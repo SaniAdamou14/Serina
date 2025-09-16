@@ -1,0 +1,20 @@
+# ninja log v7
+69	3438	7797179810320582	src/utils/CMakeFiles/serina_utils.dir/Config.cpp.obj	4b156992a5c3bf6e
+62	3557	7797179810250567	src/utils/CMakeFiles/serina_utils.dir/Random.cpp.obj	ff7624d09506f867
+6	4232	7797179809689485	src/core/CMakeFiles/serina_core.dir/World.cpp.obj	c218c7bb6fe54e84
+83	971	7797180271020252	src/core/libserina_core.a	28507a44c185fbf4
+111	978	7797180271300243	src/utils/libserina_utils.a	c601402f520ea301
+95	1881	7797180271140136	src/viewmodel/CMakeFiles/serina_viewmodel.dir/SimulationAPI.cpp.obj	8104b69b4af5c406
+1882	2028	7797180289004536	src/viewmodel/libserina_viewmodel.a	51a8a25ead95a1c3
+102	14366	7797180271217997	CMakeFiles/serina_py.dir/python/bindings.cpp.obj	3c989eae2fdbaaef
+40	428	7797180691018599	build.ninja	3f3707d129bd64e9
+40	428	7797180691018599	C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/build/cmake_install.cmake	3f3707d129bd64e9
+40	428	7797180691018599	C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/build/src/cmake_install.cmake	3f3707d129bd64e9
+40	428	7797180691018599	C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/build/src/core/cmake_install.cmake	3f3707d129bd64e9
+40	428	7797180691018599	C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/build/src/viewmodel/cmake_install.cmake	3f3707d129bd64e9
+40	428	7797180691018599	C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/build/src/utils/cmake_install.cmake	3f3707d129bd64e9
+79	1137	7797180692405302	src/core/CMakeFiles/serina_core.dir/PhysicsEngine.cpp.obj	133528e9c01dd3ca
+70	1927	7797180692312823	src/core/CMakeFiles/serina_core.dir/Species.cpp.obj	125989dd2124e432
+75	2176	7797180692365300	src/core/CMakeFiles/serina_core.dir/Genome.cpp.obj	a070f7099ca8d931
+2177	2340	7797180713375833	src/core/libserina_core.a	fd4ce1ea20d2d192
+2340	2999	7797180715015840	serina_py.cp310-win_amd64.pyd	deaeed48bfe35afd
