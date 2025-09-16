@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\src\core\World.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\src\core\Species.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\src\core\Genome.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\src\core\PhysicsEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\src\core\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{91C4066B-6650-33BC-8AF1-3E7880EAF406}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

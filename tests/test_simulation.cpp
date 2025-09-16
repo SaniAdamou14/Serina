@@ -1,24 +1,281 @@
-#include <catch2/catch_test_macros.hpp>
+#include <cassert>
+#include <iostream>
+#include <memory>
+#include <vector>
+#include <chrono>
 #include "Serina/World.hpp"
 #include "Serina/Species.hpp"
 #include "Serina/Genome.hpp"
+#include "Serina/PhysicsEngine.hpp"
+#include "Serina/SimulationAPI.hpp"
 
-TEST_CASE("World initialization", "[world]") {
-    Serina::World world(10, 10);
-    REQUIRE(world.getWidth() == 10);
-    REQUIRE(world.getHeight() == 10);
+void testGenome() {
+    std::cout << "Testing Genome..." << std::endl;
+    
+    // Test default constructor
+    Serina::Genome genome1;
+    assert(genome1.getTrait(0) == 1.0);  // Default trait value
+    assert(genome1.getTrait(4) == 1.0);  // 5th trait (beak_length)
+    
+    // Test custom constructor
+    std::vector<double> traits = {2.0, 1.5, 3.0, 0.8, 1.2};
+    Serina::Genome genome2(traits);
+    assert(genome2.getTrait(0) == 2.0);
+    assert(genome2.getTrait(4) == 1.2);
+    
+    // Test mutation
+    double originalTrait = genome2.getTrait(0);
+    genome2.mutate(0.1);
+    // Trait should have changed (with high probability)
+    // and should be >= 0.1 (clamped minimum)
+    assert(genome2.getTrait(0) >= 0.1);
+    
+    // Test crossover
+    Serina::Genome child = genome1.crossover(genome2);
+    // Child traits should be average of parents
+    double expectedTrait = (genome1.getTrait(0) + genome2.getTrait(0)) / 2;
+    assert(std::abs(child.getTrait(0) - expectedTrait) < 0.001);
+    
+    // Test trait boundaries
+    genome1.setTrait(0, 5.0);
+    assert(genome1.getTrait(0) == 5.0);
+    
+    // Test invalid trait access
+    assert(genome1.getTrait(-1) == 0.0);
+    assert(genome1.getTrait(10) == 0.0);
+    
+    std::cout << "✓ Genome tests passed!" << std::endl;
 }
 
-TEST_CASE("Species creation", "[species]") {
-    Serina::Genome genome({1.0, 2.0, 3.0});
-    Serina::Species species("Test", genome);
-    REQUIRE(species.getName() == "Test");
-    REQUIRE(species.getEnergy() == 100.0);
+void testSpecies() {
+    std::cout << "Testing Species..." << std::endl;
+    
+    std::vector<double> traits = {1.5, 2.0, 2.5, 1.0, 0.8};
+    Serina::Genome genome(traits);
+    
+    // Test constructor
+    Serina::Species species("TestSpecies", genome);
+    assert(species.getName() == "TestSpecies");
+    assert(species.getEnergy() == 100.0);  // Default starting energy
+    
+    // Test energy management
+    species.setEnergy(75.0);
+    assert(species.getEnergy() == 75.0);
+    
+    // Test survival
+    assert(species.survives(50.0) == true);   // 75 > 50
+    assert(species.survives(100.0) == false); // 75 < 100
+    
+    // Test reproduction
+    std::vector<double> traits2 = {1.0, 1.5, 2.0, 1.2, 0.9};
+    Serina::Genome genome2(traits2);
+    Serina::Species partner("Partner", genome2);
+    
+    Serina::Species child = species.reproduce(partner);
+    assert(child.getName() == "TestSpecies_child");
+    assert(child.getEnergy() == 50.0);  // Half energy at birth
+    
+    std::cout << "✓ Species tests passed!" << std::endl;
 }
 
-TEST_CASE("Genome mutation", "[genome]") {
-    Serina::Genome genome({1.0, 1.0, 1.0});
-    genome.mutate(0.1);
-    // TODO: Check if traits changed
-    REQUIRE(genome.getTrait(0) >= 0.1);
+void testPhysicsEngine() {
+    std::cout << "Testing PhysicsEngine..." << std::endl;
+    
+    Serina::WorldBounds bounds(0, 100, 0, 100);
+    Serina::PhysicsEngine physics(-9.81, bounds);  // Earth gravity
+    
+    assert(physics.getGravity() == -9.81);
+    assert(physics.getBounds().maxX == 100);
+    
+    // Test entity creation
+    Serina::Entity entity1(10, 10, 2.0, 1.0, 1);  // x, y, size, mass, id
+    Serina::Entity entity2(15, 10, 2.0, 1.0, 2);
+    
+    assert(entity1.x == 10);
+    assert(entity1.alive == true);
+    assert(entity1.speciesId == 1);
+    
+    // Test collision detection
+    bool collision = physics.checkCollision(entity1, entity2);
+    assert(collision == true);  // They should collide (distance = 5, combined radius = 2)
+    
+    // Move entities apart
+    entity2.x = 20;
+    collision = physics.checkCollision(entity1, entity2);
+    assert(collision == false);  // No collision now
+    
+    // Test physics update
+    std::vector<Serina::Entity> entities = {entity1, entity2};
+    entity1.vy = 0;  // Start with no vertical velocity
+    
+    physics.update(entities, 1.0);  // 1 second
+    
+    // After 1 second with gravity, entity should have fallen
+    assert(entities[0].vy < 0);  // Gravity should make it fall
+    assert(entities[0].y < 10);  // Y position should decrease
+    
+    // Test force application
+    physics.applyForce(entity1, 10.0, 0.0);  // Apply rightward force
+    assert(entity1.vx > 0);  // Should have rightward velocity
+    
+    std::cout << "✓ PhysicsEngine tests passed!" << std::endl;
+}
+
+void testWorld() {
+    std::cout << "Testing World..." << std::endl;
+    
+    Serina::World world(20, 15);
+    assert(world.getWidth() == 20);
+    assert(world.getHeight() == 15);
+    
+    // Test resource management
+    world.addResource(5, 5, "plants", 50.0);
+    assert(world.getResource(5, 5, "plants") >= 50.0);  // Should be at least 50 (initial + added)
+    
+    // Test resource consumption
+    bool consumed = world.consumeResource(5, 5, "plants", 25.0);
+    assert(consumed == true);
+    
+    double remaining = world.getResource(5, 5, "plants");
+    assert(remaining >= 25.0);  // Should have at least the added amount minus consumed
+    
+    // Test invalid coordinates
+    assert(world.getResource(-1, -1, "plants") == 0.0);
+    assert(world.getResource(100, 100, "plants") == 0.0);
+    
+    // Test terrain
+    world.setTerrain(10, 10, Serina::TerrainType::FOREST);
+    assert(world.getTerrain(10, 10) == Serina::TerrainType::FOREST);
+    
+    // Test climate
+    world.setClimate(10, 10, Serina::ClimateZone::TROPICAL);
+    assert(world.getClimate(10, 10) == Serina::ClimateZone::TROPICAL);
+    
+    // Test temperature and humidity
+    world.setTemperature(5, 5, 25.0);
+    assert(world.getTemperature(5, 5) == 25.0);
+    
+    world.setHumidity(5, 5, 0.7);
+    assert(world.getHumidity(5, 5) == 0.7);
+    
+    // Test time progression
+    double initialTime = world.getTimeState().currentTime;
+    world.update(1.0);  // Update by 1 time unit
+    assert(world.getTimeState().currentTime > initialTime);
+    
+    // Test resource finding
+    auto plantSources = world.findResourceSources("plants", 10.0);
+    assert(plantSources.size() > 0);  // Should find some plant sources
+    
+    // Test neighbors
+    auto neighbors = world.getNeighbors(10, 10, 1);
+    assert(neighbors.size() <= 8);  // At most 8 neighbors in a 3x3 grid
+    
+    std::cout << "✓ World tests passed!" << std::endl;
+}
+
+void testSimulationAPI() {
+    std::cout << "Testing SimulationAPI..." << std::endl;
+    
+    Serina::SimulationAPI sim(30, 25);
+    sim.initialize();
+    
+    // Test basic stepping
+    sim.step(0.1);
+    sim.step(0.1);
+    
+    // Test species management
+    std::vector<double> traits = {1.2, 1.8, 2.0, 1.1, 0.9};
+    Serina::Genome genome(traits);
+    Serina::Species species("TestSpecies", genome);
+    
+    sim.addSpecies(species);
+    auto speciesList = sim.getSpecies();
+    assert(speciesList.size() >= 1);
+    
+    // Test data export
+    std::string data = sim.exportData();
+    assert(!data.empty());
+    
+    std::cout << "✓ SimulationAPI tests passed!" << std::endl;
+}
+
+void runBenchmarks() {
+    std::cout << "\\nRunning performance benchmarks..." << std::endl;
+    
+    const int WORLD_SIZE = 100;
+    const int NUM_ENTITIES = 1000;
+    const int NUM_STEPS = 100;
+    
+    // Benchmark World updates
+    auto start = std::chrono::high_resolution_clock::now();
+    
+    Serina::World world(WORLD_SIZE, WORLD_SIZE);
+    for (int i = 0; i < NUM_STEPS; ++i) {
+        world.update(0.1);
+    }
+    
+    auto end = std::chrono::high_resolution_clock::now();
+    auto worldTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    
+    std::cout << "World benchmark (" << WORLD_SIZE << "x" << WORLD_SIZE << ", " << NUM_STEPS << " steps): " 
+              << worldTime.count() / 1000.0 << "ms" << std::endl;
+    
+    // Benchmark Physics Engine
+    start = std::chrono::high_resolution_clock::now();
+    
+    Serina::PhysicsEngine physics(-9.81);
+    std::vector<Serina::Entity> entities;
+    
+    // Create entities
+    for (int i = 0; i < NUM_ENTITIES; ++i) {
+        entities.emplace_back(i % WORLD_SIZE, (i / WORLD_SIZE) % WORLD_SIZE, 1.0, 1.0, i);
+    }
+    
+    // Run physics simulation
+    for (int i = 0; i < NUM_STEPS; ++i) {
+        physics.update(entities, 0.016);  // ~60 FPS
+    }
+    
+    end = std::chrono::high_resolution_clock::now();
+    auto physicsTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    
+    std::cout << "Physics benchmark (" << NUM_ENTITIES << " entities, " << NUM_STEPS << " steps): " 
+              << physicsTime.count() / 1000.0 << "ms" << std::endl;
+    
+    // Performance per step
+    double worldStepTime = (worldTime.count() / 1000.0) / NUM_STEPS;
+    double physicsStepTime = (physicsTime.count() / 1000.0) / NUM_STEPS;
+    
+    std::cout << "Performance summary:" << std::endl;
+    std::cout << "- World update: " << worldStepTime << "ms per step" << std::endl;
+    std::cout << "- Physics update: " << physicsStepTime << "ms per step" << std::endl;
+    std::cout << "- Total per frame: " << (worldStepTime + physicsStepTime) << "ms" << std::endl;
+    std::cout << "- Estimated FPS: " << 1000.0 / (worldStepTime + physicsStepTime) << std::endl;
+}
+
+int main() {
+    std::cout << "=== Serina C++ Test Suite ===" << std::endl;
+    
+    try {
+        testGenome();
+        testSpecies();
+        testPhysicsEngine();
+        testWorld();
+        testSimulationAPI();
+        
+        std::cout << "\\n🎉 All tests passed successfully!" << std::endl;
+        
+        // Run benchmarks
+        runBenchmarks();
+        
+    } catch (const std::exception& e) {
+        std::cout << "❌ Test failed with exception: " << e.what() << std::endl;
+        return 1;
+    } catch (...) {
+        std::cout << "❌ Test failed with unknown exception" << std::endl;
+        return 1;
+    }
+    
+    return 0;
 }

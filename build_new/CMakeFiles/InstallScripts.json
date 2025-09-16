@@ -1,0 +1,12 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/core/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/viewmodel/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/utils/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/tests/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

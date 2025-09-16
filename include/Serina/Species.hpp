@@ -26,6 +26,9 @@ namespace Serina
         const std::string &getName() const { return name_; }
         double getEnergy() const { return energy_; }
         void setEnergy(double e) { energy_ = e; }
+        
+        // Accès aux traits du génome
+        double getTrait(TraitType type) const { return genome_.getTrait(type); }
 
         // TODO: Serialize to JSON.
         std::string toJson() const;

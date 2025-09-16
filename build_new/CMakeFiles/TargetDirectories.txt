@@ -1,0 +1,7 @@
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/CMakeFiles/serina_py.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/CMakeFiles/ALL_BUILD.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/CMakeFiles/ZERO_CHECK.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/core/CMakeFiles/serina_core.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/viewmodel/CMakeFiles/serina_viewmodel.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/src/utils/CMakeFiles/serina_utils.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_new/tests/CMakeFiles/tests.dir

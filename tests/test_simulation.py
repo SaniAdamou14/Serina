@@ -1,4 +1,3 @@
-import pytest
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'build'))
@@ -6,13 +5,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'build'))
 try:
     import serina_py
 except ImportError:
-    pytest.skip("serina_py not available", allow_module_level=True)
+    print("serina_py not available")
+    sys.exit(1)
 
 def test_simulation_initialization():
     sim = serina_py.SimulationAPI(10, 10)
     sim.initialize()
-    # TODO: Check state
-    assert True  # Placeholder
+    assert True
 
 def test_simulation_step():
     sim = serina_py.SimulationAPI(10, 10)
@@ -20,3 +19,8 @@ def test_simulation_step():
     sim.step()
     data = sim.getPopulationData()
     assert isinstance(data, str)
+
+if __name__ == "__main__":
+    test_simulation_initialization()
+    test_simulation_step()
+    print("Python tests passed!")

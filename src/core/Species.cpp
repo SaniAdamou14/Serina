@@ -11,14 +11,16 @@ Species::Species(const std::string& name, const Genome& genome)
 }
 
 void Species::mutate(double mutationRate) {
-    // TODO: Mutate genome
+    genome_.mutate(mutationRate);
     std::cout << "Species " << name_ << " mutated." << std::endl;
 }
 
 Species Species::reproduce(const Species& other) const {
-    // TODO: Combine genomes, apply mutation
-    Genome childGenome = genome_;  // Placeholder
-    return Species(name_ + "_child", childGenome);
+    Genome childGenome = genome_.crossover(other.genome_);
+    childGenome.mutate(0.01);  // Small mutation rate for child
+    Species child(name_ + "_child", childGenome);
+    child.setEnergy(50.0);  // Start with half energy
+    return child;
 }
 
 bool Species::survives(double energyThreshold) const {
