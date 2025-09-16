@@ -16,6 +16,8 @@
         "chrono": "cpp",
         "optional": "cpp",
         "map": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "sstream": "cpp",
+        "iostream": "cpp"
     }
 }

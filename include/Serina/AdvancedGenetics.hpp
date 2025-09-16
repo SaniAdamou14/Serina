@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <numeric>
 #include <cmath>
+#include <array>
 
 namespace Serina::Genetics
 {
@@ -30,6 +31,28 @@ namespace Serina::Genetics
         CAMOUFLAGE,        ///< Capacité de camouflage [0.0-1.0]
         SOCIAL_BEHAVIOR,   ///< Comportement social [0.0-1.0]
         TRAIT_COUNT        ///< Nombre total de traits
+    };
+
+    /// @brief Structure simple pour stocker les valeurs de traits
+    struct AdvancedTraitValues
+    {
+        double size = 1.0;
+        double speed = 1.0;
+        double energyEfficiency = 1.0;
+        double reproductionRate = 1.0;
+        double aggression = 1.0;
+        double intelligence = 1.0;
+        double longevity = 1.0;
+        double resistance = 1.0;
+        double visionRange = 1.0;
+        double hearingAcuity = 1.0;
+        double camouflage = 1.0;
+        double socialBehavior = 1.0;
+
+        // Extensions pour compatibilité avec le simulateur
+        double fertility = 1.0;          // Alias pour reproductionRate
+        double neuralComplexity = 1.0;   // Alias pour intelligence
+        double sensoryAcuity = 1.0;      // Alias pour hearingAcuity
     };
 
     /// @brief Configuration des bornes pour chaque trait
@@ -344,6 +367,49 @@ namespace Serina::Genetics
                 generation_++;
                 generateLineageId();
             }
+        }
+
+        /// @brief Applique une mutation et retourne les nouveaux traits
+        AdvancedTraitValues mutate(const AdvancedTraitValues& originalTraits, double mutationRate) const
+        {
+            AdvancedTraitValues mutatedTraits = originalTraits;
+            auto &rng = const_cast<std::mt19937&>(getRandomEngine());
+            std::uniform_real_distribution<double> probDist(0.0, 1.0);
+            std::normal_distribution<double> gaussianDist(0.0, 0.1); // 10% de déviation standard
+
+            // Muter chaque trait avec la probabilité donnée
+            if (probDist(rng) < mutationRate) mutatedTraits.size += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.speed += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.energyEfficiency += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.intelligence += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.visionRange += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.socialBehavior += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.resistance += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.aggression += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.fertility += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.longevity += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.neuralComplexity += gaussianDist(rng);
+            if (probDist(rng) < mutationRate) mutatedTraits.sensoryAcuity += gaussianDist(rng);
+
+            // Appliquer des limites raisonnables
+            auto clamp = [](double& value, double min = 0.1, double max = 3.0) {
+                value = std::clamp(value, min, max);
+            };
+
+            clamp(mutatedTraits.size);
+            clamp(mutatedTraits.speed);
+            clamp(mutatedTraits.energyEfficiency);
+            clamp(mutatedTraits.intelligence);
+            clamp(mutatedTraits.visionRange);
+            clamp(mutatedTraits.socialBehavior);
+            clamp(mutatedTraits.resistance);
+            clamp(mutatedTraits.aggression);
+            clamp(mutatedTraits.fertility);
+            clamp(mutatedTraits.longevity);
+            clamp(mutatedTraits.neuralComplexity);
+            clamp(mutatedTraits.sensoryAcuity);
+
+            return mutatedTraits;
         }
 
         // Getters/Setters
