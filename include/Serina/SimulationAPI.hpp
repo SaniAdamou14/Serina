@@ -30,8 +30,8 @@ namespace Serina
         // Getters
         bool isRunning() const { return running_; }
         double getSpeed() const { return speed_; }
-        const World& getWorld() const { return world_; }
-        const std::vector<Species>& getSpecies() const { return species_; }
+        const World &getWorld() const { return world_; }
+        const std::vector<Species> &getSpecies() const { return species_; }
 
     private:
         World world_;
