@@ -3,6 +3,19 @@
         "*.dbclient-js": "javascript",
         "*.embeddedhtml": "html",
         "string": "cpp",
-        "vector": "cpp"
+        "vector": "cpp",
+        "memory": "cpp",
+        "numeric": "cpp",
+        "random": "cpp",
+        "functional": "cpp",
+        "unordered_map": "cpp",
+        "algorithm": "cpp",
+        "stdexcept": "cpp",
+        "array": "cpp",
+        "execution": "cpp",
+        "chrono": "cpp",
+        "optional": "cpp",
+        "map": "cpp",
+        "cmath": "cpp"
     }
 }

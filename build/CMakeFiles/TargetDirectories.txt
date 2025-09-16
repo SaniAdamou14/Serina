@@ -4,3 +4,4 @@ C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/CMakeFiles/ZERO_CHECK.dir
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/src/core/CMakeFiles/serina_core.dir
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/src/viewmodel/CMakeFiles/serina_viewmodel.dir
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/src/utils/CMakeFiles/serina_utils.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/tests/CMakeFiles/tests.dir
