@@ -1,15 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const SimulationService = require('../services/simulation');
 
-// Singleton instance shared across routes if needed
-let simService = null;
-function ensureService() {
-  if (!simService) {
-    simService = new SimulationService();
-  }
-  return simService;
-}
+// Note: SimulationService remplacé par UnifiedSerinaService
+// Ces routes sont maintenant dépréciées - utilisez /api/serina/* à la place
+
+/**
+ * @swagger
+ * /api/simulation/deprecated:
+ *   get:
+ *     summary: Notice de dépréciation - Utilisez /api/serina/* à la place
+ *     tags: [Deprecated]
+ *     responses:
+ *       200:
+ *         description: Message de dépréciation
+ */
+router.use('*', (req, res) => {
+  res.status(200).json({
+    deprecated: true,
+    message: 'Ces endpoints sont dépréciés. Utilisez /api/serina/* à la place',
+    newEndpoints: {
+      'POST /api/simulation/start': 'POST /api/serina/start',
+      'POST /api/simulation/stop/:id': 'POST /api/serina/stop/:id', 
+      'GET /api/simulation/status/:id': 'GET /api/serina/status/:id',
+      'GET /api/simulation/list': 'GET /api/serina/list'
+    },
+    migration: 'Architecture unifiée avec UnifiedSerinaService'
+  });
+});
 
 /**
  * @swagger

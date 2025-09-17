@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { SimulationData, SimulationCommand, CommandMessage } from '../types'
+import { io, Socket } from 'socket.io-client'
 
 interface SimulationContextType {
   simulationData: SimulationData | null
@@ -22,53 +23,53 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
   const [isConnected, setIsConnected] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
-  const [socket, setSocket] = useState<WebSocket | null>(null)
+  const [socket, setSocket] = useState<Socket | null>(null)
 
   const connect = () => {
     try {
-      // Connect to the WebSocket server for real simulation data
-      const wsUrl = `ws://localhost:3001/ws`
-      const newSocket = new WebSocket(wsUrl)
+      // Connect to the Socket.IO server for real simulation data
+      const newSocket = io('http://localhost:3001', {
+        transports: ['websocket', 'polling']
+      })
       
-      newSocket.onopen = () => {
-        console.log('Serina Dashboard: Connected to simulation WebSocket server')
+      newSocket.on('connect', () => {
+        console.log('Serina Dashboard: Connected to simulation Socket.IO server')
         setIsConnected(true)
         setConnectionError(null)
         setSocket(newSocket)
         
         // Request initial simulation data
-        newSocket.send(JSON.stringify({ 
+        newSocket.emit('simulation-command', { 
           type: 'command', 
           command: 'GET_STATUS' 
-        }))
-      }
+        })
+      })
       
-      newSocket.onmessage = (event) => {
+      newSocket.on('message', (data) => {
         try {
-          const data = JSON.parse(event.data)
           if (data.type === 'simulation_data') {
             setSimulationData(data.data)
           } else if (data.type === 'status_update') {
             setIsRunning(data.running)
           }
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error)
+          console.error('Error processing Socket.IO message:', error)
         }
-      }
+      })
       
-      newSocket.onerror = (error) => {
-        console.error('WebSocket error:', error)
+      newSocket.on('connect_error', (error) => {
+        console.error('Socket.IO connection error:', error)
         setConnectionError('Erreur de connexion au serveur de simulation')
         setIsConnected(false)
-      }
+      })
       
-      newSocket.onclose = () => {
-        console.log('WebSocket connection closed')
+      newSocket.on('disconnect', () => {
+        console.log('Socket.IO connection disconnected')
         setIsConnected(false)
         setSocket(null)
-      }
+      })
 
-      console.log('Serina Dashboard: Connected to simulation')
+      console.log('Serina Dashboard: Connecting to simulation via Socket.IO')
     } catch (error) {
       setConnectionError('Failed to connect to simulation server')
       setIsConnected(false)
@@ -78,7 +79,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
 
   const disconnect = () => {
     if (socket) {
-      socket.close()
+      socket.disconnect()
       setSocket(null)
     }
     setIsConnected(false)
@@ -94,11 +95,11 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       timestamp: Date.now()
     }
 
-    if (socket && isConnected && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
+    if (socket && isConnected && socket.connected) {
+      socket.emit('simulation-command', {
         type: 'command',
         ...message
-      }))
+      })
     } else {
       // Fallback for when not connected
       console.log('Serina Command (offline):', message)

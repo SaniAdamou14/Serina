@@ -29,12 +29,19 @@ public:
         result["action"] = "initialize";
         
         try {
-            // Initialize the simulator with parameters
+            // Redirect cout to stderr during initialization to capture verbose messages
+            std::streambuf* orig_cout = std::cout.rdbuf();
+            std::cout.rdbuf(std::cerr.rdbuf());
+            
+            // Create and initialize the simulator (this will output verbose messages to stderr now)
+            auto simulator = std::make_unique<Serina::Simulation::SerinaEcosystemSimulator>();
+            auto ecosystem = std::make_unique<Serina::Ecosystem::SerinaEcosystem>();
+            
+            // Restore cout for JSON output
+            std::cout.rdbuf(orig_cout);
+            
             if (verboseOutput_) {
-                std::cerr << "Initializing Serina ecosystem..." << std::endl;
-                std::cerr << "World size: " << worldSize << "x" << worldSize << std::endl;
-                std::cerr << "Initial species count: " << initialSpecies << std::endl;
-                std::cerr << "Simulation steps planned: " << steps << std::endl;
+                std::cerr << "✅ Serina CLI initialization completed" << std::endl;
             }
             
             result["parameters"] = {

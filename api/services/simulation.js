@@ -8,8 +8,8 @@ class SimulationService {
   constructor() {
     // Change from single simulation to multiple
     this.simulations = new Map(); // simulationId -> SimulationInstance
-    // Point to the root-level executable if available
-    this.cppExecutablePath = path.join(__dirname, '../../serina_evolution_engine.exe');
+    // Point to the modern CLI executable
+    this.cppExecutablePath = path.join(__dirname, '../../build/bin/Release/serina_cli.exe');
     // Store config near the API folder
     this.configPath = path.join(__dirname, '../../simulation_config.json');
     this.outputBuffer = [];

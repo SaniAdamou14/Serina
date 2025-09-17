@@ -33,19 +33,22 @@ router.post('/start', async (req, res) => {
       });
     }
 
-    const simulationId = 'serina-' + Date.now();
-    const result = await serinaService.startSerinaSimulation(simulationId);
+    const options = {
+      simulationId: req.body.simulationId || 'serina-' + Date.now()
+    };
     
-    console.log(`🌍 Serina simulation started: ${simulationId} (mode: ${result.mode})`);
+    const result = await serinaService.startSimulation(options);
+    
+    console.log(`🌍 Unified Serina simulation started: ${options.simulationId}`);
     
     res.json({
-      success: true,
-      simulationId,
-      mode: result.mode,
-      message: result.mode === 'cpp' 
-        ? 'Simulation C++ Serina authentique démarrée'
-        : 'Simulation Serina en mode hors ligne démarrée',
-      executable: result.executable || null
+      success: result.success,
+      simulationId: result.simulationId,
+      message: result.success 
+        ? 'Simulation Serina authentique démarrée avec CLI moderne'
+        : 'Échec du démarrage de simulation',
+      data: result.data || null,
+      error: result.error || null
     });
   } catch (error) {
     console.error('❌ Error starting Serina simulation:', error);
@@ -167,11 +170,12 @@ router.get('/list', async (req, res) => {
       });
     }
 
-    const simulations = serinaService.getAllSimulations();
+    const result = serinaService.listSimulations();
     
     res.json({
-      simulations,
-      count: simulations.length
+      success: result.success,
+      simulations: result.simulations || [],
+      count: result.simulations ? result.simulations.length : 0
     });
   } catch (error) {
     console.error('❌ Error listing simulations:', error);
@@ -210,12 +214,17 @@ router.get('/data/:simulationId', async (req, res) => {
     const simulationData = serinaService.getSimulationData(simulationId);
     
     if (!simulationData.latestData) {
-      return res.status(204).json({ 
-        message: 'No data available yet' 
+      return res.status(200).json({ 
+        success: false,
+        message: 'No data available yet',
+        data: null
       });
     }
     
-    res.json(simulationData.latestData);
+    res.json({
+      success: true,
+      data: simulationData.latestData
+    });
   } catch (error) {
     if (error.message.includes('not found')) {
       res.status(404).json({ 

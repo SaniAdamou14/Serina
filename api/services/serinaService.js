@@ -102,7 +102,7 @@ class SerinaSimulationService {
   spawnSerinaProcess(executablePath, simulationInstance) {
     // Initialize simulation first
     console.log('🔧 Initializing Serina simulation...');
-    const initProcess = spawn(executablePath, ['init', '100', '5', '1000'], {
+    const initProcess = spawn(executablePath, ['init'], {
       stdio: ['pipe', 'pipe', 'pipe']
     });
     

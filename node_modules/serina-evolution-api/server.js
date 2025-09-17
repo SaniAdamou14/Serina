@@ -8,8 +8,7 @@ const path = require('path');
 const database = require('./services/database');
 const websocketService = require('./services/websocket');
 const EvolutionEngine = require('./services/evolution');
-const SimulationService = require('./services/simulation');
-const { SerinaSimulationService } = require('./services/serinaService');
+const UnifiedSerinaService = require('./services/unifiedSerinaService');
 
 // Import routes
 const speciesRoutes = require('./routes/species');
@@ -73,8 +72,7 @@ app.use((req, res, next) => {
 
 // Services initialization
 let evolutionEngine = null;
-let simulationService = null;
-let serinaService = null;
+let unifiedSerinaService = null;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -120,29 +118,22 @@ async function initializeServices() {
     }
 
     try {
-      simulationService = new SimulationService();
-      await simulationService.initialize();
-      // Bridge simulation frames to WebSocket
-      simulationService.setDataCallback((frame) => {
-        try {
-          websocketService.broadcastSystemUpdate({ type: 'simulation-frame', data: frame });
-        } catch (e) {
-          console.warn('WS broadcast error:', e.message);
-        }
-      });
-      console.log('✅ Simulation Service initialized');
+      // Note: Ancien simulationService remplacé par unifiedSerinaService
+      console.log('✅ Legacy simulation service bypassed - using unified service');
     } catch (simErr) {
-      console.warn('⚠️ Simulation Service failed to initialize, continuing without it:', simErr.message);
+      console.warn('⚠️ Legacy simulation note:', simErr.message);
     }
 
-    // Initialize Serina C++ simulation service
-    serinaService = new SerinaSimulationService();
-    serinaService.setWebSocketServer({ 
-      clients: new Set(),
-      send: (message) => websocketService.broadcastSystemUpdate(message)
+    // Initialize Serina unified service
+    unifiedSerinaService = new UnifiedSerinaService();
+    await unifiedSerinaService.initialize();
+    unifiedSerinaService.setWebSocketServer({ 
+      broadcastToRoom: (room, message) => {
+        io.to(room).emit('message', message);
+      }
     });
-    setSerinaService(serinaService); // Inject service into routes
-    console.log('✅ Serina C++ Simulation Service initialized');
+    setSerinaService(unifiedSerinaService); // Inject service into routes
+    console.log('✅ Unified Serina Service initialized');
 
     // Initialize WebSocket service
     websocketService.initialize(io);
@@ -272,7 +263,7 @@ process.on('SIGINT', async () => {
   console.log('\n📡 Received SIGINT, initiating graceful shutdown...');
   try {
     if (evolutionEngine) evolutionEngine.stop();
-    if (simulationService) await simulationService.cleanup();
+    if (unifiedSerinaService) await unifiedSerinaService.cleanup();
     websocketService.cleanup();
     await database.close();
     process.exit(0);
