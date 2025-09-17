@@ -1,0 +1,32 @@
+{
+  "simulation": {
+    "population_size": 150,
+    "environment_size": {
+      "width": 1920,
+      "height": 1080
+    },
+    "time_step": 0.016667,
+    "max_generations": 1000,
+    "mutation_rate": 0.1,
+    "crossover_rate": 0.7
+  },
+  "environment": {
+    "food_sources": 50,
+    "temperature": 20,
+    "humidity": 0.6,
+    "oxygen_level": 0.21,
+    "radiation_level": 0
+  },
+  "genetics": {
+    "trait_count": 12,
+    "gene_pool_diversity": 0.8,
+    "inheritance_variance": 0.15,
+    "phenotype_expression_strength": 0.9
+  },
+  "performance": {
+    "enable_multithreading": true,
+    "thread_count": 4,
+    "enable_simd": true,
+    "memory_pool_size": "64MB"
+  }
+}

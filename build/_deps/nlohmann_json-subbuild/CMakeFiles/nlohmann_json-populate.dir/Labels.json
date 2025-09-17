@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/nlohmann_json-populate"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/c96eae84b608df9b398f5dc7c6c31dbe/nlohmann_json-populate.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/bfb33049e2c85219c82476e30df6a214/nlohmann_json-populate-complete.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-build.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-configure.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-download.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-install.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-mkdir.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-patch.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-test.rule"
+		},
+		{
+			"file" : "C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/CMakeFiles/b7438860be258c0656145b657ce10e06/nlohmann_json-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"nlohmann_json-populate"
+		],
+		"name" : "nlohmann_json-populate"
+	}
+}

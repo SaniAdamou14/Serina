@@ -2,7 +2,7 @@
 
 #include <string>
 #include <vector>
-#include "Serina/Genome.hpp" // Include for complete type
+#include "Genome.hpp" // Include for complete type
 
 namespace Serina
 {
@@ -16,7 +16,7 @@ namespace Serina
         // Phenotype expression and genetic implementation
         void expressPhenotypeFromGenome();
         void applyGeneticConstraints();
-        
+
         // Physiology and metabolism
         double getMetabolicRate() const;
         double getReproductionThreshold() const;
@@ -43,11 +43,11 @@ namespace Serina
         std::string name_;
         Genome genome_;
         double energy_; // Current energy level
-        
+
         // Phenotype attributes expressed from genome
-        double size_;           // Physical size (affects energy consumption)
-        double speed_;          // Movement speed (affects hunting/escaping)
-        double metabolism_;     // Metabolic rate (energy consumption)
+        double size_;             // Physical size (affects energy consumption)
+        double speed_;            // Movement speed (affects hunting/escaping)
+        double metabolism_;       // Metabolic rate (energy consumption)
         double reproductionCost_; // Energy cost for reproduction
     };
 

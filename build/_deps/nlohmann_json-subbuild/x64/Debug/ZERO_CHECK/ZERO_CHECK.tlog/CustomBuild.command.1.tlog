@@ -1,0 +1,10 @@
+^C:\USERS\NB03\PICTURES\PROJECTS\WEBMASTER\SERINA\BUILD\_DEPS\NLOHMANN_JSON-SUBBUILD\CMAKEFILES\C96EAE84B608DF9B398F5DC7C6C31DBE\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild -BC:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build/_deps/nlohmann_json-subbuild/nlohmann_json-populate.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Serina/World.hpp"
-#include "Serina/Species.hpp"
+#include "World.hpp"
+#include "Species.hpp"
 #include <vector>
 #include <string>
 

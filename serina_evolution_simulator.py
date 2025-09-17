@@ -25,7 +25,16 @@ from datetime import datetime
 import threading
 
 # Configuration de l'affichage
-plt.style.use('seaborn-v0_8-darkgrid')
+try:
+    plt.style.use('seaborn-v0_8-darkgrid')
+except OSError:
+    # Fallback pour les versions plus récentes de matplotlib
+    try:
+        plt.style.use('seaborn-darkgrid')
+    except OSError:
+        plt.style.use('default')
+        print("Warning: Using default matplotlib style (seaborn styles not available)")
+
 sns.set_palette("husl")
 
 class SerinaSpecies:
@@ -199,6 +208,7 @@ class SerinaSimulator:
     def __init__(self):
         self.environment = SerinaEnvironment()
         self.species = []
+        self.generation = 0  # Génération globale du simulateur
         self.time_scale = 1  # Années par étape
         self.running = False
         
@@ -276,10 +286,55 @@ class SerinaSimulator:
         
         self.species = surviving_species
         
+        # Incrémenter la génération globale
+        self.generation += 1
+        
         # Statistiques
         self.biodiversity_history.append(len(self.species))
         
         return len(self.species) > 0
+    
+    def get_simulation_data(self):
+        """Retourne les données de simulation au format JSON pour l'API"""
+        species_details = []
+        events = []
+        
+        for species in self.species:
+            species_data = {
+                "id": hash(species.name) % 10000,  # ID simple basé sur le nom
+                "name": species.name,
+                "common_name": species.common_name,
+                "population_count": species.population,
+                "traits": species.traits,
+                "fitness_average": species.fitness,
+                "genetic_diversity": min(1.0, len(species.innovations) / 10),
+                "mutation_rate": 0.1,
+                "extinction_risk": species.extinction_risk
+            }
+            species_details.append(species_data)
+            
+            # Ajouter des événements basés sur les changements récents
+            if hasattr(species, '_recent_events'):
+                events.extend(species._recent_events)
+                species._recent_events = []  # Clear after reading
+        
+        return {
+            "timestamp": int(time.time() * 1000),
+            "generation": self.environment.year // 1000,  # Convert years to generations
+            "population_count": sum(s.population for s in self.species),
+            "species_count": len(self.species),
+            "average_fitness": sum(s.fitness for s in self.species) / max(1, len(self.species)),
+            "environment": {
+                "temperature": self.environment.temperature,
+                "humidity": self.environment.rainfall / 100,
+                "food_availability": self.environment.resource_abundance,
+                "year": self.environment.year
+            },
+            "species_details": species_details,
+            "events": events,
+            "total_extinctions": self.total_extinctions,
+            "total_speciations": self.total_speciations
+        }
     
     def speciation(self, parent_species):
         """Crée une nouvelle espèce par spéciation"""
