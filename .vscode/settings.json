@@ -18,6 +18,8 @@
         "map": "cpp",
         "cmath": "cpp",
         "sstream": "cpp",
-        "iostream": "cpp"
-    }
+        "iostream": "cpp",
+        "fstream": "cpp"
+    },
+    "git.ignoreLimitWarning": true
 }

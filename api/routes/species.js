@@ -1,0 +1,500 @@
+const express = require('express');
+const { param, query, validationResult } = require('express-validator');
+const database = require('../services/database');
+const Species = require('../models/Species');
+
+const router = express.Router();
+
+// Validation middleware
+const validateRequest = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({
+      error: 'Validation Error',
+      details: errors.array()
+    });
+  }
+  next();
+};
+
+// GET /api/species/:simulationId - Get species for simulation
+router.get('/:simulationId',
+  param('simulationId').isInt().withMessage('Simulation ID must be an integer'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const simulationId = parseInt(req.params.simulationId);
+      
+      // Verify simulation exists
+      const simulation = await database.getSimulation(simulationId);
+      if (!simulation) {
+        return res.status(404).json({
+          error: 'Simulation not found',
+          simulationId
+        });
+      }
+      
+      const species = await database.getSpecies(simulationId);
+      
+      res.json({
+        success: true,
+        data: species,
+        count: species.length,
+        simulationId
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch species',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/details/:id - Get specific species details
+router.get('/details/:id',
+  param('id').isInt().withMessage('Species ID must be an integer'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const speciesId = parseInt(req.params.id);
+      
+      const species = await database.getSpeciesById(speciesId);
+      if (!species) {
+        return res.status(404).json({
+          error: 'Species not found',
+          speciesId
+        });
+      }
+      
+      // Get additional data
+      const [individuals, traitsHistory] = await Promise.all([
+        database.getIndividuals(speciesId, 50),
+        database.query(`
+          SELECT * FROM species_traits 
+          WHERE species_id = ? 
+          ORDER BY generation DESC 
+          LIMIT 100
+        `, [speciesId])
+      ]);
+      
+      const speciesData = {
+        species,
+        individuals,
+        traitsHistory,
+        populationSample: individuals.slice(0, 10) // Sample for detailed view
+      };
+      
+      res.json({
+        success: true,
+        data: speciesData
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch species details',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/:id/traits - Get species traits history
+router.get('/:id/traits',
+  param('id').isInt().withMessage('Species ID must be an integer'),
+  query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be 1-1000'),
+  query('generation').optional().isInt({ min: 0 }).withMessage('Generation must be non-negative'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const speciesId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit) || 100;
+      const generation = req.query.generation ? parseInt(req.query.generation) : null;
+      
+      // Verify species exists
+      const species = await database.getSpeciesById(speciesId);
+      if (!species) {
+        return res.status(404).json({
+          error: 'Species not found',
+          speciesId
+        });
+      }
+      
+      let sql = `
+        SELECT * FROM species_traits 
+        WHERE species_id = ?
+      `;
+      const params = [speciesId];
+      
+      if (generation !== null) {
+        sql += ` AND generation = ?`;
+        params.push(generation);
+      }
+      
+      sql += ` ORDER BY generation DESC LIMIT ?`;
+      params.push(limit);
+      
+      const traits = await database.query(sql, params);
+      
+      // Calculate trait statistics
+      const traitNames = [
+        'trait_size', 'trait_speed', 'trait_strength', 'trait_intelligence',
+        'trait_longevity', 'trait_resistance', 'trait_metabolism', 'trait_sociability',
+        'trait_adaptability', 'trait_vision_range', 'trait_camouflage', 'trait_reproduction_rate'
+      ];
+      
+      const statistics = {};
+      if (traits.length > 0) {
+        traitNames.forEach(trait => {
+          const values = traits.map(t => t[trait]).filter(v => v !== null);
+          if (values.length > 0) {
+            statistics[trait] = {
+              current: values[0], // Most recent
+              average: values.reduce((sum, val) => sum + val, 0) / values.length,
+              min: Math.min(...values),
+              max: Math.max(...values),
+              trend: values.length > 1 ? values[0] - values[1] : 0 // Recent change
+            };
+          }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: {
+          traits,
+          statistics,
+          speciesInfo: {
+            id: species.id,
+            name: species.species_name,
+            current_generation: traits.length > 0 ? traits[0].generation : 0
+          }
+        },
+        count: traits.length
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch species traits',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/:id/individuals - Get individuals for species
+router.get('/:id/individuals',
+  param('id').isInt().withMessage('Species ID must be an integer'),
+  query('limit').optional().isInt({ min: 1, max: 1000 }).withMessage('Limit must be 1-1000'),
+  query('alive').optional().isBoolean().withMessage('Alive filter must be boolean'),
+  query('generation').optional().isInt({ min: 0 }).withMessage('Generation must be non-negative'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const speciesId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit) || 100;
+      const aliveOnly = req.query.alive !== undefined ? req.query.alive === 'true' : null;
+      const generation = req.query.generation ? parseInt(req.query.generation) : null;
+      
+      // Verify species exists
+      const species = await database.getSpeciesById(speciesId);
+      if (!species) {
+        return res.status(404).json({
+          error: 'Species not found',
+          speciesId
+        });
+      }
+      
+      let sql = `
+        SELECT i.*, g.trait_size, g.trait_speed, g.trait_intelligence, g.trait_adaptability,
+               g.trait_strength, g.trait_longevity, g.trait_resistance, g.trait_metabolism,
+               g.trait_sociability, g.trait_vision_range, g.trait_camouflage, g.trait_reproduction_rate,
+               g.mutation_count, g.dominance_factor
+        FROM individuals i
+        LEFT JOIN genomes g ON i.id = g.individual_id
+        WHERE i.species_id = ?
+      `;
+      const params = [speciesId];
+      
+      if (aliveOnly !== null) {
+        sql += ` AND i.is_alive = ?`;
+        params.push(aliveOnly);
+      }
+      
+      if (generation !== null) {
+        sql += ` AND i.generation = ?`;
+        params.push(generation);
+      }
+      
+      sql += ` ORDER BY i.fitness_score DESC, i.generation DESC LIMIT ?`;
+      params.push(limit);
+      
+      const individuals = await database.query(sql, params);
+      
+      // Calculate population statistics
+      const statistics = {
+        total: individuals.length,
+        alive: individuals.filter(i => i.is_alive).length,
+        avgFitness: individuals.length > 0 ? 
+          individuals.reduce((sum, i) => sum + i.fitness_score, 0) / individuals.length : 0,
+        avgAge: individuals.length > 0 ? 
+          individuals.reduce((sum, i) => sum + i.age, 0) / individuals.length : 0,
+        generationSpread: individuals.length > 0 ? {
+          min: Math.min(...individuals.map(i => i.generation)),
+          max: Math.max(...individuals.map(i => i.generation))
+        } : { min: 0, max: 0 }
+      };
+      
+      res.json({
+        success: true,
+        data: {
+          individuals,
+          statistics,
+          speciesInfo: {
+            id: species.id,
+            name: species.species_name,
+            population_count: species.population_count
+          }
+        },
+        count: individuals.length
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch individuals',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/:simulationId/summary - Get species summary for simulation
+router.get('/:simulationId/summary',
+  param('simulationId').isInt().withMessage('Simulation ID must be an integer'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const simulationId = parseInt(req.params.simulationId);
+      
+      // Verify simulation exists
+      const simulation = await database.getSimulation(simulationId);
+      if (!simulation) {
+        return res.status(404).json({
+          error: 'Simulation not found',
+          simulationId
+        });
+      }
+      
+      const species = await database.getSpecies(simulationId);
+      
+      // Calculate summary statistics
+      const summary = {
+        totalSpecies: species.length,
+        totalPopulation: species.reduce((sum, s) => sum + s.population_count, 0),
+        averageFitness: species.length > 0 ? 
+          species.reduce((sum, s) => sum + s.avg_fitness, 0) / species.length : 0,
+        extinctionRisk: {
+          low: species.filter(s => s.extinction_risk < 0.3).length,
+          medium: species.filter(s => s.extinction_risk >= 0.3 && s.extinction_risk < 0.7).length,
+          high: species.filter(s => s.extinction_risk >= 0.7).length
+        },
+        niches: species.reduce((acc, s) => {
+          acc[s.ecological_niche] = (acc[s.ecological_niche] || 0) + 1;
+          return acc;
+        }, {}),
+        topSpecies: species
+          .sort((a, b) => b.population_count - a.population_count)
+          .slice(0, 5)
+          .map(s => ({
+            id: s.id,
+            name: s.species_name,
+            population: s.population_count,
+            fitness: s.avg_fitness,
+            niche: s.ecological_niche
+          }))
+      };
+      
+      res.json({
+        success: true,
+        data: {
+          species,
+          summary
+        },
+        simulationId
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch species summary',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/:id/evolution - Get evolution timeline for species
+router.get('/:id/evolution',
+  param('id').isInt().withMessage('Species ID must be an integer'),
+  query('limit').optional().isInt({ min: 1, max: 500 }).withMessage('Limit must be 1-500'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const speciesId = parseInt(req.params.id);
+      const limit = parseInt(req.query.limit) || 100;
+      
+      // Verify species exists
+      const species = await database.getSpeciesById(speciesId);
+      if (!species) {
+        return res.status(404).json({
+          error: 'Species not found',
+          speciesId
+        });
+      }
+      
+      // Get evolution events for this species
+      const events = await database.query(`
+        SELECT * FROM evolution_events 
+        WHERE species_id = ? 
+        ORDER BY generation DESC, recorded_at DESC 
+        LIMIT ?
+      `, [speciesId, limit]);
+      
+      // Get trait evolution over time
+      const traitEvolution = await database.query(`
+        SELECT generation, trait_size, trait_speed, trait_intelligence, trait_adaptability,
+               trait_strength, trait_longevity, trait_resistance, trait_metabolism
+        FROM species_traits 
+        WHERE species_id = ? 
+        ORDER BY generation ASC
+      `, [speciesId]);
+      
+      // Get population changes over time
+      const populationHistory = await database.query(`
+        SELECT pm.generation, pm.active_individuals, pm.recorded_at
+        FROM performance_metrics pm
+        JOIN simulations s ON pm.simulation_id = s.id
+        JOIN species sp ON s.id = sp.simulation_id
+        WHERE sp.id = ?
+        ORDER BY pm.generation ASC
+      `, [speciesId]);
+      
+      const evolutionData = {
+        events,
+        traitEvolution,
+        populationHistory,
+        speciesInfo: {
+          id: species.id,
+          name: species.species_name,
+          current_population: species.population_count,
+          current_generation: species.generation_span
+        }
+      };
+      
+      res.json({
+        success: true,
+        data: evolutionData
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to fetch evolution timeline',
+        message: error.message
+      });
+    }
+  }
+);
+
+// GET /api/species/compare/:id1/:id2 - Compare two species
+router.get('/compare/:id1/:id2',
+  param('id1').isInt().withMessage('First species ID must be an integer'),
+  param('id2').isInt().withMessage('Second species ID must be an integer'),
+  validateRequest,
+  async (req, res) => {
+    try {
+      const speciesId1 = parseInt(req.params.id1);
+      const speciesId2 = parseInt(req.params.id2);
+      
+      // Get both species
+      const [species1, species2] = await Promise.all([
+        database.getSpeciesById(speciesId1),
+        database.getSpeciesById(speciesId2)
+      ]);
+      
+      if (!species1) {
+        return res.status(404).json({
+          error: 'First species not found',
+          speciesId: speciesId1
+        });
+      }
+      
+      if (!species2) {
+        return res.status(404).json({
+          error: 'Second species not found',
+          speciesId: speciesId2
+        });
+      }
+      
+      // Get latest traits for both species
+      const [traits1, traits2] = await Promise.all([
+        database.query(`
+          SELECT * FROM species_traits 
+          WHERE species_id = ? 
+          ORDER BY generation DESC 
+          LIMIT 1
+        `, [speciesId1]),
+        database.query(`
+          SELECT * FROM species_traits 
+          WHERE species_id = ? 
+          ORDER BY generation DESC 
+          LIMIT 1
+        `, [speciesId2])
+      ]);
+      
+      const traitNames = [
+        'trait_size', 'trait_speed', 'trait_strength', 'trait_intelligence',
+        'trait_longevity', 'trait_resistance', 'trait_metabolism', 'trait_sociability',
+        'trait_adaptability', 'trait_vision_range', 'trait_camouflage', 'trait_reproduction_rate'
+      ];
+      
+      const comparison = {
+        species1: {
+          info: species1,
+          traits: traits1[0] || {}
+        },
+        species2: {
+          info: species2,
+          traits: traits2[0] || {}
+        },
+        differences: {},
+        similarities: {}
+      };
+      
+      // Calculate trait differences
+      if (traits1[0] && traits2[0]) {
+        traitNames.forEach(trait => {
+          const val1 = traits1[0][trait] || 0;
+          const val2 = traits2[0][trait] || 0;
+          const diff = Math.abs(val1 - val2);
+          
+          comparison.differences[trait] = {
+            species1: val1,
+            species2: val2,
+            difference: diff,
+            percentage: (diff * 100).toFixed(2)
+          };
+          
+          if (diff < 0.1) {
+            comparison.similarities[trait] = { val1, val2, similarity: (1 - diff) * 100 };
+          }
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: comparison
+      });
+    } catch (error) {
+      res.status(500).json({
+        error: 'Failed to compare species',
+        message: error.message
+      });
+    }
+  }
+);
+
+module.exports = router;

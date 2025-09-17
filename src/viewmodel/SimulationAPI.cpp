@@ -118,20 +118,44 @@ void SimulationAPI::setSpeed(double speed) {
 
 std::string SimulationAPI::getPopulationData() const {
     std::ostringstream oss;
-    oss << "{\"population_count\":" << species_.size() << ",\"species\":[";
+    
+    // Calculer population totale (simulée)
+    uint32_t totalPopulation = 0;
+    for (const auto& s : species_) {
+        // Population basée sur l'énergie et les traits de reproduction
+        uint32_t speciesPopulation = static_cast<uint32_t>(
+            100 + (s.getEnergy() * 50) + (s.getTrait(TraitType::REPRODUCTION_RATE) * 100)
+        );
+        totalPopulation += speciesPopulation;
+    }
+    
+    oss << "{";
+    oss << "\"totalPopulation\":" << totalPopulation << ",";
+    oss << "\"generation\":" << (world_.getDayCount() / 10) << ",";
+    oss << "\"species\":[";
     
     bool first = true;
     for (const auto& s : species_) {
         if (!first) oss << ",";
-        oss << "{\"name\":\"" << s.getName() << "\",";
-        oss << "\"energy\":" << s.getEnergy() << ",";
+        
+        // Population individuelle de l'espèce
+        uint32_t speciesPopulation = static_cast<uint32_t>(
+            100 + (s.getEnergy() * 50) + (s.getTrait(TraitType::REPRODUCTION_RATE) * 100)
+        );
+        
+        oss << "{";
+        oss << "\"name\":\"" << s.getName() << "\",";
+        oss << "\"population\":" << speciesPopulation << ",";
+        oss << "\"averageEnergy\":" << s.getEnergy() << ",";
+        oss << "\"fitness\":" << (s.getEnergy() * s.getTrait(TraitType::ENERGY_EFFICIENCY)) << ",";
         oss << "\"traits\":{";
         oss << "\"size\":" << s.getTrait(TraitType::SIZE) << ",";
         oss << "\"speed\":" << s.getTrait(TraitType::SPEED) << ",";
         oss << "\"energy_efficiency\":" << s.getTrait(TraitType::ENERGY_EFFICIENCY) << ",";
         oss << "\"reproduction_rate\":" << s.getTrait(TraitType::REPRODUCTION_RATE) << ",";
         oss << "\"intelligence\":" << s.getTrait(TraitType::INTELLIGENCE);
-        oss << "}}";
+        oss << "}";
+        oss << "}";
         first = false;
     }
     

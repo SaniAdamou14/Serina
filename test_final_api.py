@@ -8,8 +8,8 @@ import sys
 import os
 import json
 
-# Ajouter le répertoire build au path pour trouver le module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'build', 'Release'))
+# Ajouter le répertoire python au path pour trouver le module
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'python', 'Release'))
 
 def test_complete_simulation():
     """Test complet de SimulationAPI"""

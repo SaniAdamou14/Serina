@@ -4,3 +4,4 @@ C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/CMakeFiles/ZERO_CHECK.di
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/core/CMakeFiles/serina_core.dir
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/viewmodel/CMakeFiles/serina_viewmodel.dir
 C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/utils/CMakeFiles/serina_utils.dir
+C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/tests/CMakeFiles/tests.dir

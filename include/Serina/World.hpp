@@ -102,6 +102,7 @@ namespace Serina
         bool isDay() const { return timeState_.isDay(); }
         bool isNight() const { return timeState_.isNight(); }
         int getCurrentSeason() const { return timeState_.currentSeason; }
+        int getDayCount() const { return timeState_.currentDay; }
 
         // Spatial queries
         std::vector<std::pair<int, int>> findResourceSources(const std::string &type, double minAmount = 0.0) const;

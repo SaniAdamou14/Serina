@@ -1,0 +1,265 @@
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const cors = require('cors');
+const path = require('path');
+
+// Import services
+const database = require('./services/database');
+const websocketService = require('./services/websocket');
+const EvolutionEngine = require('./services/evolution');
+const SimulationService = require('./services/simulation');
+
+// Import routes
+const speciesRoutes = require('./routes/species');
+const simulationRoutes = require('./routes/simulations');
+const environmentRoutes = require('./routes/environment');
+
+// Create Express app
+const app = express();
+const server = http.createServer(app);
+
+// Configure Socket.IO with CORS
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
+
+// Security and middleware
+app.use(cors({
+  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Body parsing middleware
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static files
+app.use('/static', express.static(path.join(__dirname, 'public')));
+
+// Logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Services initialization
+let evolutionEngine = null;
+let simulationService = null;
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    services: {
+      database: database.isConnected(),
+      evolutionEngine: evolutionEngine ? evolutionEngine.isRunning : false,
+      simulation: simulationService ? simulationService.getSimulationStatus() : null,
+      websocket: websocketService.isInitialized
+    }
+  });
+});
+
+// Initialize services
+async function initializeServices() {
+  try {
+    console.log('🚀 Initializing services...');
+
+    // Initialize database
+    await database.initialize();
+    console.log('✅ Database service initialized');
+
+    // Initialize services
+    evolutionEngine = new EvolutionEngine();
+    await evolutionEngine.initialize();
+    console.log('✅ Evolution Engine initialized');
+
+    simulationService = new SimulationService();
+    await simulationService.initialize();
+    console.log('✅ Simulation Service initialized');
+
+    // Initialize WebSocket service
+    websocketService.initialize(io);
+    console.log('✅ WebSocket Service initialized');
+
+    console.log('✅ All services initialized successfully');
+
+  } catch (error) {
+    console.error('❌ Failed to initialize services:', error);
+    process.exit(1);
+  }
+}
+
+// Setup routes
+app.use('/api/species', speciesRoutes);
+app.use('/api/simulations', simulationRoutes);
+app.use('/api/environment', environmentRoutes);
+
+// Evolution control endpoints
+app.post('/api/evolution/start', async (req, res) => {
+  try {
+    if (!evolutionEngine) {
+      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
+    }
+    await evolutionEngine.start();
+    res.json({ success: true, message: 'Evolution started' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/evolution/stop', async (req, res) => {
+  try {
+    if (!evolutionEngine) {
+      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
+    }
+    evolutionEngine.stop();
+    res.json({ success: true, message: 'Evolution stopped' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/evolution/reset', async (req, res) => {
+  try {
+    if (!evolutionEngine) {
+      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
+    }
+    await evolutionEngine.reset();
+    res.json({ success: true, message: 'Evolution reset' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/api/evolution/status', async (req, res) => {
+  try {
+    if (!evolutionEngine) {
+      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
+    }
+    const data = await evolutionEngine.getSimulationData();
+    res.json({ success: true, data: data });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found',
+    path: req.originalUrl
+  });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    message: err.message
+  });
+});
+
+// Start server
+const PORT = process.env.PORT || 3001;
+
+async function startServer() {
+  try {
+    await initializeServices();
+    
+    server.listen(PORT, () => {
+      console.log(`🌟 Serina Evolution Server running on port ${PORT}`);
+      console.log(`📡 WebSocket server ready for connections`);
+      console.log(`🔗 API available at http://localhost:${PORT}/api`);
+      console.log(`💚 Health check at http://localhost:${PORT}/health`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('\n📡 Received SIGTERM, initiating graceful shutdown...');
+  try {
+    if (evolutionEngine) evolutionEngine.stop();
+    if (simulationService) await simulationService.cleanup();
+    websocketService.cleanup();
+    await database.close();
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+});
+
+process.on('SIGINT', async () => {
+  console.log('\n📡 Received SIGINT, initiating graceful shutdown...');
+  try {
+    if (evolutionEngine) evolutionEngine.stop();
+    if (simulationService) await simulationService.cleanup();
+    websocketService.cleanup();
+    await database.close();
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+});
+
+// Start the server if this file is run directly
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, server, io };
+
+// Scheduled tasks for continuous evolution
+cron.schedule('*/5 * * * * *', () => {
+  if (evolutionEngine?.isRunning()) {
+    performanceMonitor?.recordMetrics();
+  }
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  
+  if (evolutionEngine) {
+    await evolutionEngine.stop();
+  }
+  
+  if (performanceMonitor) {
+    performanceMonitor.stopMonitoring();
+  }
+  
+  if (database) {
+    await database.close();
+  }
+  
+  server.close(() => {
+    console.log('Process terminated');
+    process.exit(0);
+  });
+});
+
+// Start the server if this file is run directly
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = { app, server, io };
