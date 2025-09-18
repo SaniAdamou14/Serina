@@ -136,6 +136,7 @@ async function initializeServices() {
     console.log('✅ Unified Serina Service initialized');
 
     // Initialize WebSocket service
+    websocketService.setUnifiedSerinaService(unifiedSerinaService);
     websocketService.initialize(io);
     console.log('✅ WebSocket Service initialized');
 

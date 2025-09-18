@@ -174,9 +174,17 @@ if %errorlevel% neq 0 goto :VCEnd</Command>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </ProjectReference>
+    <ProjectReference Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\python\src\serina_cli.vcxproj">
+      <Project>{506200FA-3891-326F-ABAF-C6A0C9FE791E}</Project>
+      <Name>serina_cli</Name>
+    </ProjectReference>
     <ProjectReference Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\python\src\core\serina_core.vcxproj">
       <Project>{FBF41BCE-A12C-3174-B666-73B71CDAF3B2}</Project>
       <Name>serina_core</Name>
+    </ProjectReference>
+    <ProjectReference Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\python\src\serina_demo.vcxproj">
+      <Project>{088B98D8-48EE-32C8-A00B-A7828A856368}</Project>
+      <Name>serina_demo</Name>
     </ProjectReference>
     <ProjectReference Include="C:\Users\NB03\Pictures\Projects\Webmaster\Serina\python\serina_py.vcxproj">
       <Project>{1DFA1DF0-88E1-327F-AF81-3C0ABF0929C4}</Project>

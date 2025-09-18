@@ -6,6 +6,7 @@
 		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/core/cmake_install.cmake",
 		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/viewmodel/cmake_install.cmake",
 		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/src/utils/cmake_install.cmake",
+		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/_deps/nlohmann_json-build/cmake_install.cmake",
 		"C:/Users/NB03/Pictures/Projects/Webmaster/Serina/python/tests/cmake_install.cmake"
 	],
 	"Parallel" : false

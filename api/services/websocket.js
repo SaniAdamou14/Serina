@@ -7,7 +7,13 @@ class WebSocketService {
     this.clients = new Map();
     this.simulationChannels = new Map();
     this.evolutionEngine = null;
+    this.unifiedSerinaService = null;
     this.isInitialized = false;
+  }
+
+  setUnifiedSerinaService(unifiedSerinaService) {
+    this.unifiedSerinaService = unifiedSerinaService;
+    console.log('✅ WebSocket service linked to UnifiedSerinaService');
   }
 
   initialize(socketServer) {
@@ -128,25 +134,59 @@ class WebSocketService {
 
   async handleSimulationCommand(socket, data) {
     try {
-      const { command, simulationId, payload } = data;
+      const { command, simulationId, payload, parameters } = data;
 
+      // Support both old format and new frontend format
+      let actualCommand = command;
+      let actualSimulationId = simulationId;
+
+      // Map frontend commands to backend commands
       switch (command) {
+        case 'START':
+          actualCommand = 'start-simulation';
+          break;
+        case 'PAUSE':
+          actualCommand = 'pause-simulation';
+          break;
+        case 'RESET':
+          actualCommand = 'stop-simulation';
+          break;
         case 'start-simulation':
-          await this.startSimulation(simulationId);
-          break;
         case 'pause-simulation':
-          await this.pauseSimulation(simulationId);
-          break;
         case 'stop-simulation':
-          await this.stopSimulation(simulationId);
-          break;
         case 'update-config':
-          await this.updateSimulationConfig(simulationId, payload);
+          actualCommand = command;
           break;
         default:
+          console.log('Unknown simulation command:', command);
           socket.emit('command-error', {
             error: `Unknown command: ${command}`
           });
+          return;
+      }
+
+      // If no simulationId provided, create or use active simulation
+      if (!actualSimulationId) {
+        // Create a new simulation if starting
+        if (actualCommand === 'start-simulation') {
+          actualSimulationId = 'serina-' + Date.now();
+          await this.createNewSimulation(actualSimulationId, parameters);
+        }
+      }
+
+      switch (actualCommand) {
+        case 'start-simulation':
+          await this.startSimulation(actualSimulationId, parameters);
+          break;
+        case 'pause-simulation':
+          await this.pauseSimulation(actualSimulationId);
+          break;
+        case 'stop-simulation':
+          await this.stopSimulation(actualSimulationId);
+          break;
+        case 'update-config':
+          await this.updateSimulationConfig(actualSimulationId, payload || parameters);
+          break;
       }
     } catch (error) {
       console.error('WebSocket command error:', error);
@@ -157,15 +197,62 @@ class WebSocketService {
   }
 
   // Simulation Control Methods
-  async startSimulation(simulationId) {
-    await database.updateSimulation(simulationId, {
-      status: 'running'
+  async createNewSimulation(simulationId, parameters = {}) {
+    const defaultConfig = {
+      worldSize: parameters.worldSize || 50,
+      initialSpecies: parameters.initialSpecies || 5,
+      steps: parameters.steps || 1000
+    };
+
+    // Use UnifiedSerinaService if available
+    if (this.unifiedSerinaService) {
+      try {
+        const result = await this.unifiedSerinaService.startSimulation({
+          simulationId,
+          ...defaultConfig
+        });
+        return result;
+      } catch (error) {
+        console.error('Failed to create simulation via UnifiedSerinaService:', error);
+      }
+    }
+
+    // Fallback to database only
+    await database.createSimulation({
+      id: simulationId,
+      status: 'created',
+      config: defaultConfig,
+      created_at: new Date()
     });
 
-    this.broadcastToSimulation(simulationId, 'simulation-started', {
-      simulationId,
-      timestamp: new Date().toISOString()
-    });
+    return { simulationId, config: defaultConfig };
+  }
+
+  async startSimulation(simulationId, parameters) {
+    try {
+      // If simulation doesn't exist, create it first
+      let simulation;
+      try {
+        simulation = await database.getSimulation(simulationId);
+      } catch (error) {
+        // Simulation doesn't exist, create it
+        await this.createNewSimulation(simulationId, parameters);
+      }
+
+      await database.updateSimulation(simulationId, {
+        status: 'running'
+      });
+
+      this.broadcastToSimulation(simulationId, 'simulation-started', {
+        simulationId,
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`🚀 Simulation ${simulationId} started via WebSocket`);
+    } catch (error) {
+      console.error('Failed to start simulation:', error);
+      throw error;
+    }
   }
 
   async pauseSimulation(simulationId) {
