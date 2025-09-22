@@ -199,6 +199,23 @@ void testSimulationAPI() {
     
     std::string worldState = sim.getWorldState();
     assert(!worldState.empty());
+
+    // New unified statistics (simple mode)
+    auto stats = sim.getStatistics();
+    assert(stats.speciesCount > 0);
+    assert(stats.totalPopulation >= 0);
+    std::cout << "Statistics (simple mode): population=" << stats.totalPopulation
+              << " species=" << stats.speciesCount << std::endl;
+
+    // Advanced population mode test
+    sim.enableAdvancedPopulation(true, 50);
+    for (int i = 0; i < 5; ++i) {
+        sim.step();
+    }
+    auto advStats = sim.getStatistics();
+    assert(advStats.totalPopulation > 0);
+    std::cout << "Statistics (advanced mode): population=" << advStats.totalPopulation
+              << " generation=" << advStats.generation << std::endl;
     
     std::cout << "✓ SimulationAPI tests passed!" << std::endl;
 }

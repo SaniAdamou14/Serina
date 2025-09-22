@@ -143,6 +143,20 @@ PYBIND11_MODULE(serina_py, m) {
         .def("getHeight", &Serina::World::getHeight);
 
     // SimulationAPI class (existing)
+    py::class_<Serina::SimulationStatistics>(m, "SimulationStatistics")
+        .def_property_readonly("tick", [](const Serina::SimulationStatistics &s){ return s.tick; })
+        .def_property_readonly("generation", [](const Serina::SimulationStatistics &s){ return s.generation; })
+        .def_property_readonly("timestampMs", [](const Serina::SimulationStatistics &s){ return s.timestampMs; })
+        .def_property_readonly("speciesCount", [](const Serina::SimulationStatistics &s){ return s.speciesCount; })
+        .def_property_readonly("totalPopulation", [](const Serina::SimulationStatistics &s){ return s.totalPopulation; })
+        .def_property_readonly("averageFitness", [](const Serina::SimulationStatistics &s){ return s.averageFitness; })
+        .def_property_readonly("maxFitness", [](const Serina::SimulationStatistics &s){ return s.maxFitness; })
+        .def_property_readonly("minFitness", [](const Serina::SimulationStatistics &s){ return s.minFitness; })
+        .def_property_readonly("geneticDiversity", [](const Serina::SimulationStatistics &s){ return s.geneticDiversity; })
+        .def_property_readonly("births", [](const Serina::SimulationStatistics &s){ return s.births; })
+        .def_property_readonly("deaths", [](const Serina::SimulationStatistics &s){ return s.deaths; })
+        .def("toJson", &Serina::SimulationStatistics::toJson);
+
     py::class_<Serina::SimulationAPI>(m, "SimulationAPI")
         .def(py::init<int, int>(), py::arg("worldWidth"), py::arg("worldHeight"))
         .def("initialize", &Serina::SimulationAPI::initialize)
@@ -151,5 +165,8 @@ PYBIND11_MODULE(serina_py, m) {
         .def("pause", &Serina::SimulationAPI::pause)
         .def("setSpeed", &Serina::SimulationAPI::setSpeed, py::arg("speed"))
         .def("getPopulationData", &Serina::SimulationAPI::getPopulationData)
-        .def("getWorldState", &Serina::SimulationAPI::getWorldState);
+        .def("getWorldState", &Serina::SimulationAPI::getWorldState)
+        .def("enableAdvancedPopulation", &Serina::SimulationAPI::enableAdvancedPopulation,
+             py::arg("enable"), py::arg("initialSize") = 200)
+        .def("getStatistics", &Serina::SimulationAPI::getStatistics);
 }

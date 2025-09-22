@@ -1,78 +1,264 @@
-# 🧬 Serina - Advanced Evolutionary Ecosystem Simulator
+# Serina - Simulateur Évolutionnaire Autonome# Serina - Simulateur Évolutionnaire Autonome
 
-## 📋 Overview
 
-**Serina** is a cutting-edge evolutionary ecosystem simulator built with C++20 and featuring Python integration. The project simulates complex species evolution in dynamic environments with sophisticated genetic systems, realistic physics, and real-time visualization capabilities.
 
-### 🌟 Key Features
+![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)![Serina Logo](https://img.shields.io/badge/Serina-Evolution%20Simulator-blue?style=flat-square)
 
-- **🧠 Advanced Genetics**: 12-trait genetic system with phenotype expression and biological constraints
-- **🌍 Dynamic World**: Varied terrain, climate systems, day/night cycles, and seasonal changes  
-- **⚡ High-Performance Physics**: SIMD-optimized spatial hashing with collision detection
-- **🐍 Python Integration**: Complete pybind11 API for control and visualization
-- **📊 Real-Time Visualization**: Interactive matplotlib graphics with population analytics
-- **🔬 Modular Architecture**: Modern C++20 design with extensible plugin system
-- **🎯 Autonomous Simulation**: Self-regulating ecosystem with emergent behaviors
-- **💾 Advanced Persistence**: JSON serialization with comprehensive data export
+![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)
 
-## 🏗️ Project Architecture
+![Status](https://img.shields.io/badge/Status-Production%20Ready-green?style=flat-square)![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)
 
-### Directory Structure
+![License](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square)
+
+**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Il permet de simuler l'évolution d'espèces virtuelles dans des environnements complexes de manière complètement autonome.
+
+**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Ce système permet de simuler l'évolution d'espèces virtuelles dans des environnements complexes avec des interactions écologiques réalistes.
+
+## ⚡ Démarrage Rapide
+
+## ✨ Fonctionnalités Principales
+
+### Installation
+
+- � **Système génétique avancé** : 8 traits évolutionnaires avec mutations et croisements réalistes
+
+```bash- 🌍 **Environnements multiples** : 4+ zones climatiques avec conditions spécifiques
+
+# Compilation- 🔄 **Évolution continue** : Simulations pouvant tourner indéfiniment avec progression sauvegardée
+
+cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON- 📊 **Statistiques complètes** : Métriques d'évolution en temps réel et historiques
+
+cmake --build build --config Release- 🚀 **Mode autonome** : Runner indépendant avec gestion signaux et snapshots automatiques
+
+- 🐍 **Bindings Python** : API complète pour intégration et analyse de données
+
+# Lancement immédiat- 🌐 **API REST** : Interface web pour contrôle à distance (optionnel)
+
+./run_serina.sh  # Linux/macOS
+
+run_serina.bat   # Windows## � Installation et Compilation
 
 ```
-Serina/
-├── 📁 include/Serina/          # C++ Headers
-│   ├── 🧬 Genome.hpp           # 12-trait genetic system
-│   ├── 🐾 Species.hpp          # Species behavior & phenotypes
-│   ├── 🌍 World.hpp            # Environment simulation
-│   ├── ⚡ PhysicsEngine.hpp    # SIMD-optimized physics
-│   ├── 🔧 Config.hpp           # JSON configuration system
-│   └── 🔌 SimulationAPI.hpp    # Python interface layer
-├── 📁 src/                     # C++ Implementations
-│   ├── 📁 core/               # Core simulation components
-│   ├── 📁 physics/            # Physics engine & spatial systems
-│   ├── 📁 utils/              # Utility classes & helpers
+
+### Prérequis
+
+### Utilisation de Base- **C++20** compatible compiler (MSVC 2022, GCC 10+, Clang 12+)
+
+- **CMake 3.20+**
+
+```bash- **Python 3.8+** (pour les bindings, optionnel)
+
+# Simulation infinie autonome- **pybind11** (pour les bindings Python)
+
+./run_serina.sh
+
+### Compilation Rapide
+
+# 1000 générations avec snapshots fréquents
+
+./run_serina.sh -g 1000 -s 50```bash
+
+# Cloner le projet
+
+# Expérience personnaliséegit clone https://github.com/[username]/serina.git
+
+./run_serina.sh -g 5000 -o mon_experience -p 2000cd serina
+
+```
+
+# Build complet
+
+## 🎯 Fonctionnalités Cléscmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON
+
+cmake --build build --config Release
+
+- **🔄 Évolution autonome** : Simulations pouvant tourner indéfiniment
+
+- **📊 Monitoring complet** : Logs temps réel + snapshots automatiques# Les exécutables sont dans build/bin/
+
+- **🧬 Génétique avancée** : Système à 8 traits avec mutations réalistes```
+
+- **🌍 Environnements multiples** : Zones climatiques diversifiées
+
+- **🐍 API Python** : Contrôle et analyse de données### Configuration pybind11 (si nécessaire)
+
+- **🛑 Arrêt gracieux** : Ctrl+C pour terminer proprement
+
+```bash
+
+## 📊 Données Générées# Spécifier manuellement le chemin pybind11
+
+cmake -S . -B build -DPYBIND11_ROOT="/chemin/vers/pybind11"
+
+Chaque simulation produit :```
+
+
+
+```text## � Utilisation
+
+results_YYYYMMDD_HHMMSS/
+
+├── evolution_log.txt        # Événements détaillés### Lancement Rapide - Mode Autonome
+
+├── evolution_stats.jsonl    # Métriques par génération
+
+├── snapshot_gen_*.json      # États périodiquesLe moyen le plus simple de démarrer une simulation évolutionnaire :
+
+└── final_report.txt         # Résumé final
+
+``````bash
+
+# Windows
+
+## 🐍 API Pythonrun_serina.bat
+
+
+
+```python# Linux/macOS  
+
+import serina_pychmod +x run_serina.sh
+
+./run_serina.sh
+
+sim = serina_py.SimulationAPI()```
+
+sim.enableAdvancedPopulation(True, 1000)
+
+### Options du Runner
+
+for gen in range(1000):
+
+    sim.step()```bash
+
+    if gen % 100 == 0:# Simulation infinie (arrêt Ctrl+C)
+
+        stats = sim.getStatistics()./run_serina.sh
+
+        print(f"Gen {gen}: {stats.totalSpecies} espèces")
+
+```# 1000 générations avec snapshots fréquents
+
+./run_serina.sh -g 1000 -s 50
+
+## 🧪 Tests
+
+# Simulation personnalisée
+
+```bash./run_serina.sh -g 5000 -s 100 -l 5 -o mon_experience -p 2000
+
+# Test d'intégration complet
+
+./build/bin/test_runner_integration# Mode simple (sans évolution avancée)
+
+./run_serina.sh --simple
+
+# Tests unitaires```
+
+./build/bin/tests
+
+```**Paramètres disponibles :**
+
+- `-g N` : Nombre maximum de générations (0 = infini)
+
+## 🏗️ Architecture- `-s N` : Intervalle de snapshots (défaut: 100)
+
+- `-l N` : Intervalle de logs (défaut: 10) 
+
+Le projet est organisé en modules C++20 modernes :- `-o DIR` : Répertoire de sortie
+
+- `-p N` : Taille de population en mode avancé (défaut: 1000)
+
+- **core/** : Moteur de simulation (World, Species, Genome)- `--simple` : Mode évolution simple (plus rapide, moins de détails)
+
+- **viewmodel/** : API publique (SimulationAPI, statistiques)├── 📁 src/                     # C++ Implementations
+
+- **utils/** : Utilitaires (physique, interactions)│   ├── 📁 core/               # Core simulation components
+
+- **python/** : Bindings Python (pybind11)│   ├── 📁 physics/            # Physics engine & spatial systems
+
+- **tests/** : Tests unitaires et d'intégration│   ├── 📁 utils/              # Utility classes & helpers
+
 │   └── 📁 api/                # Python API implementation
-├── 📁 python/                  # Python Integration
+
+## ⚙️ Configuration Avancée├── 📁 python/                  # Python Integration
+
 │   ├── 🎮 advanced_simulation.py   # Autonomous ecosystem runner
-│   ├── 🔍 visualization_test.py    # Real-time visualization
-│   ├── 📡 api_test.py             # API functionality tests
-│   └── 🔗 bindings.cpp           # PyBind11 interface
-├── 📁 tests/                   # Comprehensive test suite
-├── 📁 config/                  # Configuration templates
+
+```bash│   ├── 🔍 visualization_test.py    # Real-time visualization
+
+# Options CMake│   ├── 📡 api_test.py             # API functionality tests
+
+cmake -S . -B build \│   └── 🔗 bindings.cpp           # PyBind11 interface
+
+    -DBUILD_PYTHON_MODULE=ON \├── 📁 tests/                   # Comprehensive test suite
+
+    -DPYBIND11_ROOT="/chemin/custom"├── 📁 config/                  # Configuration templates
+
 └── 📁 build/                   # Build artifacts
-```
 
-### Core Systems
+# Options du runner```
 
-#### 🧬 Advanced Genetic System (`Genome.hpp`)
+./run_serina.sh --help
 
-The genetic system implements 12 sophisticated evolutionary traits:
+```### Core Systems
+
+
+
+## 🎮 Modes d'Évolution#### 🧬 Advanced Genetic System (`Genome.hpp`)
+
+
+
+1. **Mode Simple** (`--simple`) : Évolution basique, plus rapideThe genetic system implements 12 sophisticated evolutionary traits:
+
+2. **Mode Avancé** (défaut) : PopulationManager complet avec individus distincts
 
 ```cpp
-enum class TraitType {
+
+## 📈 Métriquesenum class TraitType {
+
     SIZE,              // Organism size (affects metabolism & reproduction)
-    SPEED,             // Movement velocity & agility  
-    STRENGTH,          // Physical power & dominance
-    INTELLIGENCE,      // Cognitive capacity & learning ability
-    LONGEVITY,         // Lifespan & aging resistance  
+
+- Statistiques temps réel : espèces, population, diversité génétique    SPEED,             // Movement velocity & agility  
+
+- Événements d'extinction et spéciation    STRENGTH,          // Physical power & dominance
+
+- Métriques d'adaptation environnementale    INTELLIGENCE,      // Cognitive capacity & learning ability
+
+- Logs de performance et progression    LONGEVITY,         // Lifespan & aging resistance  
+
     RESISTANCE,        // Disease & environmental stress resistance
-    METABOLISM,        // Energy processing efficiency
+
+## 🤝 Contribution    METABOLISM,        // Energy processing efficiency
+
     SOCIABILITY,       // Group behavior & cooperation tendencies
-    ADAPTABILITY,      // Environmental flexibility
-    VISION_RANGE,      // Sensory perception distance
-    CAMOUFLAGE        // Predator evasion capability
-};
+
+Voir [`CONTRIBUTING.md`](CONTRIBUTING.md) pour les guidelines. Le projet privilégie :    ADAPTABILITY,      // Environmental flexibility
+
+- PRs thématiques et ciblées    VISION_RANGE,      // Sensory perception distance
+
+- Tests obligatoires pour tout ajout    CAMOUFLAGE        // Predator evasion capability
+
+- Documentation des nouveaux formats JSON};
+
 ```
+
+## 📄 License
 
 **Advanced Features:**
 
+MIT License - Voir [`LICENSE`](LICENSE)
+
 - Stochastic genetic mutations with realistic probability distributions
-- Sophisticated crossover mechanisms during reproduction  
+
+---- Sophisticated crossover mechanisms during reproduction  
+
 - Trait dominance and recessiveness modeling
-- Mendelian inheritance patterns with genetic drift simulation
+
+**Inspiré par "Serina - The World of Birds"** de Dylan Bajda- Mendelian inheritance patterns with genetic drift simulation
+
 - Phenotype expression with environmental interactions
-- Metabolic rate calculations affecting survival and reproduction
+
+🌍 *L'évolution ne s'arrête jamais...*- Metabolic rate calculations affecting survival and reproduction
 
 #### 🐾 Species Management (`Species.hpp`)
 

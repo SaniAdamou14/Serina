@@ -1,47 +1,38 @@
-// Core genetic trait types
+// Core genetic trait types - correspondant exactement à l'API C++
 export enum TraitType {
   SIZE = 'SIZE',
-  SPEED = 'SPEED', 
-  STRENGTH = 'STRENGTH',
+  SPEED = 'SPEED',
+  ENERGY_EFFICIENCY = 'ENERGY_EFFICIENCY',
+  REPRODUCTION_RATE = 'REPRODUCTION_RATE',
+  AGGRESSION = 'AGGRESSION',
   INTELLIGENCE = 'INTELLIGENCE',
   LONGEVITY = 'LONGEVITY',
-  RESISTANCE = 'RESISTANCE',
-  METABOLISM = 'METABOLISM',
-  SOCIABILITY = 'SOCIABILITY',
-  ADAPTABILITY = 'ADAPTABILITY',
-  VISION_RANGE = 'VISION_RANGE',
-  CAMOUFLAGE = 'CAMOUFLAGE',
-  REPRODUCTION_RATE = 'REPRODUCTION_RATE'
+  RESISTANCE = 'RESISTANCE'
 }
 
 export interface GeneticTrait {
   type: TraitType
   value: number // 0.0 to 1.0
   dominance: number // 0.0 to 1.0
-  mutationRate: number // 0.0 to 1.0
 }
 
 export interface Genome {
   traits: Record<TraitType, GeneticTrait>
-  id: string
-  generation: number
-  parentIds: string[]
+  id?: string
+  generation?: number
+  parentIds?: string[]
 }
 
 // Phenotype representation
 export interface Phenotype {
   size: number
   speed: number
-  strength: number
+  energyEfficiency: number
+  reproductionRate: number
+  aggression: number
   intelligence: number
   longevity: number
   resistance: number
-  metabolism: number
-  sociability: number
-  adaptability: number
-  visionRange: number
-  camouflage: number
-  reproductionRate: number
   metabolicRate: number
   reproductionThreshold: number
   fitnessScore: number
@@ -65,7 +56,7 @@ export interface Individual {
   causeOfDeath?: string
 }
 
-// Species and population
+// Species and population - correspondant aux API C++
 export interface Species {
   id: string
   name: string
@@ -75,20 +66,17 @@ export interface Species {
   generationSpan: number
   extinctionRisk: number
   ecologicalNiche: string
+  energy: number
+  genome: Genome
 }
 
-// Environmental types
+// Environmental types - correspondant aux enums C++
 export enum TerrainType {
   LAND = 'LAND',
   WATER = 'WATER',
   MOUNTAIN = 'MOUNTAIN',
   FOREST = 'FOREST',
-  DESERT = 'DESERT',
-  WETLAND = 'WETLAND',
-  GRASSLAND = 'GRASSLAND',
-  TUNDRA = 'TUNDRA',
-  CAVES = 'CAVES',
-  VOLCANIC = 'VOLCANIC'
+  DESERT = 'DESERT'
 }
 
 export enum ClimateZone {
@@ -96,12 +84,11 @@ export enum ClimateZone {
   TEMPERATE = 'TEMPERATE',
   ARCTIC = 'ARCTIC',
   DESERT = 'DESERT',
-  OCEANIC = 'OCEANIC',
-  MONTANE = 'MONTANE',
-  SUBTROPICAL = 'SUBTROPICAL',
-  BOREAL = 'BOREAL',
-  MEDITERRANEAN = 'MEDITERRANEAN'
+  OCEANIC = 'OCEANIC'
+
 }
+
+
 
 export interface EnvironmentalConditions {
   temperature: number
@@ -179,14 +166,6 @@ export interface WebSocketMessage {
   timestamp: number
 }
 
-// API response types
-export interface ApiResponse<T = any> {
-  success: boolean
-  data?: T
-  error?: string
-  timestamp: number
-}
-
 // Chart and visualization data
 export interface PopulationChartData {
   time: number[]
@@ -232,16 +211,19 @@ export interface ControlPanelProps {
   onLoad: () => void
 }
 
-// Simulation control commands
+// Simulation control commands - Mise à jour pour correspondre au backend
 export enum SimulationCommand {
   START = 'START',
   PAUSE = 'PAUSE',
+  STOP = 'STOP',
   RESET = 'RESET',
   STEP = 'STEP',
   SAVE = 'SAVE',
   LOAD = 'LOAD',
   SET_SPEED = 'SET_SPEED',
   SET_CONFIG = 'SET_CONFIG',
+  GET_STATUS = 'GET_STATUS',
+  GET_DATA = 'GET_DATA',
   ADD_SPECIES = 'ADD_SPECIES',
   REMOVE_SPECIES = 'REMOVE_SPECIES'
 }
@@ -250,4 +232,89 @@ export interface CommandMessage {
   command: SimulationCommand
   parameters?: any
   timestamp: number
+}
+
+// Performance and Environment types
+export interface PerformanceMetrics {
+  fps: number
+  memoryUsage: number
+  processingTime: number
+  networkLatency?: number
+  simulationSpeed: number
+}
+
+export interface EnvironmentData {
+  temperature: number
+  humidity: number
+  oxygenLevel: number
+  co2Level: number
+  biomass: number
+  biodiversity: number
+  climateZone: ClimateZone
+  weatherPattern: string
+}
+
+// Types supplémentaires pour l'API Backend
+export interface Cell {
+  resources: Record<string, number> // plants, water, energy, food
+  terrain: TerrainType
+  climate: ClimateZone
+  temperature: number
+  humidity: number
+  elevation: number
+}
+
+// API Serina - Routes disponibles
+export interface SerinaApiEndpoints {
+  start: '/api/serina/start'
+  stop: '/api/serina/stop/:simulationId'
+  status: '/api/serina/status/:simulationId'
+  data: '/api/serina/data/:simulationId'
+  list: '/api/serina/list'
+}
+
+// WebSocket message types
+export enum WebSocketMessageType {
+  SIMULATION_UPDATE = 'simulation_data',
+  STATUS_UPDATE = 'status_update',
+  ERROR = 'error',
+  COMMAND = 'simulation-command',
+  CONNECTED = 'connected',
+  DISCONNECTED = 'disconnect'
+}
+
+export interface WebSocketEventMessage {
+  type: WebSocketMessageType
+  data: any
+  timestamp: number
+}
+
+// Additional API types
+export interface ApiResponse<T = any> {
+  success: boolean
+  data?: T
+  error?: string
+  message?: string
+  timestamp?: number
+}
+
+export interface SimulationStatus {
+  simulationId: string
+  isRunning: boolean
+  currentGeneration: number
+  populationCount: number
+  startTime: string
+  lastUpdate: string
+  performance: PerformanceMetrics
+}
+
+export interface SpeciesData {
+  id: string
+  name: string
+  populationCount: number
+  averageTraits: Record<TraitType, number>
+  generationSpan: number
+  extinctionRisk: number
+  ecologicalNiche: string
+  individuals: Individual[]
 }

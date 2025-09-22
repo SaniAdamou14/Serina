@@ -1,0 +1,10 @@
+^C:\USERS\NB03\PICTURES\PROJECTS\WEBMASTER\SERINA\BUILD_TEST\CMAKEFILES\D75CDFA33ACDA10BD366B110CDD54333\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/NB03/Pictures/Projects/Webmaster/Serina -BC:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_test --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/NB03/Pictures/Projects/Webmaster/Serina/build_test/Serina.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

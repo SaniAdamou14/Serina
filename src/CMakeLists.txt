@@ -33,7 +33,17 @@ target_link_libraries(serina_cli PRIVATE
 )
 target_include_directories(serina_cli PRIVATE ../include)
 
+# Build autonomous evolution runner
+add_executable(serina_runner serina_runner.cpp)
+target_link_libraries(serina_runner PRIVATE 
+    serina_core 
+    serina_viewmodel 
+    serina_utils
+)
+target_include_directories(serina_runner PRIVATE ../include)
+target_compile_features(serina_runner PRIVATE cxx_std_20)
+
 # Set output directories
-set_target_properties(serina_demo serina_cli PROPERTIES
+set_target_properties(serina_demo serina_cli serina_runner PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

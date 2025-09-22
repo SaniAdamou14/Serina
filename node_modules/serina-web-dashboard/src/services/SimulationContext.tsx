@@ -1,13 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { SimulationData, SimulationCommand, CommandMessage } from '../types'
+import { SimulationData, SimulationCommand, CommandMessage, SimulationStatus } from '../types'
 import { io, Socket } from 'socket.io-client'
+import { apiService } from './ApiService'
 
 interface SimulationContextType {
   simulationData: SimulationData | null
   isConnected: boolean
   isRunning: boolean
   connectionError: string | null
+  currentSimulationId: string | null
+  availableSimulations: SimulationStatus[]
   sendCommand: (command: SimulationCommand, parameters?: any) => void
+  startNewSimulation: (options?: any) => Promise<void>
+  stopCurrentSimulation: () => Promise<void>
   connect: () => void
   disconnect: () => void
 }
@@ -24,25 +29,102 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
   const [isRunning, setIsRunning] = useState(false)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [socket, setSocket] = useState<Socket | null>(null)
+  const [currentSimulationId, setCurrentSimulationId] = useState<string | null>(null)
+  const [availableSimulations, setAvailableSimulations] = useState<SimulationStatus[]>([])
 
-  const connect = () => {
+  // Vérifier la santé du serveur
+  const checkServerHealth = async () => {
     try {
+      const health = await apiService.healthCheck()
+      console.log('✅ Server health check:', health)
+      return health.status === 'healthy'
+    } catch (error) {
+      console.error('❌ Server health check failed:', error)
+      setConnectionError('Serveur backend non disponible')
+      return false
+    }
+  }
+
+  // Démarrer une nouvelle simulation
+  const startNewSimulation = async (options: any = {}) => {
+    try {
+      setConnectionError(null)
+      const response = await apiService.startSimulation(options)
+      
+      if (response.success && response.data?.simulationId) {
+        setCurrentSimulationId(response.data.simulationId)
+        setIsRunning(true)
+        console.log('✅ Simulation started:', response.data.simulationId)
+        
+        // Rafraîchir la liste des simulations
+        await refreshSimulationList()
+      } else {
+        throw new Error(response.error || 'Failed to start simulation')
+      }
+    } catch (error) {
+      console.error('❌ Failed to start simulation:', error)
+      setConnectionError(`Erreur de démarrage: ${error}`)
+      throw error
+    }
+  }
+
+  // Arrêter la simulation courante
+  const stopCurrentSimulation = async () => {
+    if (!currentSimulationId) return
+
+    try {
+      await apiService.stopSimulation(currentSimulationId)
+      setIsRunning(false)
+      setCurrentSimulationId(null)
+      console.log('🛑 Simulation stopped')
+      
+      // Rafraîchir la liste des simulations
+      await refreshSimulationList()
+    } catch (error) {
+      console.error('❌ Failed to stop simulation:', error)
+      setConnectionError(`Erreur d'arrêt: ${error}`)
+      throw error
+    }
+  }
+
+  // Rafraîchir la liste des simulations
+  const refreshSimulationList = async () => {
+    try {
+      const response = await apiService.listSimulations()
+      if (response.success && response.data) {
+        setAvailableSimulations(response.data)
+      }
+    } catch (error) {
+      console.error('❌ Failed to refresh simulation list:', error)
+    }
+  }
+
+  const connect = async () => {
+    try {
+      // D'abord vérifier la santé du serveur
+      const isServerHealthy = await checkServerHealth()
+      if (!isServerHealthy) {
+        return
+      }
+
+      // Rafraîchir la liste des simulations
+      await refreshSimulationList()
+
       // Connect to the Socket.IO server for real simulation data
       const newSocket = io('http://localhost:3001', {
         transports: ['websocket', 'polling']
       })
       
       newSocket.on('connect', () => {
-        console.log('Serina Dashboard: Connected to simulation Socket.IO server')
+        console.log('✅ Serina Dashboard: Connected to simulation Socket.IO server')
         setIsConnected(true)
         setConnectionError(null)
         setSocket(newSocket)
         
-        // Request initial simulation data
-        newSocket.emit('simulation-command', { 
-          type: 'command', 
-          command: 'GET_STATUS' 
-        })
+        // S'abonner aux mises à jour si on a une simulation active
+        if (currentSimulationId) {
+          newSocket.emit('subscribe-simulation', currentSimulationId)
+        }
       })
       
       newSocket.on('message', (data) => {
@@ -51,6 +133,8 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
             setSimulationData(data.data)
           } else if (data.type === 'status_update') {
             setIsRunning(data.running)
+          } else if (data.type === 'error') {
+            setConnectionError(data.message || 'Erreur de simulation')
           }
         } catch (error) {
           console.error('Error processing Socket.IO message:', error)
@@ -64,12 +148,12 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       })
       
       newSocket.on('disconnect', () => {
-        console.log('Socket.IO connection disconnected')
+        console.log('🔌 Socket.IO connection disconnected')
         setIsConnected(false)
         setSocket(null)
       })
 
-      console.log('Serina Dashboard: Connecting to simulation via Socket.IO')
+      console.log('🔌 Serina Dashboard: Connecting to simulation via Socket.IO')
     } catch (error) {
       setConnectionError('Failed to connect to simulation server')
       setIsConnected(false)
@@ -100,23 +184,30 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
         type: 'command',
         ...message
       })
+      console.log('✅ Command sent via WebSocket:', message)
     } else {
-      // Fallback for when not connected
-      console.log('Serina Command (offline):', message)
+      console.warn('⚠️ WebSocket not connected, using API fallback')
       
+      // Fallback API calls pour les commandes principales
       switch (command) {
         case SimulationCommand.START:
-          setIsRunning(true)
+          startNewSimulation(parameters).catch(console.error)
           break
         case SimulationCommand.PAUSE:
-          setIsRunning(false)
+        case SimulationCommand.STOP:
+          if (currentSimulationId) {
+            stopCurrentSimulation().catch(console.error)
+          }
           break
         case SimulationCommand.RESET:
-          // Reset simulation data
-          connect()
+          if (currentSimulationId) {
+            stopCurrentSimulation()
+              .then(() => startNewSimulation(parameters))
+              .catch(console.error)
+          }
           break
         default:
-          console.log('Command not implemented in demo mode:', command)
+          console.log('Command not implemented in API fallback:', command)
       }
     }
   }
@@ -166,7 +257,11 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     isConnected,
     isRunning,
     connectionError,
+    currentSimulationId,
+    availableSimulations,
     sendCommand,
+    startNewSimulation,
+    stopCurrentSimulation,
     connect,
     disconnect
   }

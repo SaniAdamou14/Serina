@@ -38,8 +38,15 @@ endif()
 # Répertoires d'inclusion
 include_directories(include include/Serina)
 
-# Set pybind11 path
-set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH};C:/Users/NB03/Pictures/Projects/Webmaster/Serina/.venv/Lib/site-packages/pybind11/share/cmake")
+## ------------------------------------------------------------------
+## Pybind11 (chemin configurable)
+## Permet de surcharger via -DPYBIND11_ROOT="/chemin/vers/pybind11"
+## ou en s'appuyant sur l'environnement (venv, conda, etc.)
+## ------------------------------------------------------------------
+set(PYBIND11_ROOT "" CACHE PATH "Chemin racine optionnel vers pybind11 (prefix contenant share/cmake/pybind11)")
+if(PYBIND11_ROOT)
+    list(APPEND CMAKE_PREFIX_PATH "${PYBIND11_ROOT}")
+endif()
 
 # PyBind11 pour les bindings Python
 if(BUILD_PYTHON_MODULE)

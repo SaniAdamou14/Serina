@@ -43,7 +43,30 @@ void SimulationAPI::initialize() {
     species_.push_back(fish);
 
     std::cout << "Simulation initialized with " << species_.size() << " species." << std::endl;
+    #include <iomanip>
+    #include <chrono>
 }
+
+
+    // ===================== SimulationStatistics =====================
+    std::string SimulationStatistics::toJson() const {
+        std::ostringstream oss;
+        oss << '{'
+            << "\"tick\":" << tick << ','
+            << "\"generation\":" << generation << ','
+            << "\"timestampMs\":" << timestampMs << ','
+            << "\"speciesCount\":" << speciesCount << ','
+            << "\"totalPopulation\":" << totalPopulation << ','
+            << std::fixed << std::setprecision(6)
+            << "\"averageFitness\":" << averageFitness << ','
+            << "\"maxFitness\":" << maxFitness << ','
+            << "\"minFitness\":" << minFitness << ','
+            << "\"geneticDiversity\":" << geneticDiversity << ','
+            << "\"births\":" << births << ','
+            << "\"deaths\":" << deaths
+            << '}';
+        return oss.str();
+    }
 
 void SimulationAPI::step() {
     double deltaTime = 1.0 / 60.0; // Simulation à 60 FPS
@@ -109,7 +132,10 @@ void SimulationAPI::start() {
 
 void SimulationAPI::pause() {
     running_ = false;
-    std::cout << "Simulation paused." << std::endl;
+        uint64_t totalPopulation = 0;
+        if (populationManager_) {
+            totalPopulation = populationManager_->getPopulationSize();
+        } else {
 }
 
 void SimulationAPI::setSpeed(double speed) {
@@ -117,7 +143,6 @@ void SimulationAPI::setSpeed(double speed) {
 }
 
 std::string SimulationAPI::getPopulationData() const {
-    std::ostringstream oss;
     
     // Calculer population totale (simulée)
     uint32_t totalPopulation = 0;
@@ -162,6 +187,69 @@ std::string SimulationAPI::getPopulationData() const {
     oss << "]}";
     return oss.str();
 }
+
+    void SimulationAPI::enableAdvancedPopulation(bool enable, size_t initialSize) {
+        if (enable) {
+            if (!populationManager_) {
+                populationManager_ = std::make_unique<Evolution::PopulationManager>();
+                populationManager_->initializePopulation(initialSize);
+                lastPopulationStats_ = populationManager_->getStatistics();
+                std::cout << "[SimulationAPI] Advanced population mode enabled (initial=" << initialSize << ")" << std::endl;
+            }
+        } else {
+            populationManager_.reset();
+            std::cout << "[SimulationAPI] Advanced population mode disabled" << std::endl;
+        }
+    }
+
+    void SimulationAPI::updateAdvanced(double deltaTime) {
+        // Avance temps population
+        populationManager_->updatePopulation(deltaTime);
+        // Reproduction éventuelle
+        populationManager_->reproduce();
+        lastPopulationStats_ = populationManager_->getStatistics();
+    }
+
+    SimulationStatistics SimulationAPI::getStatistics() const {
+        SimulationStatistics stats;
+        stats.tick = tickCounter_;
+        stats.timestampMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                    std::chrono::system_clock::now().time_since_epoch()).count());
+
+        if (populationManager_) {
+            const auto &ps = lastPopulationStats_;
+            stats.generation = static_cast<uint32_t>(ps.generation);
+            stats.totalPopulation = static_cast<uint32_t>(ps.totalPopulation);
+            stats.speciesCount = 1; // Pour l'instant une seule population agrégée
+            stats.averageFitness = ps.averageFitness;
+            stats.maxFitness = ps.maxFitness;
+            stats.minFitness = ps.minFitness;
+            stats.geneticDiversity = ps.geneticDiversity;
+            stats.births = ps.birthCount;
+            stats.deaths = ps.extinctionCount;
+        } else {
+            stats.speciesCount = static_cast<uint32_t>(species_.size());
+            stats.generation = static_cast<uint32_t>(world_.getDayCount() / 10);
+            // Estimations basées sur getPopulationData logique
+            uint64_t totalPop = 0;
+            double accFitness = 0.0, maxF = 0.0, minF = 1e9;
+            for (const auto &s : species_) {
+                uint32_t speciesPopulation = static_cast<uint32_t>(100 + (s.getEnergy() * 50) + (s.getTrait(TraitType::REPRODUCTION_RATE) * 100));
+                totalPop += speciesPopulation;
+                double fit = s.getEnergy() * s.getTrait(TraitType::ENERGY_EFFICIENCY);
+                accFitness += fit;
+                maxF = std::max(maxF, fit);
+                minF = std::min(minF, fit);
+            }
+            stats.totalPopulation = totalPop;
+            if (!species_.empty()) {
+                stats.averageFitness = accFitness / species_.size();
+                stats.maxFitness = maxF;
+                stats.minFitness = (minF == 1e9 ? 0.0 : minF);
+            }
+        }
+        return stats;
+    }
 
 std::string SimulationAPI::getWorldState() const {
     return world_.toJson();

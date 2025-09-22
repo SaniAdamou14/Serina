@@ -84,7 +84,7 @@ app.get('/health', (req, res) => {
     services: {
       database: database.isConnected(),
       evolutionEngine: evolutionEngine ? evolutionEngine.isRunning : false,
-      simulation: simulationService ? simulationService.getSimulationStatus() : null,
+      simulation: unifiedSerinaService ? (unifiedSerinaService.isRunning || false) : false,
       websocket: websocketService.isInitialized
     }
   });
@@ -250,7 +250,7 @@ process.on('SIGTERM', async () => {
   console.log('\n📡 Received SIGTERM, initiating graceful shutdown...');
   try {
     if (evolutionEngine) evolutionEngine.stop();
-    if (simulationService) await simulationService.cleanup();
+    if (unifiedSerinaService) await unifiedSerinaService.cleanup();
     websocketService.cleanup();
     await database.close();
     process.exit(0);
@@ -279,5 +279,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = { app, server, io };
 module.exports = { app, server, io };
