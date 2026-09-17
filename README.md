@@ -1,271 +1,172 @@
-# Serina - Simulateur Évolutionnaire Autonome# Serina - Simulateur Évolutionnaire Autonome
+# Serina - Simulateur Évolutionnaire Autonome
 
-
-
-![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)![Serina Logo](https://img.shields.io/badge/Serina-Evolution%20Simulator-blue?style=flat-square)
-
-![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)
-
-![Status](https://img.shields.io/badge/Status-Production%20Ready-green?style=flat-square)![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)
-
+![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square)
 
-**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Il permet de simuler l'évolution d'espèces virtuelles dans des environnements complexes de manière complètement autonome.
-
-**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Ce système permet de simuler l'évolution d'espèces virtuelles dans des environnements complexes avec des interactions écologiques réalistes.
-
-## ⚡ Démarrage Rapide
+**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Il simule l'évolution d'espèces virtuelles dans des environnements complexes, avec des interactions écologiques et une génétique réalistes, de manière autonome.
 
 ## ✨ Fonctionnalités Principales
 
-### Installation
+- 🧬 **Système génétique avancé** : traits évolutionnaires multiples avec mutations et croisements réalistes
+- 🌍 **Environnements multiples** : plusieurs zones climatiques avec conditions spécifiques
+- 🔄 **Évolution continue** : simulations pouvant tourner indéfiniment avec progression sauvegardée
+- 📊 **Statistiques complètes** : métriques d'évolution en temps réel et historiques
+- 🚀 **Mode autonome** : runner indépendant avec gestion des signaux et snapshots automatiques
+- 🐍 **Bindings Python** : API complète pour l'intégration et l'analyse de données
+- 🌐 **API REST** : interface web pour contrôle à distance (optionnel)
 
-- � **Système génétique avancé** : 8 traits évolutionnaires avec mutations et croisements réalistes
-
-```bash- 🌍 **Environnements multiples** : 4+ zones climatiques avec conditions spécifiques
-
-# Compilation- 🔄 **Évolution continue** : Simulations pouvant tourner indéfiniment avec progression sauvegardée
-
-cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON- 📊 **Statistiques complètes** : Métriques d'évolution en temps réel et historiques
-
-cmake --build build --config Release- 🚀 **Mode autonome** : Runner indépendant avec gestion signaux et snapshots automatiques
-
-- 🐍 **Bindings Python** : API complète pour intégration et analyse de données
-
-# Lancement immédiat- 🌐 **API REST** : Interface web pour contrôle à distance (optionnel)
-
-./run_serina.sh  # Linux/macOS
-
-run_serina.bat   # Windows## � Installation et Compilation
-
-```
+## 🛠️ Installation
 
 ### Prérequis
 
-### Utilisation de Base- **C++20** compatible compiler (MSVC 2022, GCC 10+, Clang 12+)
-
+- **C++20** compatible compiler (MSVC 2022, GCC 10+, Clang 12+)
 - **CMake 3.20+**
+- **Python 3.8+** (pour les bindings, optionnel)
+- **pybind11** (pour les bindings Python)
 
-```bash- **Python 3.8+** (pour les bindings, optionnel)
-
-# Simulation infinie autonome- **pybind11** (pour les bindings Python)
-
-./run_serina.sh
-
-### Compilation Rapide
-
-# 1000 générations avec snapshots fréquents
-
-./run_serina.sh -g 1000 -s 50```bash
-
-# Cloner le projet
-
-# Expérience personnaliséegit clone https://github.com/[username]/serina.git
-
-./run_serina.sh -g 5000 -o mon_experience -p 2000cd serina
-
-```
-
-# Build complet
-
-## 🎯 Fonctionnalités Cléscmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON
-
-cmake --build build --config Release
-
-- **🔄 Évolution autonome** : Simulations pouvant tourner indéfiniment
-
-- **📊 Monitoring complet** : Logs temps réel + snapshots automatiques# Les exécutables sont dans build/bin/
-
-- **🧬 Génétique avancée** : Système à 8 traits avec mutations réalistes```
-
-- **🌍 Environnements multiples** : Zones climatiques diversifiées
-
-- **🐍 API Python** : Contrôle et analyse de données### Configuration pybind11 (si nécessaire)
-
-- **🛑 Arrêt gracieux** : Ctrl+C pour terminer proprement
+### Compilation
 
 ```bash
-
-## 📊 Données Générées# Spécifier manuellement le chemin pybind11
-
-cmake -S . -B build -DPYBIND11_ROOT="/chemin/vers/pybind11"
-
-Chaque simulation produit :```
-
-
-
-```text## � Utilisation
-
-results_YYYYMMDD_HHMMSS/
-
-├── evolution_log.txt        # Événements détaillés### Lancement Rapide - Mode Autonome
-
-├── evolution_stats.jsonl    # Métriques par génération
-
-├── snapshot_gen_*.json      # États périodiquesLe moyen le plus simple de démarrer une simulation évolutionnaire :
-
-└── final_report.txt         # Résumé final
-
-``````bash
-
-# Windows
-
-## 🐍 API Pythonrun_serina.bat
-
-
-
-```python# Linux/macOS  
-
-import serina_pychmod +x run_serina.sh
-
-./run_serina.sh
-
-sim = serina_py.SimulationAPI()```
-
-sim.enableAdvancedPopulation(True, 1000)
-
-### Options du Runner
-
-for gen in range(1000):
-
-    sim.step()```bash
-
-    if gen % 100 == 0:# Simulation infinie (arrêt Ctrl+C)
-
-        stats = sim.getStatistics()./run_serina.sh
-
-        print(f"Gen {gen}: {stats.totalSpecies} espèces")
-
-```# 1000 générations avec snapshots fréquents
-
-./run_serina.sh -g 1000 -s 50
-
-## 🧪 Tests
-
-# Simulation personnalisée
-
-```bash./run_serina.sh -g 5000 -s 100 -l 5 -o mon_experience -p 2000
-
-# Test d'intégration complet
-
-./build/bin/test_runner_integration# Mode simple (sans évolution avancée)
-
-./run_serina.sh --simple
-
-# Tests unitaires```
-
-./build/bin/tests
-
-```**Paramètres disponibles :**
-
-- `-g N` : Nombre maximum de générations (0 = infini)
-
-## 🏗️ Architecture- `-s N` : Intervalle de snapshots (défaut: 100)
-
-- `-l N` : Intervalle de logs (défaut: 10) 
-
-Le projet est organisé en modules C++20 modernes :- `-o DIR` : Répertoire de sortie
-
-- `-p N` : Taille de population en mode avancé (défaut: 1000)
-
-- **core/** : Moteur de simulation (World, Species, Genome)- `--simple` : Mode évolution simple (plus rapide, moins de détails)
-
-- **viewmodel/** : API publique (SimulationAPI, statistiques)├── 📁 src/                     # C++ Implementations
-
-- **utils/** : Utilitaires (physique, interactions)│   ├── 📁 core/               # Core simulation components
-
-- **python/** : Bindings Python (pybind11)│   ├── 📁 physics/            # Physics engine & spatial systems
-
-- **tests/** : Tests unitaires et d'intégration│   ├── 📁 utils/              # Utility classes & helpers
-
-│   └── 📁 api/                # Python API implementation
-
-## ⚙️ Configuration Avancée├── 📁 python/                  # Python Integration
-
-│   ├── 🎮 advanced_simulation.py   # Autonomous ecosystem runner
-
-```bash│   ├── 🔍 visualization_test.py    # Real-time visualization
-
-# Options CMake│   ├── 📡 api_test.py             # API functionality tests
-
-cmake -S . -B build \│   └── 🔗 bindings.cpp           # PyBind11 interface
-
-    -DBUILD_PYTHON_MODULE=ON \├── 📁 tests/                   # Comprehensive test suite
-
-    -DPYBIND11_ROOT="/chemin/custom"├── 📁 config/                  # Configuration templates
-
-└── 📁 build/                   # Build artifacts
-
-# Options du runner```
-
-./run_serina.sh --help
-
-```### Core Systems
-
-
-
-## 🎮 Modes d'Évolution#### 🧬 Advanced Genetic System (`Genome.hpp`)
-
-
-
-1. **Mode Simple** (`--simple`) : Évolution basique, plus rapideThe genetic system implements 12 sophisticated evolutionary traits:
-
-2. **Mode Avancé** (défaut) : PopulationManager complet avec individus distincts
-
-```cpp
-
-## 📈 Métriquesenum class TraitType {
-
-    SIZE,              // Organism size (affects metabolism & reproduction)
-
-- Statistiques temps réel : espèces, population, diversité génétique    SPEED,             // Movement velocity & agility  
-
-- Événements d'extinction et spéciation    STRENGTH,          // Physical power & dominance
-
-- Métriques d'adaptation environnementale    INTELLIGENCE,      // Cognitive capacity & learning ability
-
-- Logs de performance et progression    LONGEVITY,         // Lifespan & aging resistance  
-
-    RESISTANCE,        // Disease & environmental stress resistance
-
-## 🤝 Contribution    METABOLISM,        // Energy processing efficiency
-
-    SOCIABILITY,       // Group behavior & cooperation tendencies
-
-Voir [`CONTRIBUTING.md`](CONTRIBUTING.md) pour les guidelines. Le projet privilégie :    ADAPTABILITY,      // Environmental flexibility
-
-- PRs thématiques et ciblées    VISION_RANGE,      // Sensory perception distance
-
-- Tests obligatoires pour tout ajout    CAMOUFLAGE        // Predator evasion capability
-
-- Documentation des nouveaux formats JSON};
-
+git clone https://github.com/SaniAdamou14/Serina.git
+cd Serina
+
+cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON
+cmake --build build --config Release
 ```
 
-## 📄 License
+Les exécutables sont dans `build/bin/`.
+
+Si CMake ne trouve pas pybind11 automatiquement :
+
+```bash
+cmake -S . -B build -DPYBIND11_ROOT="/chemin/vers/pybind11"
+```
+
+## ⚡ Démarrage Rapide
+
+Le moyen le plus simple de démarrer une simulation évolutionnaire :
+
+```bash
+# Windows
+run_serina.bat
+
+# Linux/macOS
+chmod +x run_serina.sh
+./run_serina.sh
+```
+
+**Options du runner :**
+
+- `-g N` : nombre maximum de générations (0 = infini)
+- `-s N` : intervalle de snapshots (défaut : 100)
+- `-l N` : intervalle de logs (défaut : 10)
+- `-o DIR` : répertoire de sortie
+- `-p N` : taille de population en mode avancé (défaut : 1000)
+- `--simple` : mode évolution simple (plus rapide, moins de détails)
+
+Exemples :
+
+```bash
+# 1000 générations avec snapshots fréquents
+./run_serina.sh -g 1000 -s 50
+
+# Expérience personnalisée
+./run_serina.sh -g 5000 -o mon_experience -p 2000
+
+# Mode simple (sans PopulationManager avancé)
+./run_serina.sh --simple
+```
+
+**Modes d'évolution :**
+
+1. **Mode Simple** (`--simple`) : évolution basique, plus rapide
+2. **Mode Avancé** (défaut) : PopulationManager complet avec individus distincts
+
+## 📊 Données Générées
+
+Chaque simulation produit :
+
+```text
+results_YYYYMMDD_HHMMSS/
+├── evolution_log.txt        # Événements détaillés
+├── evolution_stats.jsonl    # Métriques par génération
+├── snapshot_gen_*.json      # États périodiques
+└── final_report.txt         # Résumé final
+```
+
+## 🐍 Utilisation via l'API Python
+
+```python
+import serina_py
+
+sim = serina_py.SimulationAPI()
+sim.enableAdvancedPopulation(True, 1000)
+
+for gen in range(1000):
+    sim.step()
+    if gen % 100 == 0:
+        stats = sim.getStatistics()
+        print(f"Gen {gen}: {stats.totalSpecies} espèces")
+```
+
+## 🏗️ Architecture
+
+Le projet est organisé en modules C++20 modernes :
+
+```text
+├── 📁 src/                     # Implémentations C++
+│   ├── 📁 core/                # Composants du moteur de simulation
+│   ├── 📁 physics/             # Moteur physique et systèmes spatiaux
+│   ├── 📁 utils/                # Classes utilitaires
+│   └── 📁 api/                 # Implémentation de l'API Python
+├── 📁 python/                  # Intégration Python
+│   ├── 🎮 advanced_simulation.py   # Runner d'écosystème autonome
+│   ├── 🔍 visualization_test.py    # Visualisation temps réel
+│   ├── 📡 api_test.py              # Tests fonctionnels de l'API
+│   └── 🔗 bindings.cpp             # Interface PyBind11
+├── 📁 tests/                   # Suite de tests unitaires et d'intégration
+├── 📁 config/                  # Modèles de configuration
+└── 📁 build/                   # Artefacts de build
+```
+
+### Core Systems
+
+#### 🧬 Advanced Genetic System (`Genome.hpp`)
+
+The genetic system implements 11 evolutionary traits:
+
+```cpp
+enum class TraitType {
+    SIZE,              // Organism size (affects metabolism & reproduction)
+    SPEED,             // Movement velocity & agility
+    STRENGTH,          // Physical power & dominance
+    INTELLIGENCE,      // Cognitive capacity & learning ability
+    LONGEVITY,         // Lifespan & aging resistance
+    RESISTANCE,        // Disease & environmental stress resistance
+    METABOLISM,        // Energy processing efficiency
+    SOCIABILITY,       // Group behavior & cooperation tendencies
+    ADAPTABILITY,      // Environmental flexibility
+    VISION_RANGE,      // Sensory perception distance
+    CAMOUFLAGE         // Predator evasion capability
+};
+```
 
 **Advanced Features:**
 
-MIT License - Voir [`LICENSE`](LICENSE)
-
 - Stochastic genetic mutations with realistic probability distributions
-
----- Sophisticated crossover mechanisms during reproduction  
-
+- Sophisticated crossover mechanisms during reproduction
 - Trait dominance and recessiveness modeling
-
-**Inspiré par "Serina - The World of Birds"** de Dylan Bajda- Mendelian inheritance patterns with genetic drift simulation
-
+- Mendelian inheritance patterns with genetic drift simulation
 - Phenotype expression with environmental interactions
-
-🌍 *L'évolution ne s'arrête jamais...*- Metabolic rate calculations affecting survival and reproduction
+- Metabolic rate calculations affecting survival and reproduction
 
 #### 🐾 Species Management (`Species.hpp`)
 
 Each species features:
 
 - **Unique identifier** with taxonomic classification
-- **Complete genome** encoding all 12 evolutionary traits
+- **Complete genome** encoding all 11 evolutionary traits
 - **Dynamic energy systems** influenced by environmental factors
 - **Reproduction mechanics** with genetic compatibility checks
 - **Behavioral patterns** emerging from genetic programming
@@ -325,7 +226,7 @@ public:
 };
 ```
 
-## 🛠️ Installation and Configuration
+## 🛠️ Guide d'installation détaillé (Windows / Visual Studio)
 
 ### Prerequisites
 
@@ -399,7 +300,7 @@ build/
 └── 📚 serina_utils.lib               # Utility functions library
 ```
 
-## 🚀 Usage and Examples
+## 📖 Exemples d'utilisation avancés
 
 ### Basic Simulation
 
@@ -776,3 +677,9 @@ This project is licensed under the MIT License. See the `LICENSE` file for compr
 - **Memory Efficiency**: <50MB for 10,000+ concurrent organisms
 
 **Serina** represents a cutting-edge evolutionary ecosystem simulator, combining advanced genetic algorithms, realistic physics simulation, and interactive visualization to create a comprehensive virtual evolution laboratory for scientific research and educational exploration.
+
+---
+
+**Inspiré par "Serina - The World of Birds"** de Dylan Bajda
+
+🌍 *L'évolution ne s'arrête jamais...*
