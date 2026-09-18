@@ -60,6 +60,10 @@ namespace Serina::Evolution
         // Getters
         uint64_t getId() const { return id_; }
         const std::string &getSpecies() const { return species_; }
+        /// @brief Re-étiquette l'organisme (utilisé lors d'un événement de
+        /// spéciation réelle : un sous-groupe géographiquement isolé et
+        /// génétiquement divergent bascule vers un nouveau taxon).
+        void setSpecies(const std::string &species) { species_ = species; }
         const Genetics::AdvancedGenome &getGenome() const { return *genome_; }
         Genetics::AdvancedGenome &getGenome() { return *genome_; }
         double getEnergy() const { return energy_; }

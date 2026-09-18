@@ -521,7 +521,8 @@ namespace Serina::Evolution
             case Genetics::TraitType::AGGRESSION: return traits.aggression;
             case Genetics::TraitType::REPRODUCTION_RATE: return traits.reproductionRate;
             case Genetics::TraitType::LONGEVITY: return traits.longevity;
-            case Genetics::TraitType::HEARING_ACUITY: traits.hearingAcuity;
+            case Genetics::TraitType::HEARING_ACUITY: return traits.hearingAcuity;
+            case Genetics::TraitType::CAMOUFLAGE: return traits.camouflage;
             default: return 1.0;
             }
         }
@@ -544,6 +545,8 @@ namespace Serina::Evolution
             case Genetics::TraitType::REPRODUCTION_RATE: traits.reproductionRate = value; break;
             case Genetics::TraitType::LONGEVITY: traits.longevity = value; break;
             case Genetics::TraitType::HEARING_ACUITY: traits.hearingAcuity = value; break;
+            case Genetics::TraitType::CAMOUFLAGE: traits.camouflage = value; break;
+            default: break;
             }
         }
 

@@ -26,3 +26,13 @@ target_link_libraries(test_runner_integration PRIVATE serina_core serina_viewmod
 target_include_directories(test_runner_integration PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_features(test_runner_integration PRIVATE cxx_std_20)
 catch_discover_tests(test_runner_integration)
+
+# WorldSimulation.hpp and everything it composes (Region, PopulationManager,
+# EcosystemTaxonomy, EcologicalInteractions, EvolutionaryConstraints,
+# EnvironmentalAdaptation) are header-only, so this target needs no library
+# beyond Catch2 itself.
+add_executable(test_world_simulation test_world_simulation.cpp)
+target_link_libraries(test_world_simulation PRIVATE Catch2::Catch2WithMain)
+target_include_directories(test_world_simulation PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_world_simulation PRIVATE cxx_std_20)
+catch_discover_tests(test_world_simulation)

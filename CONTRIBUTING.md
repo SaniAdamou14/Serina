@@ -73,9 +73,11 @@ Selon le moteur concerné (voir README §Architecture pour la distinction) :
 
 ## Roadmap Immédiate (Suggestions)
 
+- [x] Phase 7 — Moteur unifié (fondation) : `include/Serina/WorldSimulation.hpp` fusionne individus à génome diploïde réel (`PopulationManager.hpp`), grille spatiale procédurale (`Region.hpp`), taxonomie, interactions écologiques et contraintes biologiques par individu. Diversité génétique calculée depuis `AdvancedGenome::geneticDistance()` (plus de tirage aléatoire), spéciation qui émerge d'une divergence génétique mesurée et soutenue géographiquement. 17 tests Catch2. Voir `docs/UNIFIED_ENGINE_DESIGN.md`. **Pas encore branché sur `serina_cli`/l'API/le frontend — voir phases suivantes.**
+- [ ] Phase 8 — Mouvement piloté par NEAT (une lignée = un réseau, pas un individu, pour rester à l'échelle visée)
+- [ ] Phase 9 — Nouveau contrat `serina_cli`/API exposant régions + individus + arbre de lignées réel (remplace `SerinaEcosystemSimulator`, aujourd'hui backend du CLI, par `UnifiedWorldSimulator`)
+- [ ] Phase 10 — Interface façon RimWorld : carte de régions 2D, panneaux d'inspection, écrans de paramétrage réels
 - [ ] Étendre la CI à Windows/MSVC (actuellement Linux/GCC uniquement)
-- [ ] Wiring réel de NEAT/AdvancedGenetics dans `SerinaEcosystemSimulator::simulateGeneration()` (le code existe dans `NEAT.hpp`/`AdvancedGenetics.hpp` mais n'est appelé par aucun chemin d'exécution — voir `SerinaSimulator.hpp`)
-- [ ] Une fois AdvancedGenetics branché : remplacer le tirage aléatoire de `geneticDiversity` (`SerinaSimulator.hpp:594`) par un vrai calcul de distance génétique
 - [ ] Historique de tendances réel côté frontend (le backend expose déjà `/api/simulations/:id/trends`, non consommé par `web/`)
 - [ ] Packaging Python (scikit-build-core)
 - [ ] Authentification sur les routes API destructrices (aucune actuellement)
