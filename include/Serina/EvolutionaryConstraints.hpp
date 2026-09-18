@@ -354,9 +354,6 @@ namespace Serina::Evolution
                                                    Ecosystem::EnvironmentType::WETLAND};
 
             groupRules_[Taxonomy::BiologicalType::CNIDARIAN] = cnidarianRules;
-
-            std::cout << "📏 " << groupRules_.size() 
-                      << " groupes biologiques avec contraintes évolutionnaires initialisés" << std::endl;
         }
 
         /// @brief Valide une mutation selon les contraintes biologiques
@@ -469,10 +466,7 @@ namespace Serina::Evolution
 
             // Ajouter l'innovation
             acquiredInnovations_[species].push_back(innovation);
-            
-            std::cout << "🚀 " << species << " a développé l'innovation : " 
-                      << innovation << std::endl;
-            
+
             return true;
         }
 

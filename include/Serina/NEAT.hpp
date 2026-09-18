@@ -150,8 +150,8 @@ namespace Serina::NEAT
     };
 
     // Initialisation des variables statiques
-    uint32_t InnovationCounter::nextInnovation_ = 1;
-    std::unordered_map<std::pair<uint32_t, uint32_t>, uint32_t,
+    inline uint32_t InnovationCounter::nextInnovation_ = 1;
+    inline std::unordered_map<std::pair<uint32_t, uint32_t>, uint32_t,
                        std::function<size_t(const std::pair<uint32_t, uint32_t> &)>>
         InnovationCounter::connectionInnovations_(
             0,

@@ -253,9 +253,6 @@ namespace Serina::Environment
             mountain.annualVariation = 0.9;
             mountain.stochasticEvents = 0.4;
             environments_[Ecosystem::EnvironmentType::MOUNTAIN] = mountain;
-
-            std::cout << "🌍 " << environments_.size() 
-                      << " environnements de Serina initialisés" << std::endl;
         }
 
         /// @brief Initialise le catalogue d'adaptations possibles
@@ -326,9 +323,6 @@ namespace Serina::Environment
             social.energyCost = 0.1;
             social.developmentTime = 200;
             adaptationCatalog_.push_back(social);
-
-            std::cout << "🧬 " << adaptationCatalog_.size() 
-                      << " adaptations évolutionnaires disponibles" << std::endl;
         }
 
         /// @brief Évalue si une espèce peut développer une adaptation
@@ -423,10 +417,7 @@ namespace Serina::Environment
 
             // Ajouter l'adaptation à l'espèce
             speciesAdaptations_[species].push_back(*adaptIt);
-            
-            std::cout << "🧬 " << species << " a développé l'adaptation : " 
-                      << adaptationName << std::endl;
-            
+
             return true;
         }
 

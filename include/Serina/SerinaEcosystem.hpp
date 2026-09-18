@@ -300,9 +300,6 @@ namespace Serina::Ecosystem
                                    0.08, 0.1, 5.0, 0.5,
                                    {"shell_carrying", "social_behavior", "scavenging"},
                                    0.04, 0.7);
-
-            std::cout << "🌍 Écosystème Serina initialisé avec " << speciesDatabase_.size() 
-                      << " espèces originales" << std::endl;
         }
 
         /// @brief Enregistre une espèce originale

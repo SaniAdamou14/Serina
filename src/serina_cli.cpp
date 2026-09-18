@@ -1,6 +1,6 @@
 #include "SerinaSimulator.hpp"
 #include <iostream>
-#include <iomanip>
+#include <fstream>
 #include <string>
 #include <sstream>
 #include <chrono>
@@ -9,310 +9,439 @@
 using namespace Serina;
 using json = nlohmann::json;
 
-/// @brief CLI interface for Serina simulation for web backend integration
+namespace {
+
+int64_t nowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::system_clock::now().time_since_epoch())
+        .count();
+}
+
+json speciesStatsToJson(const Simulation::SpeciesSimulationStats &s)
+{
+    json j;
+    j["totalPopulation"] = s.totalPopulation;
+    j["averageFitness"] = s.averageFitness;
+    j["geneticDiversity"] = s.geneticDiversity;
+    j["occupiedEnvironments"] = json::array();
+    for (auto e : s.occupiedEnvironments)
+        j["occupiedEnvironments"].push_back(static_cast<int>(e));
+    j["acquiredAdaptations"] = s.acquiredAdaptations;
+    j["evolutionaryInnovations"] = s.evolutionaryInnovations;
+    j["generationsSinceLastInnovation"] = s.generationsSinceLastInnovation;
+    j["extinctionRisk"] = s.extinctionRisk;
+    return j;
+}
+
+Simulation::SpeciesSimulationStats speciesStatsFromJson(const std::string &name, const json &j)
+{
+    Simulation::SpeciesSimulationStats s;
+    s.species = name;
+    s.totalPopulation = j.value("totalPopulation", 0u);
+    s.averageFitness = j.value("averageFitness", 0.0);
+    s.geneticDiversity = j.value("geneticDiversity", 0.0);
+    if (j.contains("occupiedEnvironments"))
+    {
+        for (const auto &e : j.at("occupiedEnvironments"))
+            s.occupiedEnvironments.push_back(static_cast<Ecosystem::EnvironmentType>(e.get<int>()));
+    }
+    s.acquiredAdaptations = j.value("acquiredAdaptations", std::vector<std::string>{});
+    s.evolutionaryInnovations = j.value("evolutionaryInnovations", std::vector<std::string>{});
+    s.generationsSinceLastInnovation = j.value("generationsSinceLastInnovation", 0u);
+    s.extinctionRisk = j.value("extinctionRisk", 0.0);
+    return s;
+}
+
+} // namespace
+
+/// @brief CLI interface pour la simulation Serina, utilisée par le backend web.
+/// Chaque invocation est un processus indépendant (pas de démon) : l'état de
+/// la simulation est donc persisté dans un fichier JSON entre les appels, de
+/// sorte que `status`/`world`/`genetics` rapportent l'évolution réelle
+/// accumulée par les appels `init`/`run` précédents plutôt que des données
+/// figées.
 class SerinaCLI
 {
 private:
     std::unique_ptr<Simulation::SerinaEcosystemSimulator> simulator_;
-    bool verboseOutput_;
+    std::string statePath_;
+    bool verbose_;
 
 public:
-    SerinaCLI(bool verbose = false) 
-        : simulator_(std::make_unique<Simulation::SerinaEcosystemSimulator>())
-        , verboseOutput_(verbose) {}
+    SerinaCLI(std::string statePath, bool verbose)
+        : simulator_(std::make_unique<Simulation::SerinaEcosystemSimulator>()),
+          statePath_(std::move(statePath)), verbose_(verbose)
+    {
+        loadState();
+    }
 
-    /// @brief Initialize simulation with given parameters
-    json initializeSimulation(int worldSize = 100, int initialSpecies = 5, int steps = 1000)
+    bool hasPopulations() const { return !simulator_->getSpeciesStats().empty(); }
+
+    bool loadState()
+    {
+        std::ifstream in(statePath_);
+        if (!in.is_open())
+            return false;
+
+        try
+        {
+            json j;
+            in >> j;
+
+            std::unordered_map<std::string, Simulation::SpeciesSimulationStats> stats;
+            if (j.contains("speciesStats"))
+            {
+                for (auto it = j.at("speciesStats").begin(); it != j.at("speciesStats").end(); ++it)
+                    stats[it.key()] = speciesStatsFromJson(it.key(), it.value());
+            }
+
+            simulator_->restoreState(
+                j.value("generation", 0u), std::move(stats),
+                j.value("totalBiodiversity", 0.0), j.value("ecosystemStability", 1.0),
+                j.value("totalSpeciations", 0u), j.value("totalExtinctions", 0u));
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            if (verbose_)
+                std::cerr << "Impossible de charger l'etat depuis " << statePath_ << ": " << e.what() << std::endl;
+            return false;
+        }
+    }
+
+    void saveState() const
+    {
+        json j;
+        j["generation"] = simulator_->getCurrentGeneration();
+        j["totalBiodiversity"] = simulator_->getTotalBiodiversity();
+        j["ecosystemStability"] = simulator_->getEcosystemStability();
+        j["totalSpeciations"] = simulator_->getTotalSpeciationsEvents();
+        j["totalExtinctions"] = simulator_->getTotalExtinctionEvents();
+
+        json statsJson = json::object();
+        for (const auto &[name, stats] : simulator_->getSpeciesStats())
+            statsJson[name] = speciesStatsToJson(stats);
+        j["speciesStats"] = statsJson;
+
+        std::ofstream out(statePath_);
+        out << j.dump(2);
+    }
+
+    /// @brief Initialise (ou reprend) la simulation et persiste l'état.
+    json initializeSimulation()
     {
         json result;
         result["status"] = "success";
         result["action"] = "initialize";
-        
-        try {
-            // Redirect cout to stderr during initialization to capture verbose messages
-            std::streambuf* orig_cout = std::cout.rdbuf();
-            std::cout.rdbuf(std::cerr.rdbuf());
-            
-            // Create and initialize the simulator (this will output verbose messages to stderr now)
-            auto simulator = std::make_unique<Serina::Simulation::SerinaEcosystemSimulator>();
-            auto ecosystem = std::make_unique<Serina::Ecosystem::SerinaEcosystem>();
-            
-            // Restore cout for JSON output
-            std::cout.rdbuf(orig_cout);
-            
-            if (verboseOutput_) {
-                std::cerr << "✅ Serina CLI initialization completed" << std::endl;
-            }
-            
-            result["parameters"] = {
-                {"worldSize", worldSize},
-                {"initialSpecies", initialSpecies},
-                {"simulationSteps", steps}
-            };
-            
-            result["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            
-        } catch (const std::exception& e) {
+
+        try
+        {
+            bool resumed = hasPopulations();
+            if (!resumed)
+                simulator_->seedInitialPopulations();
+
+            saveState();
+
+            result["resumed"] = resumed;
+            result["speciesCount"] = simulator_->getSpeciesStats().size();
+            result["generation"] = simulator_->getCurrentGeneration();
+            result["timestamp"] = nowMs();
+        }
+        catch (const std::exception &e)
+        {
             result["status"] = "error";
             result["error"] = e.what();
         }
-        
+
         return result;
     }
 
-    /// @brief Run simulation for specified number of steps
-    json runSimulation(int steps = 100)
+    /// @brief Avance la simulation de N générations réelles et persiste l'état.
+    json runSimulation(uint32_t steps)
     {
         json result;
         result["status"] = "success";
         result["action"] = "simulate";
-        
-        try {
-            if (verboseOutput_) {
-                std::cerr << "Running simulation for " << steps << " steps..." << std::endl;
-            }
-            
+
+        try
+        {
+            if (!hasPopulations())
+                simulator_->seedInitialPopulations();
+
             auto startTime = std::chrono::high_resolution_clock::now();
-            
-            // Run the simulation (placeholder - actual simulation logic)
-            for (int i = 0; i < steps; ++i) {
-                // Simulation step logic would go here
-                if (verboseOutput_ && i % (steps / 10) == 0) {
-                    std::cerr << "Progress: " << (i * 100 / steps) << "%" << std::endl;
-                }
-            }
-            
+            for (uint32_t i = 0; i < steps; ++i)
+                simulator_->simulateGeneration();
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-            
+
+            saveState();
+
             result["steps_completed"] = steps;
-            result["execution_time_ms"] = duration.count();
-            result["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            
-        } catch (const std::exception& e) {
+            result["generation"] = simulator_->getCurrentGeneration();
+            result["species_count"] = simulator_->getSpeciesStats().size();
+            result["execution_time_ms"] = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            result["timestamp"] = nowMs();
+        }
+        catch (const std::exception &e)
+        {
             result["status"] = "error";
             result["error"] = e.what();
         }
-        
+
         return result;
     }
 
-    /// @brief Get current ecosystem status
+    /// @brief Rapporte l'état réel de l'écosystème (population, espèces, stabilité).
     json getEcosystemStatus()
     {
         json result;
         result["status"] = "success";
         result["action"] = "status";
-        
-        try {
-            // Get ecosystem data (placeholder - would use actual simulator data)
+
+        try
+        {
+            const auto &speciesStats = simulator_->getSpeciesStats();
+
+            uint64_t totalPopulation = 0;
+            for (const auto &[name, s] : speciesStats)
+                totalPopulation += s.totalPopulation;
+
             result["ecosystem"] = {
-                {"total_species", 12},
-                {"total_population", 2547},
-                {"world_time", 15230},
-                {"environment_health", 0.85},
-                {"biodiversity_index", 0.73}
-            };
-            
+                {"generation", simulator_->getCurrentGeneration()},
+                {"total_species", speciesStats.size()},
+                {"total_population", totalPopulation},
+                {"biodiversity_index", simulator_->getTotalBiodiversity()},
+                {"ecosystem_stability", simulator_->getEcosystemStability()},
+                {"total_speciations", simulator_->getTotalSpeciationsEvents()},
+                {"total_extinctions", simulator_->getTotalExtinctionEvents()}};
+
             result["species"] = json::array();
-            
-            // Add sample species data
-            for (int i = 0; i < 5; ++i) {
-                json species;
-                species["id"] = i + 1;
-                species["name"] = "Species_" + std::to_string(i + 1);
-                species["population"] = 200 + (i * 150);
-                species["health"] = 0.8 + (i * 0.05);
-                species["diet_type"] = (i % 3 == 0) ? "herbivore" : ((i % 3 == 1) ? "carnivore" : "omnivore");
-                result["species"].push_back(species);
+            for (const auto &[name, s] : speciesStats)
+            {
+                json sp;
+                sp["name"] = name;
+                sp["population"] = s.totalPopulation;
+                sp["fitness"] = s.averageFitness;
+                sp["geneticDiversity"] = s.geneticDiversity;
+                sp["extinctionRisk"] = s.extinctionRisk;
+                sp["adaptations"] = s.acquiredAdaptations;
+                sp["innovations"] = s.evolutionaryInnovations;
+                result["species"].push_back(sp);
             }
-            
-            result["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            
-        } catch (const std::exception& e) {
+
+            result["timestamp"] = nowMs();
+        }
+        catch (const std::exception &e)
+        {
             result["status"] = "error";
             result["error"] = e.what();
         }
-        
+
         return result;
     }
 
-    /// @brief Get detailed world data
+    /// @brief Rapporte les paramètres réels de l'environnement de départ
+    /// (prairie, où toutes les espèces d'origine sont placées) plutôt que
+    /// des constantes inventées.
     json getWorldData()
     {
         json result;
         result["status"] = "success";
         result["action"] = "world_data";
-        
-        try {
-            // Get world environmental data
-            result["world"] = {
-                {"size", {{"width", 100}, {"height", 100}}},
-                {"climate", {
-                    {"temperature", 22.5},
-                    {"humidity", 0.65},
-                    {"precipitation", 0.8}
-                }},
-                {"terrain", {
-                    {"forest_coverage", 0.45},
-                    {"water_coverage", 0.25},
-                    {"mountain_coverage", 0.15},
-                    {"plains_coverage", 0.15}
-                }}
-            };
-            
-            result["resources"] = {
-                {"food_availability", 0.78},
-                {"water_quality", 0.92},
-                {"shelter_capacity", 0.67}
-            };
-            
-            result["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            
-        } catch (const std::exception& e) {
+
+        try
+        {
+            const auto *env = simulator_->getEnvironments().getEnvironment(Ecosystem::EnvironmentType::GRASSLAND);
+
+            if (env)
+            {
+                result["world"] = {
+                    {"primaryEnvironment", env->name},
+                    {"description", env->description},
+                    {"climate", {{"temperature", env->climate.temperature},
+                                 {"humidity", env->climate.humidity},
+                                 {"precipitation", env->climate.precipitation},
+                                 {"windSpeed", env->climate.windSpeed},
+                                 {"sunlightIntensity", env->climate.sunlightIntensity}}},
+                    {"resources", {{"primaryProducers", env->resources.primaryProducers},
+                                   {"smallPrey", env->resources.smallPrey},
+                                   {"waterQuality", env->resources.waterQuality},
+                                   {"shelter", env->resources.shelter}}},
+                    {"pressures", {{"predationPressure", env->pressures.predationPressure},
+                                   {"competitionIntensity", env->pressures.competitionIntensity},
+                                   {"resourceScarcity", env->pressures.resourceScarcity},
+                                   {"climaticStress", env->pressures.climaticStress}}},
+                    {"carryingCapacity", env->carryingCapacity}};
+            }
+            else
+            {
+                result["world"] = json::object();
+            }
+
+            result["generation"] = simulator_->getCurrentGeneration();
+            result["timestamp"] = nowMs();
+        }
+        catch (const std::exception &e)
+        {
             result["status"] = "error";
             result["error"] = e.what();
         }
-        
+
         return result;
     }
 
-    /// @brief Get genetic diversity data
+    /// @brief Rapporte la diversité génétique réelle par espèce, calculée
+    /// par le simulateur, plutôt qu'un tableau de traits inventé.
     json getGeneticData()
     {
         json result;
         result["status"] = "success";
         result["action"] = "genetics";
-        
-        try {
-            result["genetic_diversity"] = {
-                {"overall_diversity", 0.82},
-                {"mutation_rate", 0.001},
-                {"selection_pressure", 0.35}
-            };
-            
-            result["traits"] = json::array();
-            
-            // Sample trait data
-            std::vector<std::string> traitNames = {
-                "Body Size", "Speed", "Intelligence", "Camouflage", "Social Behavior"
-            };
-            
-            for (size_t i = 0; i < traitNames.size(); ++i) {
-                json trait;
-                trait["name"] = traitNames[i];
-                trait["variance"] = 0.15 + (i * 0.1);
-                trait["heritability"] = 0.6 + (i * 0.05);
-                trait["selection_coefficient"] = -0.1 + (i * 0.05);
-                result["traits"].push_back(trait);
+
+        try
+        {
+            const auto &speciesStats = simulator_->getSpeciesStats();
+
+            double totalDiversity = 0.0;
+            double totalFitness = 0.0;
+            for (const auto &[name, s] : speciesStats)
+            {
+                totalDiversity += s.geneticDiversity;
+                totalFitness += s.averageFitness;
             }
-            
-            result["timestamp"] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()
-            ).count();
-            
-        } catch (const std::exception& e) {
+            size_t n = speciesStats.size();
+
+            result["genetic_diversity"] = {
+                {"overall_diversity", n ? totalDiversity / n : 0.0},
+                {"average_fitness", n ? totalFitness / n : 0.0},
+                {"species_count", n}};
+
+            result["species"] = json::array();
+            for (const auto &[name, s] : speciesStats)
+            {
+                json sp;
+                sp["name"] = name;
+                sp["geneticDiversity"] = s.geneticDiversity;
+                sp["averageFitness"] = s.averageFitness;
+                sp["generationsSinceLastInnovation"] = s.generationsSinceLastInnovation;
+                result["species"].push_back(sp);
+            }
+
+            result["timestamp"] = nowMs();
+        }
+        catch (const std::exception &e)
+        {
             result["status"] = "error";
             result["error"] = e.what();
         }
-        
+
         return result;
     }
 };
 
-void printUsage(const char* programName)
+void printUsage(const char *programName)
 {
     std::cout << "Usage: " << programName << " [OPTIONS] COMMAND [ARGS...]\n\n";
     std::cout << "Commands:\n";
-    std::cout << "  init [world_size] [species_count] [steps]  Initialize simulation\n";
-    std::cout << "  run [steps]                                Run simulation for N steps\n";
-    std::cout << "  status                                     Get ecosystem status\n";
-    std::cout << "  world                                      Get world data\n";
-    std::cout << "  genetics                                   Get genetic diversity data\n";
+    std::cout << "  init                                        Initialize (or resume) the simulation\n";
+    std::cout << "  run [generations]                          Advance the simulation by N generations (default 1)\n";
+    std::cout << "  status                                      Get real ecosystem status\n";
+    std::cout << "  world                                       Get real environment data\n";
+    std::cout << "  genetics                                    Get real genetic diversity data\n";
     std::cout << "\nOptions:\n";
+    std::cout << "  --state-file PATH                          Persisted simulation state (default: serina_state.json)\n";
     std::cout << "  -v, --verbose                              Enable verbose output to stderr\n";
     std::cout << "  -h, --help                                 Show this help message\n";
     std::cout << "\nExamples:\n";
-    std::cout << "  " << programName << " init 50 3 500\n";
-    std::cout << "  " << programName << " run 100\n";
+    std::cout << "  " << programName << " init\n";
+    std::cout << "  " << programName << " run 50\n";
     std::cout << "  " << programName << " status\n";
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
-    try {
+    try
+    {
         bool verbose = false;
+        std::string statePath = "serina_state.json";
         int argIndex = 1;
-        
-        // Parse options
-        while (argIndex < argc && argv[argIndex][0] == '-') {
-            std::string arg = argv[argIndex];
-            if (arg == "-v" || arg == "--verbose") {
+
+        // Parse options (n'importe où avant ou après la commande)
+        std::vector<std::string> args(argv + 1, argv + argc);
+        std::vector<std::string> positional;
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            const auto &arg = args[i];
+            if (arg == "-v" || arg == "--verbose")
+            {
                 verbose = true;
-            } else if (arg == "-h" || arg == "--help") {
+            }
+            else if (arg == "-h" || arg == "--help")
+            {
                 printUsage(argv[0]);
                 return 0;
-            } else {
-                std::cerr << "Unknown option: " << arg << std::endl;
-                printUsage(argv[0]);
-                return 1;
             }
-            argIndex++;
+            else if (arg == "--state-file" && i + 1 < args.size())
+            {
+                statePath = args[++i];
+            }
+            else
+            {
+                positional.push_back(arg);
+            }
         }
-        
-        if (argIndex >= argc) {
+        (void)argIndex;
+
+        if (positional.empty())
+        {
             std::cerr << "Error: No command specified" << std::endl;
             printUsage(argv[0]);
             return 1;
         }
-        
-        SerinaCLI cli(verbose);
-        std::string command = argv[argIndex++];
+
+        SerinaCLI cli(statePath, verbose);
+        const std::string &command = positional[0];
         json result;
-        
-        if (command == "init") {
-            int worldSize = (argIndex < argc) ? std::stoi(argv[argIndex++]) : 100;
-            int speciesCount = (argIndex < argc) ? std::stoi(argv[argIndex++]) : 5;
-            int steps = (argIndex < argc) ? std::stoi(argv[argIndex++]) : 1000;
-            result = cli.initializeSimulation(worldSize, speciesCount, steps);
-            
-        } else if (command == "run") {
-            int steps = (argIndex < argc) ? std::stoi(argv[argIndex++]) : 100;
+
+        if (command == "init")
+        {
+            result = cli.initializeSimulation();
+        }
+        else if (command == "run")
+        {
+            uint32_t steps = positional.size() > 1 ? static_cast<uint32_t>(std::stoul(positional[1])) : 1;
             result = cli.runSimulation(steps);
-            
-        } else if (command == "status") {
+        }
+        else if (command == "status")
+        {
             result = cli.getEcosystemStatus();
-            
-        } else if (command == "world") {
+        }
+        else if (command == "world")
+        {
             result = cli.getWorldData();
-            
-        } else if (command == "genetics") {
+        }
+        else if (command == "genetics")
+        {
             result = cli.getGeneticData();
-            
-        } else {
+        }
+        else
+        {
             std::cerr << "Error: Unknown command '" << command << "'" << std::endl;
             printUsage(argv[0]);
             return 1;
         }
-        
-        // Output JSON result to stdout
+
+        // Output JSON result to stdout (the only thing consumers should parse)
         std::cout << result.dump(2) << std::endl;
-        
-    } catch (const std::exception& e) {
+    }
+    catch (const std::exception &e)
+    {
         json error;
         error["status"] = "error";
         error["error"] = e.what();
         std::cout << error.dump(2) << std::endl;
         return 1;
     }
-    
+
     return 0;
 }

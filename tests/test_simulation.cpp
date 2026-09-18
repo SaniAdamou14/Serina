@@ -66,12 +66,18 @@ void testSpecies() {
     assert(species.survives(50.0) == true);   // 75 > 50
     assert(species.survives(100.0) == false); // 75 < 100
     
-    // Test reproduction
+    // Test reproduction (both parents need enough energy to clear their
+    // reproduction threshold, or reproduce() falls back to returning the
+    // fitter parent unchanged instead of producing a child)
     Serina::Genome genome2;
     genome2.setTrait(Serina::TraitType::SIZE, 0.6);
     genome2.setTrait(Serina::TraitType::SPEED, 0.9);
     Serina::Species partner("Partner", genome2);
-    
+
+    species.setEnergy(species.getReproductionThreshold() + 10.0);
+    partner.setEnergy(partner.getReproductionThreshold() + 10.0);
+    assert(species.canReproduce() && partner.canReproduce());
+
     Serina::Species child = species.reproduce(partner);
     assert(child.getName().find("TestSpecies") != std::string::npos);
     assert(child.getEnergy() > 0.0);  // Child should have positive energy
@@ -89,19 +95,21 @@ void testPhysicsEngine() {
     assert(physics.getBounds().maxX == 100);
     
     // Test entity creation
+    // checkCollision() treats `size` as a diameter: entities collide when
+    // distance < (sizeA + sizeB) * 0.5.
     Serina::Entity entity1(10, 10, 2.0, 1.0, 1);  // x, y, size, mass, id
-    Serina::Entity entity2(15, 10, 2.0, 1.0, 2);
-    
+    Serina::Entity entity2(11, 10, 2.0, 1.0, 2);  // distance = 1, threshold = 2.0
+
     assert(entity1.x == 10);
     assert(entity1.alive == true);
     assert(entity1.speciesId == 1);
-    
+
     // Test collision detection
     bool collision = physics.checkCollision(entity1, entity2);
-    assert(collision == true);  // They should collide (distance = 5, combined radius = 2)
-    
+    assert(collision == true);  // distance (1) < threshold (2.0)
+
     // Move entities apart
-    entity2.x = 20;
+    entity2.x = 20;  // distance = 10, well beyond threshold
     collision = physics.checkCollision(entity1, entity2);
     assert(collision == false);  // No collision now
     

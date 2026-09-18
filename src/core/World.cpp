@@ -3,6 +3,8 @@
 #include <random>
 #include <cmath>
 #include <algorithm>
+#include <sstream>
+#include <iomanip>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -20,8 +22,6 @@ World::World(int width, int height)
     generateTerrain();
     generateClimate();
     seedResources();
-    
-    std::cout << "World created: " << width_ << "x" << height_ << std::endl;
 }
 
 bool World::isValidCoordinate(int x, int y) const {
@@ -47,19 +47,15 @@ void World::update(double deltaTime) {
     int newDay = static_cast<int>(timeState_.currentTime / timeState_.dayLength);
     if (newDay > timeState_.currentDay) {
         timeState_.currentDay = newDay;
-        std::cout << "New day: " << timeState_.currentDay << std::endl;
     }
-    
+
     // Update seasons
     simulateSeasons();
-    
+
     // Update environmental systems
     updateEnvironment(deltaTime);
     updateResources(deltaTime);
     updateWeather(deltaTime);
-    
-    std::cout << "World updated - Day " << timeState_.currentDay 
-              << ", Season " << timeState_.currentSeason << std::endl;
 }
 
 void World::updateEnvironment(double deltaTime) {
@@ -182,7 +178,6 @@ void World::updateWeather(double deltaTime) {
         int rainX = static_cast<int>(dis(gen) * width_);
         int rainY = static_cast<int>(dis(gen) * height_);
         spreadResources(rainX, rainY, "water", 50.0, 3);
-        std::cout << "Rain at (" << rainX << ", " << rainY << ")" << std::endl;
     }
 }
 
@@ -192,7 +187,6 @@ void World::simulateSeasons() {
     
     if (newSeason != timeState_.currentSeason) {
         timeState_.currentSeason = newSeason;
-        std::cout << "Season changed to: " << newSeason << std::endl;
     }
 }
 
@@ -434,13 +428,54 @@ void World::spreadResources(int x, int y, const std::string& type, double amount
 }
 
 std::string World::toJson() const {
-    // TODO: Implement proper JSON serialization with nlohmann/json
-    return "{\"world\": \"advanced_implementation_placeholder\"}";
+    // Résumé agrégé de l'état du monde : dimensions, cycle temporel et
+    // moyennes environnementales calculées sur la grille (un export complet
+    // cellule par cellule serait inutilement volumineux pour les
+    // consommateurs actuels : CLI, API web, snapshots).
+    double totalTemperature = 0.0, totalHumidity = 0.0;
+    double totalPlants = 0.0, totalWater = 0.0, totalFood = 0.0;
+    const size_t cellCount = static_cast<size_t>(width_) * height_;
+
+    for (const auto& row : grid_) {
+        for (const auto& cell : row) {
+            totalTemperature += cell.temperature;
+            totalHumidity += cell.humidity;
+            auto plants = cell.resources.find("plants");
+            auto water = cell.resources.find("water");
+            auto food = cell.resources.find("food");
+            if (plants != cell.resources.end()) totalPlants += plants->second;
+            if (water != cell.resources.end()) totalWater += water->second;
+            if (food != cell.resources.end()) totalFood += food->second;
+        }
+    }
+
+    double avgTemperature = cellCount > 0 ? totalTemperature / cellCount : globalTemperature_;
+    double avgHumidity = cellCount > 0 ? totalHumidity / cellCount : 0.5;
+
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(3);
+    oss << "{"
+        << "\"width\":" << width_ << ","
+        << "\"height\":" << height_ << ","
+        << "\"day\":" << timeState_.currentDay << ","
+        << "\"season\":" << timeState_.currentSeason << ","
+        << "\"dayProgress\":" << timeState_.getDayProgress() << ","
+        << "\"isDay\":" << (isDay() ? "true" : "false") << ","
+        << "\"temperature\":" << avgTemperature << ","
+        << "\"humidity\":" << avgHumidity << ","
+        << "\"resources\":{"
+        << "\"plants\":" << totalPlants << ","
+        << "\"water\":" << totalWater << ","
+        << "\"food\":" << totalFood
+        << "}"
+        << "}";
+    return oss.str();
 }
 
-void World::fromJson(const std::string& jsonStr) {
-    // TODO: Implement JSON deserialization
-    std::cout << "Loading world from JSON (not implemented yet)" << std::endl;
+void World::fromJson(const std::string& /*jsonStr*/) {
+    // Non implémenté : aucun consommateur actuel (CLI, API, runner) ne
+    // recharge un monde depuis un snapshot JSON. À faire quand un vrai
+    // besoin de reprise d'état apparaîtra (voir CONTRIBUTING.md).
 }
 
 } // namespace Serina

@@ -206,48 +206,65 @@ private:
         showEvolutionaryConstraints();
     }
 
+    static std::string biologicalTypeToString(Taxonomy::BiologicalType type)
+    {
+        switch (type)
+        {
+        case Taxonomy::BiologicalType::BIRD: return "Oiseau";
+        case Taxonomy::BiologicalType::FISH: return "Poisson";
+        case Taxonomy::BiologicalType::ARTHROPOD: return "Arthropode";
+        case Taxonomy::BiologicalType::MOLLUSC: return "Mollusque";
+        case Taxonomy::BiologicalType::CNIDARIAN: return "Cnidaire";
+        case Taxonomy::BiologicalType::ANNELID: return "Annélide";
+        case Taxonomy::BiologicalType::PLANT: return "Plante";
+        case Taxonomy::BiologicalType::CRUSTACEAN: return "Crustacé";
+        default: return "Autre";
+        }
+    }
+
     void showScientificNaming()
     {
-        auto taxonomy = std::make_unique<Taxonomy::EcosystemTaxonomy>();
-        
+        Taxonomy::EcosystemTaxonomy taxonomy;
+
         std::vector<Taxonomy::BiologicalType> types = {
             Taxonomy::BiologicalType::BIRD,
             Taxonomy::BiologicalType::FISH,
             Taxonomy::BiologicalType::ARTHROPOD,
             Taxonomy::BiologicalType::MOLLUSC
         };
-        
+
         for (auto type : types)
         {
-            auto info = taxonomy->generateTaxonomicName(type, "test_species");
-            std::cout << "  " << taxonomy->biologicalTypeToString(type) << ": " 
-                      << info.genus << " " << info.species << " (" << info.family << ")" << std::endl;
+            std::string speciesKey = taxonomy.registerNewSpecies(type, {"test_species"});
+            const auto* info = taxonomy.getSpeciesInfo(speciesKey);
+            if (info)
+            {
+                std::cout << "  " << biologicalTypeToString(type) << ": "
+                          << info->genus << " " << info->species << " (" << info->family << ")" << std::endl;
+            }
         }
     }
 
     void showSpeciesCharacteristics()
     {
         auto ecosystem = std::make_unique<Ecosystem::SerinaEcosystem>();
-        auto species = ecosystem->getAllSpecies();
-        
+        const auto& species = ecosystem->getAllSpecies();
+
         int count = 0;
-        for (const auto& sp : species)
+        for (const auto& [name, characteristics] : species)
         {
             if (count >= 5) break; // Montrer seulement les 5 premières
-            
-            auto characteristics = ecosystem->getSpeciesCharacteristics(sp);
-            if (characteristics)
-            {
-                std::cout << "  🔸 " << sp << std::endl;
-                std::cout << "     Type: " << static_cast<int>(characteristics->biologicalType) << std::endl;
-                std::cout << "     Régime: " << static_cast<int>(characteristics->diet) << std::endl;
-                std::cout << "     Environnements: " << characteristics->preferredEnvironments.size() << std::endl;
-                std::cout << "     Peut nager: " << (characteristics->canSwim ? "Oui" : "Non") << std::endl;
-                std::cout << "     Peut voler: " << (characteristics->canFly ? "Oui" : "Non") << std::endl;
-            }
+
+            std::cout << "  🔸 " << name << std::endl;
+            std::cout << "     Type: " << biologicalTypeToString(characteristics.biologicalType) << std::endl;
+            std::cout << "     Régime: " << static_cast<int>(characteristics.diet) << std::endl;
+            std::cout << "     Environnements: " << characteristics.preferredEnvironments.size() << std::endl;
+            std::cout << "     Peut nager: " << (characteristics.canSwim ? "Oui" : "Non") << std::endl;
+            std::cout << "     Peut voler: " << (characteristics.canFly ? "Oui" : "Non") << std::endl;
             count++;
         }
-        std::cout << "  ... et " << (species.size() - 5) << " autres espèces" << std::endl;
+        if (species.size() > 5)
+            std::cout << "  ... et " << (species.size() - 5) << " autres espèces" << std::endl;
     }
 
     void showEnvironments()
@@ -307,23 +324,19 @@ private:
         std::cout << "\n📋 === INFORMATIONS SUR L'ÉCOSYSTÈME SERINA ===" << std::endl;
         
         auto ecosystem = std::make_unique<Ecosystem::SerinaEcosystem>();
-        auto species = ecosystem->getAllSpecies();
-        
+        const auto& species = ecosystem->getAllSpecies();
+
         std::cout << "\n📊 STATISTIQUES GÉNÉRALES:" << std::endl;
         std::cout << "  🧬 Espèces originales: " << species.size() << std::endl;
         std::cout << "  🌍 Environnements disponibles: 7" << std::endl;
         std::cout << "  ⚗️ Traits évolutionnaires: 12" << std::endl;
         std::cout << "  🔗 Types d'interactions: 6" << std::endl;
-        
+
         // Compter par type biologique
         std::unordered_map<Taxonomy::BiologicalType, int> typeCounts;
-        for (const auto& sp : species)
+        for (const auto& [name, characteristics] : species)
         {
-            auto characteristics = ecosystem->getSpeciesCharacteristics(sp);
-            if (characteristics)
-            {
-                typeCounts[characteristics->biologicalType]++;
-            }
+            typeCounts[characteristics.biologicalType]++;
         }
         
         std::cout << "\n🏷️ RÉPARTITION PAR GROUPE BIOLOGIQUE:" << std::endl;

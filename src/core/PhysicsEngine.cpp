@@ -110,8 +110,6 @@ void PhysicsEngine::update(std::vector<Entity>& entities, double deltaTime) {
             }
         }
     }
-    
-    std::cout << "Physics updated for " << entities.size() << " entities." << std::endl;
 }
 
 void PhysicsEngine::applyGravity(Entity& entity, double deltaTime) {

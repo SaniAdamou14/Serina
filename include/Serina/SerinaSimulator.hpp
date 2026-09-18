@@ -106,6 +106,42 @@ namespace Serina::Simulation
             setupDefaultParameters();
         }
 
+        // ===================== Accès en lecture à l'état réel =====================
+        // Permet à des consommateurs externes (CLI, API) de rapporter l'état
+        // véritable de la simulation plutôt que des données inventées.
+
+        /// @brief Peuple l'écosystème avec les espèces d'origine de Serina
+        /// (à appeler une fois avant les premiers simulateGeneration()).
+        void seedInitialPopulations() { initializeSpeciesPopulations(); }
+
+        uint32_t getCurrentGeneration() const { return currentGeneration_; }
+        double getTotalBiodiversity() const { return totalBiodiversity_; }
+        double getEcosystemStability() const { return ecosystemStability_; }
+        uint32_t getTotalSpeciationsEvents() const { return totalSpeciationsEvents_; }
+        uint32_t getTotalExtinctionEvents() const { return totalExtinctionEvents_; }
+        const std::unordered_map<std::string, SpeciesSimulationStats> &getSpeciesStats() const { return speciesStats_; }
+        const std::vector<EcologicalEvent> &getEventHistory() const { return eventHistory_; }
+        const Ecosystem::SerinaEcosystem &getEcosystem() const { return *ecosystem_; }
+        const Environment::SerinaEnvironmentManager &getEnvironments() const { return *environments_; }
+
+        // ===================== Restauration d'état =====================
+        // Un processus CLI est relancé à chaque commande (pas de démon) : ces
+        // setters permettent à l'appelant de recharger un état persistant
+        // (fichier JSON) avant de reprendre la simulation là où elle s'était
+        // arrêtée, au lieu de repartir de zéro à chaque invocation.
+        void restoreState(uint32_t generation,
+                           std::unordered_map<std::string, SpeciesSimulationStats> speciesStats,
+                           double totalBiodiversity, double ecosystemStability,
+                           uint32_t totalSpeciations, uint32_t totalExtinctions)
+        {
+            currentGeneration_ = generation;
+            speciesStats_ = std::move(speciesStats);
+            totalBiodiversity_ = totalBiodiversity;
+            ecosystemStability_ = ecosystemStability;
+            totalSpeciationsEvents_ = totalSpeciations;
+            totalExtinctionEvents_ = totalExtinctions;
+        }
+
         /// @brief Initialise tous les composants de simulation
         void initializeComponents(uint32_t seed)
         {
@@ -119,8 +155,6 @@ namespace Serina::Simulation
 
             // Initialiser les interactions écologiques de base
             interactions_->initializeBasicInteractions(*ecosystem_);
-
-            std::cout << "🧬 Simulateur d'écosystème Serina initialisé" << std::endl;
         }
 
         /// @brief Configure les paramètres par défaut
@@ -153,9 +187,7 @@ namespace Serina::Simulation
 
             for (uint32_t generation = 0; generation < parameters_.totalGenerations; ++generation)
             {
-                currentGeneration_ = generation;
-
-                // Simulation d'une génération
+                // Simulation d'une génération (avance aussi currentGeneration_)
                 simulateGeneration();
 
                 // Rapport périodique
@@ -223,6 +255,12 @@ namespace Serina::Simulation
 
             // 9. Avancement des composants
             constraints_->advanceGeneration();
+
+            // 10. Avancement du compteur de génération (une seule source de
+            // vérité, que l'appelant soit runSimulation() ou un appel direct
+            // et répété à simulateGeneration() depuis l'extérieur, par ex.
+            // depuis la CLI).
+            ++currentGeneration_;
         }
 
         /// @brief Simule les interactions écologiques
@@ -495,8 +533,6 @@ namespace Serina::Simulation
                         event.generation = currentGeneration_;
                         event.impact = 1.0;
                         eventHistory_.push_back(event);
-
-                        std::cout << "🌱 Spéciation: " << newSpecies << " émerge de " << species << std::endl;
                     }
                 }
             }
@@ -543,8 +579,6 @@ namespace Serina::Simulation
 
                 speciesStats_.erase(species);
                 totalExtinctionEvents_++;
-
-                std::cout << "💀 Extinction: " << species << " disparaît" << std::endl;
             }
         }
 
@@ -666,8 +700,6 @@ namespace Serina::Simulation
                 speciesStats_[species] = stats;
                 environmentSpecies_[Ecosystem::EnvironmentType::GRASSLAND].push_back(species);
             }
-
-            std::cout << "🌱 " << originalSpecies.size() << " espèces originales initialisées" << std::endl;
         }
 
         bool checkStopConditions()

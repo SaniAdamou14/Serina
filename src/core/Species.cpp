@@ -105,8 +105,6 @@ void Species::mutate(double mutationRate) {
     
     // Re-express phenotype after mutation
     expressPhenotypeFromGenome();
-    
-    std::cout << "Species " << name_ << " mutated." << std::endl;
 }
 
 Species Species::reproduce(const Species& other) const {

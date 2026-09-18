@@ -136,7 +136,7 @@ namespace Serina::Evolution
         }
     };
 
-    uint64_t Organism::nextId_ = 1;
+    inline uint64_t Organism::nextId_ = 1;
 
     /// @brief Gestionnaire de population avec algorithmes évolutifs avancés
     class PopulationManager

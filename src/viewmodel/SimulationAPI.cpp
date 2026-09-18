@@ -3,6 +3,8 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <iomanip>
+#include <chrono>
 
 namespace Serina {
 
@@ -43,8 +45,6 @@ void SimulationAPI::initialize() {
     species_.push_back(fish);
 
     std::cout << "Simulation initialized with " << species_.size() << " species." << std::endl;
-    #include <iomanip>
-    #include <chrono>
 }
 
 
@@ -71,8 +71,15 @@ void SimulationAPI::initialize() {
 void SimulationAPI::step() {
     double deltaTime = 1.0 / 60.0; // Simulation à 60 FPS
     world_.update(deltaTime);
-    
-    // Simulation basique de l'évolution
+    ++tickCounter_;
+
+    if (populationManager_) {
+        // Mode avancé : la population individuelle pilote toute l'évolution.
+        updateAdvanced(deltaTime);
+        return;
+    }
+
+    // Mode simple : simulation basique de l'évolution par espèce agrégée
     for (auto& s : species_) {
         // Consommation d'énergie basée sur les traits
         double energyCost = 1.0 + s.getTrait(TraitType::SIZE) * 0.5 + s.getTrait(TraitType::SPEED) * 0.3;
@@ -121,8 +128,6 @@ void SimulationAPI::step() {
             [](const Species& s) { return !s.survives(0.0); }),
         species_.end()
     );
-    
-    std::cout << "Simulation step completed. Population: " << species_.size() << std::endl;
 }
 
 void SimulationAPI::start() {
@@ -132,10 +137,7 @@ void SimulationAPI::start() {
 
 void SimulationAPI::pause() {
     running_ = false;
-        uint64_t totalPopulation = 0;
-        if (populationManager_) {
-            totalPopulation = populationManager_->getPopulationSize();
-        } else {
+    std::cout << "Simulation paused." << std::endl;
 }
 
 void SimulationAPI::setSpeed(double speed) {
@@ -143,7 +145,8 @@ void SimulationAPI::setSpeed(double speed) {
 }
 
 std::string SimulationAPI::getPopulationData() const {
-    
+    std::ostringstream oss;
+
     // Calculer population totale (simulée)
     uint32_t totalPopulation = 0;
     for (const auto& s : species_) {
@@ -153,7 +156,7 @@ std::string SimulationAPI::getPopulationData() const {
         );
         totalPopulation += speciesPopulation;
     }
-    
+
     oss << "{";
     oss << "\"totalPopulation\":" << totalPopulation << ",";
     oss << "\"generation\":" << (world_.getDayCount() / 10) << ",";

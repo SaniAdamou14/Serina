@@ -135,9 +135,6 @@ namespace Serina::Ecology
             // === AMÉNSALISME ===
             // Organismes qui nuisent sans bénéfice
             addAmensalismInteraction("Achatina fulica", "Folsomia candida", -0.2); // Compaction du sol
-
-            std::cout << "🔗 " << interactions_.size() 
-                      << " interactions écologiques de base initialisées" << std::endl;
         }
 
         /// @brief Ajoute une interaction de prédation
