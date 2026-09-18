@@ -16,23 +16,11 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "socket.io-client": "^4.7.4",
-    "three": "^0.158.0",
-    "@react-three/fiber": "^8.15.11",
-    "@react-three/drei": "^9.88.13",
-    "plotly.js": "^2.27.0",
-    "react-plotly.js": "^2.6.0",
-    "recharts": "^2.8.0",
-    "tailwindcss": "^3.3.6",
-    "class-variance-authority": "^0.7.0",
-    "clsx": "^2.0.0",
-    "lucide-react": "^0.292.0",
-    "@headlessui/react": "^1.7.17",
-    "framer-motion": "^10.16.5"
+    "tailwindcss": "^3.3.6"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
-    "@types/three": "^0.158.3",
     "@typescript-eslint/eslint-plugin": "^6.14.0",
     "@typescript-eslint/parser": "^6.14.0",
     "@vitejs/plugin-react": "^4.2.1",
@@ -59,8 +47,7 @@
     "visualization",
     "react",
     "typescript",
-    "websocket",
-    "3d"
+    "websocket"
   ],
   "author": "Serina Development Team",
   "license": "MIT"

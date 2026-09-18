@@ -1,117 +1,114 @@
+import { useEffect, useState } from 'react'
 import { useSimulation } from '@services/SimulationContext'
+import { apiService } from '@services/ApiService'
+import { HealthCheckResponse } from '../types'
 
-export function PerformanceMetrics() {
-  const { simulationData } = useSimulation()
+/**
+ * Panneau d'état du moteur. L'ancien "PerformanceMetrics" affichait des
+ * métriques (FPS, CPU, mémoire) et des mentions "SIMD ✓ Enabled" / "OpenMP
+ * ✓ Active" qui n'ont jamais correspondu à quoi que ce soit de réel — le
+ * backend ne rapporte aucune télémétrie de ce type, et l'audit du moteur
+ * C++ a confirmé que ces optimisations ne sont pas branchées dans le
+ * binaire qui tourne réellement (voir CONTRIBUTING.md). Ce composant
+ * n'affiche donc que des informations vérifiables : la santé des services
+ * backend et la progression réelle de la simulation en cours.
+ */
+export function EngineStatus() {
+  const { simulationData, isConnected, currentSimulationId } = useSimulation()
+  const [health, setHealth] = useState<HealthCheckResponse | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
-  if (!simulationData) {
-    return (
-      <div className="card">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
-          <div className="space-y-3">
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-            <div className="h-4 bg-gray-200 rounded"></div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    let cancelled = false
 
-  const { performance } = simulationData
-
-  const getStatusColor = (value: number, thresholds: { good: number; warning: number }) => {
-    if (value >= thresholds.good) return 'text-green-600 bg-green-100'
-    if (value >= thresholds.warning) return 'text-yellow-600 bg-yellow-100'
-    return 'text-red-600 bg-red-100'
-  }
-
-  const metrics = [
-    {
-      label: 'Frame Rate',
-      value: performance.frameRate.toFixed(1),
-      unit: 'FPS',
-      status: getStatusColor(performance.frameRate, { good: 30, warning: 20 })
-    },
-    {
-      label: 'Generations/Sec',
-      value: performance.generationsPerSecond.toFixed(1),
-      unit: 'gen/s',
-      status: getStatusColor(performance.generationsPerSecond, { good: 2, warning: 1 })
-    },
-    {
-      label: 'Memory Usage',
-      value: performance.memoryUsage.toFixed(1),
-      unit: 'MB',
-      status: getStatusColor(100 - performance.memoryUsage, { good: 50, warning: 25 })
-    },
-    {
-      label: 'CPU Usage',
-      value: performance.cpuUsage.toFixed(1),
-      unit: '%',
-      status: getStatusColor(100 - performance.cpuUsage, { good: 50, warning: 20 })
+    const fetchHealth = async () => {
+      try {
+        const result = await apiService.healthCheck()
+        if (!cancelled) {
+          setHealth(result)
+          setHealthError(null)
+        }
+      } catch (error) {
+        if (!cancelled) setHealthError(error instanceof Error ? error.message : String(error))
+      }
     }
-  ]
+
+    fetchHealth()
+    const interval = setInterval(fetchHealth, 10000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  const StatusRow = ({ label, ok, okLabel, koLabel }: { label: string; ok: boolean; okLabel: string; koLabel: string }) => (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-gray-600">{label}</span>
+      <span className={ok ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+        {ok ? `✓ ${okLabel}` : `✗ ${koLabel}`}
+      </span>
+    </div>
+  )
 
   return (
     <div className="card">
       <div className="border-b border-gray-200 pb-4 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Performance Metrics</h3>
-        <p className="text-sm text-gray-600">System performance and optimization status</p>
+        <h3 className="text-lg font-semibold text-gray-900">État du Moteur</h3>
+        <p className="text-sm text-gray-600">Santé réelle des services backend</p>
       </div>
 
-      <div className="space-y-4">
-        {metrics.map((metric) => (
-          <div key={metric.label} className="flex items-center justify-between">
-            <div className="flex-1">
-              <div className="text-sm font-medium text-gray-700">{metric.label}</div>
-              <div className="text-xs text-gray-500">Real-time monitoring</div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="text-right">
-                <div className="text-lg font-bold text-gray-900">
-                  {metric.value}
-                </div>
-                <div className="text-xs text-gray-500">{metric.unit}</div>
-              </div>
-              <div className={`w-3 h-3 rounded-full ${metric.status.split(' ')[1]}`}></div>
-            </div>
+      <div className="space-y-3">
+        {healthError && (
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-600">
+            {healthError}
           </div>
-        ))}
+        )}
+
+        {health && (
+          <>
+            <StatusRow label="API Backend" ok={health.status === 'healthy'} okLabel="En ligne" koLabel="Hors ligne" />
+            <StatusRow
+              label="Moteur C++ (serina_cli)"
+              ok={health.services.simulationEngine}
+              okLabel="Construit et disponible"
+              koLabel="Non construit — voir README"
+            />
+            <StatusRow
+              label="Base de données"
+              ok={health.services.database}
+              okLabel="Connectée (historique actif)"
+              koLabel="Indisponible (pas d'historique)"
+            />
+            <StatusRow label="WebSocket" ok={health.services.websocket && isConnected} okLabel="Actif" koLabel="Inactif" />
+          </>
+        )}
       </div>
 
-      {/* Performance Charts (Placeholder) */}
+      {/* Progression réelle de la simulation en cours */}
       <div className="mt-6 pt-6 border-t border-gray-200">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Performance History</h4>
-        <div className="h-24 bg-gray-100 rounded-lg flex items-center justify-center">
-          <div className="text-center text-gray-500">
-            <div className="text-sm">📈 Performance Charts</div>
-            <div className="text-xs">Real-time graphs coming soon</div>
+        <h4 className="text-sm font-medium text-gray-700 mb-3">Simulation en cours</h4>
+        {currentSimulationId && simulationData ? (
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-600">Génération</span>
+              <span className="font-medium">{simulationData.status.ecosystem.generation}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Stabilité écosystème</span>
+              <span className="font-medium">{(simulationData.status.ecosystem.ecosystem_stability * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Spéciations</span>
+              <span className="font-medium">{simulationData.status.ecosystem.total_speciations}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Extinctions</span>
+              <span className="font-medium">{simulationData.status.ecosystem.total_extinctions}</span>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* System Info */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">System Status</h4>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">SIMD Optimization</span>
-            <span className="text-green-600 font-medium">✓ Enabled</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">OpenMP Threading</span>
-            <span className="text-green-600 font-medium">✓ Active</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Spatial Hashing</span>
-            <span className="text-green-600 font-medium">✓ Optimized</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-gray-600">Memory Pooling</span>
-            <span className="text-green-600 font-medium">✓ Active</span>
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-gray-500">Aucune simulation active</p>
+        )}
       </div>
     </div>
   )

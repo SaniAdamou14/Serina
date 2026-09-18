@@ -18,65 +18,35 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
     )
   }
 
-  const { environment, time } = simulationData.worldState
+  const { world } = simulationData.world
+  const { climate, resources, pressures } = world
 
-  const environmentMetrics = [
-    { label: 'Temperature', value: `${environment.temperature.toFixed(1)}°C`, color: 'text-red-600' },
-    { label: 'Humidity', value: `${(environment.humidity * 100).toFixed(1)}%`, color: 'text-blue-600' },
-    { label: 'Precipitation', value: `${(environment.precipitation * 100).toFixed(1)}%`, color: 'text-cyan-600' },
-    { label: 'Resources', value: `${(environment.resourceAbundance * 100).toFixed(1)}%`, color: 'text-green-600' }
+  const climateMetrics = [
+    { label: 'Température', value: `${climate.temperature.toFixed(1)}°C`, color: 'text-red-600' },
+    { label: 'Humidité', value: `${(climate.humidity * 100).toFixed(0)}%`, color: 'text-blue-600' },
+    { label: 'Précipitations', value: `${climate.precipitation.toFixed(0)}mm/an`, color: 'text-cyan-600' },
+    { label: 'Ensoleillement', value: `${(climate.sunlightIntensity * 100).toFixed(0)}%`, color: 'text-yellow-600' }
   ]
 
   const pressureMetrics = [
-    { label: 'Predation', value: environment.predationPressure, color: 'text-red-500' },
-    { label: 'Disease Load', value: environment.diseaseLoad, color: 'text-purple-500' },
-    { label: 'Seasonal Effect', value: environment.seasonalModifier, color: 'text-orange-500' }
+    { label: 'Prédation', value: pressures.predationPressure, color: 'text-red-500' },
+    { label: 'Compétition', value: pressures.competitionIntensity, color: 'text-purple-500' },
+    { label: 'Rareté des ressources', value: pressures.resourceScarcity, color: 'text-orange-500' },
+    { label: 'Stress climatique', value: pressures.climaticStress, color: 'text-amber-500' }
   ]
-
-  const getDayNightIcon = () => {
-    if (environment.dayNightCycle < 0.25) return '🌙'
-    if (environment.dayNightCycle < 0.5) return '🌅'
-    if (environment.dayNightCycle < 0.75) return '☀️'
-    return '🌇'
-  }
 
   return (
     <div className="card">
       <div className="border-b border-gray-200 pb-4 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Conditions Environnementales - Serina</h3>
-        <p className="text-sm text-gray-600">État actuel de l'écosystème et pressions environnementales sur ce monde d'oiseaux</p>
+        <h3 className="text-lg font-semibold text-gray-900">Environnement — {world.primaryEnvironment}</h3>
+        <p className="text-sm text-gray-600">{world.description || 'Environnement principal où les espèces d\'origine ont été introduites'}</p>
       </div>
 
-      {/* Time and Season */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <span className="text-2xl">{getDayNightIcon()}</span>
-            <div>
-              <div className="text-sm font-medium text-gray-700">
-                Day/Night Cycle: {(environment.dayNightCycle * 100).toFixed(1)}%
-              </div>
-              <div className="text-xs text-gray-600">Season: {time.season}</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="text-sm font-medium text-gray-700">
-              Generation {time.generation}
-            </div>
-            <div className="text-xs text-gray-600">
-              Elapsed: {Math.floor(time.elapsed / 1000)}s
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Environmental Metrics */}
+      {/* Climate Metrics */}
       <div className="grid grid-cols-2 gap-4 mb-6">
-        {environmentMetrics.map((metric) => (
+        {climateMetrics.map((metric) => (
           <div key={metric.label} className="text-center p-3 bg-gray-50 rounded-lg">
-            <div className={`text-lg font-bold ${metric.color}`}>
-              {metric.value}
-            </div>
+            <div className={`text-lg font-bold ${metric.color}`}>{metric.value}</div>
             <div className="text-xs text-gray-600">{metric.label}</div>
           </div>
         ))}
@@ -84,14 +54,14 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
 
       {/* Environmental Pressures */}
       <div className="space-y-3 mb-6">
-        <h4 className="text-sm font-medium text-gray-700">Environmental Pressures</h4>
+        <h4 className="text-sm font-medium text-gray-700">Pressions Environnementales</h4>
         {pressureMetrics.map((pressure) => {
           const percentage = pressure.value * 100
           return (
             <div key={pressure.label} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-gray-600">{pressure.label}</span>
-                <span className="font-medium">{percentage.toFixed(1)}%</span>
+                <span className="font-medium">{percentage.toFixed(0)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
@@ -105,40 +75,25 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
       </div>
 
       {showDetails && (
-        <>
-          {/* Biomes de Serina */}
-          <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-700 mb-3">Biomes de Serina</h4>
-            <div className="h-32 bg-gradient-to-br from-green-100 via-yellow-100 to-blue-100 rounded-lg flex items-center justify-center border-2 border-dashed border-gray-300">
-              <div className="text-center text-gray-500">
-                <div className="text-sm">🗺️ Carte Interactive de Serina</div>
-                <div className="text-xs">Visualisation des biomes en temps réel</div>
-              </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="ecosystem-stat">
+            <div className="text-sm font-medium text-ecosystem-800 mb-2">Ressources disponibles</div>
+            <div className="space-y-1 text-xs">
+              <div>🌱 Producteurs primaires : {(resources.primaryProducers * 100).toFixed(0)}%</div>
+              <div>🦗 Petites proies : {(resources.smallPrey * 100).toFixed(0)}%</div>
+              <div>💧 Qualité de l'eau : {(resources.waterQuality * 100).toFixed(0)}%</div>
+              <div>🏠 Abris : {(resources.shelter * 100).toFixed(0)}%</div>
             </div>
           </div>
-
-          {/* Écosystèmes spécifiques à Serina */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="ecosystem-stat">
-              <div className="text-sm font-medium text-ecosystem-800 mb-2">Biomes Principaux</div>
-              <div className="space-y-1 text-xs">
-                <div>� Océans et côtes: {((simulationData.worldState.terrainMap?.flat().filter(t => t === 'WATER').length || 0) / (simulationData.worldState.worldSize.width * simulationData.worldState.worldSize.height) * 100 || 35).toFixed(0)}%</div>
-                <div>🌲 Forêts tempérées: {((simulationData.worldState.terrainMap?.flat().filter(t => t === 'FOREST').length || 0) / (simulationData.worldState.worldSize.width * simulationData.worldState.worldSize.height) * 100 || 30).toFixed(0)}%</div>
-                <div>� Prairies: {((simulationData.worldState.terrainMap?.flat().filter(t => t === 'GRASSLAND').length || 0) / (simulationData.worldState.worldSize.width * simulationData.worldState.worldSize.height) * 100 || 25).toFixed(0)}%</div>
-                <div>�️ Montagnes: {((simulationData.worldState.terrainMap?.flat().filter(t => t === 'MOUNTAIN').length || 0) / (simulationData.worldState.worldSize.width * simulationData.worldState.worldSize.height) * 100 || 10).toFixed(0)}%</div>
-              </div>
-            </div>
-            <div className="ecosystem-stat">
-              <div className="text-sm font-medium text-ecosystem-800 mb-2">Ressources Écologiques</div>
-              <div className="space-y-1 text-xs">
-                <div>🌱 Sources alimentaires: {Math.floor((simulationData.worldState.resourceMap?.flat().reduce((a, b) => a + b, 0) || 0) * 1000) || 847}</div>
-                <div>💧 Points d'eau douce: {simulationData.worldState.terrainMap?.flat().filter(t => t === 'WETLAND').length || 23}</div>
-                <div>🏠 Sites de nidification: {Math.floor(simulationData.species.reduce((sum, s) => sum + s.populationCount, 0) * 0.8) || 156}</div>
-                <div>🔄 Régénération: {environment.resourceAbundance > 0.5 ? 'Active' : 'Lente'}</div>
-              </div>
+          <div className="ecosystem-stat">
+            <div className="text-sm font-medium text-ecosystem-800 mb-2">Capacité de charge</div>
+            <div className="space-y-1 text-xs">
+              <div>👥 Capacité totale : {world.carryingCapacity.toLocaleString()}</div>
+              <div>📅 Génération : {simulationData.status.ecosystem.generation}</div>
+              <div>🐾 Espèces présentes : {simulationData.status.ecosystem.total_species}</div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )

@@ -19,13 +19,17 @@ export default defineConfig({
     port: 3000,
     host: true,
     proxy: {
+      // The API server (api/server.js) listens on PORT (default 3001, see
+      // api/.env). Requests are proxied so the frontend can call relative
+      // /api and /socket.io paths in both dev and production instead of
+      // hardcoding a host/port.
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false
       },
       '/socket.io': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         ws: true
       }
@@ -37,14 +41,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          vendor: ['react', 'react-dom'],
-          three: ['three', '@react-three/fiber', '@react-three/drei'],
-          charts: ['plotly.js', 'react-plotly.js', 'recharts']
+          vendor: ['react', 'react-dom']
         }
       }
     }
-  },
-  optimizeDeps: {
-    exclude: ['lucide-react']
   }
 })

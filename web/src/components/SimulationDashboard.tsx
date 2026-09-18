@@ -4,22 +4,22 @@ import { PopulationChart } from './PopulationChart'
 import { GeneticAnalysis } from './GeneticAnalysis'
 import { EnvironmentView } from './EnvironmentView'
 import { SpeciesPanel } from './SpeciesPanel'
-import { PerformanceMetrics } from './PerformanceMetrics'
-import { WorldMap } from './WorldMap'
+import { EngineStatus } from './PerformanceMetrics'
 import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
 import { useSimulation } from '@services/SimulationContext'
 
 export function SimulationDashboard() {
   const { simulationData, isConnected, isRunning } = useSimulation()
-  const [activeTab, setActiveTab] = useState<'overview' | 'genetics' | 'world' | 'evolution' | 'species'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'genetics' | 'evolution' | 'species'>('overview')
 
   const tabs = [
     { id: 'overview', label: 'Vue d\'ensemble', icon: '📊' },
-    { id: 'world', label: 'Carte de Serina', icon: '🗺️' },
     { id: 'evolution', label: 'Arbre Évolutif', icon: '🌳' },
     { id: 'genetics', label: 'Génétique', icon: '🧬' },
     { id: 'species', label: 'Espèces', icon: '🐾' }
   ] as const
+
+  const ecosystem = simulationData?.status.ecosystem
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -42,7 +42,7 @@ export function SimulationDashboard() {
                 <div className={`w-2 h-2 rounded-full mr-2 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 {isConnected ? 'Connecté à Serina' : 'Déconnecté'}
               </div>
-              
+
               <div className={`status-indicator ${isRunning ? 'status-running' : 'status-paused'}`}>
                 {isRunning ? '▶️ Évolution en cours' : '⏸️ Simulation en pause'}
               </div>
@@ -87,15 +87,9 @@ export function SimulationDashboard() {
               <div className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                   <PopulationChart />
-                  <PerformanceMetrics />
+                  <EngineStatus />
                 </div>
-                <EnvironmentView />
-              </div>
-            )}
-
-            {activeTab === 'world' && (
-              <div className="space-y-6">
-                <WorldMap />
+                <EnvironmentView showDetails />
               </div>
             )}
 
@@ -124,14 +118,14 @@ export function SimulationDashboard() {
       <footer className="bg-white border-t border-gray-200 px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center space-x-4">
-            <span>🕒 Génération: {simulationData?.generation || 0}</span>
-            <span>👥 Population: {simulationData?.populationCount || 0}</span>
-            <span>🐾 Espèces: {simulationData?.species?.length || 0}</span>
+            <span>🕒 Génération : {ecosystem?.generation ?? 0}</span>
+            <span>👥 Population : {ecosystem?.total_population ?? 0}</span>
+            <span>🐾 Espèces : {ecosystem?.total_species ?? 0}</span>
             <span>🌍 Monde de Serina</span>
           </div>
           <div className="flex items-center space-x-4">
-            <span>⚡ FPS: {simulationData?.performance?.frameRate?.toFixed(1) || '0.0'}</span>
-            <span>💾 Mémoire: {simulationData?.performance?.memoryUsage?.toFixed(1) || '0.0'}MB</span>
+            <span>🌱 Spéciations : {ecosystem?.total_speciations ?? 0}</span>
+            <span>💀 Extinctions : {ecosystem?.total_extinctions ?? 0}</span>
           </div>
         </div>
       </footer>

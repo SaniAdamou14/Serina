@@ -1,30 +1,26 @@
 import { useState } from 'react'
-import { useSimulation } from '../services/SimulationContext'
+import { useSimulation } from '@services/SimulationContext'
 import { SimulationCommand } from '../types'
 
 export function SimulationControl() {
-  const { 
-    isConnected, 
-    isRunning, 
+  const {
+    isConnected,
+    isRunning,
     currentSimulationId,
     availableSimulations,
     connectionError,
-    sendCommand, 
+    sendCommand,
     startNewSimulation,
     stopCurrentSimulation,
-    connect, 
-    disconnect 
+    connect,
+    disconnect
   } = useSimulation()
-  const [simulationSpeed, setSimulationSpeed] = useState(1.0)
   const [isStarting, setIsStarting] = useState(false)
 
   const handleStartNew = async () => {
     try {
       setIsStarting(true)
-      await startNewSimulation({
-        worldWidth: 100,
-        worldHeight: 100
-      })
+      await startNewSimulation()
     } catch (error) {
       console.error('Failed to start simulation:', error)
     } finally {
@@ -41,20 +37,7 @@ export function SimulationControl() {
   }
 
   const handlePlayPause = () => {
-    if (isRunning) {
-      sendCommand(SimulationCommand.PAUSE)
-    } else {
-      sendCommand(SimulationCommand.START)
-    }
-  }
-
-  const handleReset = () => {
-    sendCommand(SimulationCommand.RESET)
-  }
-
-  const handleSpeedChange = (speed: number) => {
-    setSimulationSpeed(speed)
-    sendCommand(SimulationCommand.SET_SPEED, { speed })
+    sendCommand(isRunning ? SimulationCommand.PAUSE : SimulationCommand.RESUME)
   }
 
   return (
@@ -72,13 +55,13 @@ export function SimulationControl() {
             {isConnected ? 'Connecté' : 'Déconnecté'}
           </div>
         </div>
-        
+
         {connectionError && (
           <div className="bg-red-50 border border-red-200 rounded-md p-3">
             <p className="text-sm text-red-600">{connectionError}</p>
           </div>
         )}
-        
+
         <div className="flex space-x-2">
           <button
             onClick={connect}
@@ -105,10 +88,10 @@ export function SimulationControl() {
             {currentSimulationId ? (isRunning ? 'En cours' : 'En pause') : 'Aucune simulation'}
           </div>
         </div>
-        
+
         {currentSimulationId && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p className="text-sm text-blue-600">ID: {currentSimulationId}</p>
+            <p className="text-sm text-blue-600">ID : {currentSimulationId}</p>
           </div>
         )}
 
@@ -148,8 +131,8 @@ export function SimulationControl() {
           <span className="text-sm font-medium text-gray-700">Simulations Disponibles</span>
           <div className="max-h-32 overflow-y-auto space-y-1">
             {availableSimulations.map((sim) => (
-              <div key={sim.simulationId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                <span className="text-xs text-gray-600">{sim.simulationId}</span>
+              <div key={sim.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                <span className="text-xs text-gray-600">{sim.id}</span>
                 <span className={`text-xs px-2 py-1 rounded ${sim.isRunning ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                   {sim.isRunning ? 'Active' : 'Arrêtée'}
                 </span>
@@ -159,84 +142,18 @@ export function SimulationControl() {
         </div>
       )}
 
-      {/* Contrôle de vitesse */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-700">Vitesse</label>
-          <span className="text-sm text-gray-600">{simulationSpeed}x</span>
-        </div>
-        
-        <div className="space-y-2">
-          <input
-            type="range"
-            min="0.1"
-            max="5.0"
-            step="0.1"
-            value={simulationSpeed}
-            onChange={(e) => handleSpeedChange(parseFloat(e.target.value))}
-            disabled={!isConnected}
-            className="w-full accent-blue-600 disabled:opacity-50"
-          />
-          
-          <div className="flex justify-between text-xs text-gray-500">
-            <span>0.1x</span>
-            <span>1x</span>
-            <span>5x</span>
-          </div>
-        </div>
-        
-        <div className="flex space-x-2">
-          {[0.5, 1.0, 2.0, 5.0].map(speed => (
-            <button
-              key={speed}
-              onClick={() => handleSpeedChange(speed)}
-              disabled={!isConnected}
-              className={`px-2 py-1 text-xs rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                simulationSpeed === speed 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {speed}x
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Actions rapides */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-gray-700">Actions Rapides</h3>
-        <div className="space-y-2">
-          <button
-            onClick={handleReset}
-            disabled={!isConnected}
-            className="w-full button-warning disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            🔄 Réinitialiser
-          </button>
-          
-          <button
-            onClick={() => sendCommand(SimulationCommand.SAVE)}
-            disabled={!isConnected || !currentSimulationId}
-            className="w-full button-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            💾 Sauvegarder État
-          </button>
-        </div>
-      </div>
-
       {/* Informations système */}
       <div className="border-t border-gray-200 pt-4">
         <h3 className="text-sm font-medium text-gray-700 mb-3">Système</h3>
         <div className="space-y-2 text-xs text-gray-600">
           <div className="flex justify-between">
-            <span>Backend:</span>
+            <span>Backend :</span>
             <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
               {isConnected ? 'En ligne' : 'Hors ligne'}
             </span>
           </div>
           <div className="flex justify-between">
-            <span>WebSocket:</span>
+            <span>WebSocket :</span>
             <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
               {isConnected ? 'Actif' : 'Inactif'}
             </span>

@@ -84,7 +84,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </div>
 
               {/* Debug Info (Development Only) */}
-              {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
+              {import.meta.env.DEV && this.state.errorInfo && (
                 <details className="mt-6">
                   <summary className="cursor-pointer text-sm text-gray-600 hover:text-gray-800">
                     Show Debug Information

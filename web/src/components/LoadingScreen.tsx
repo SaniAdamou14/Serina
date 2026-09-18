@@ -55,10 +55,6 @@ export function LoadingScreen({ message = "Initializing Serina Ecosystem..." }: 
               <span>WebSocket Connection</span>
               <span className="text-yellow-600 font-medium">⟳ Connecting</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span>3D Visualization</span>
-              <span className="text-blue-600 font-medium">⟳ Loading</span>
-            </div>
           </div>
         </div>
 
