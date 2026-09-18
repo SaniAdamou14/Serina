@@ -379,26 +379,25 @@ router.get('/compare/:id1/:id2',
         });
       }
       
-      // Get latest traits for both species
+      // Get latest recorded traits for both species
       const [traits1, traits2] = await Promise.all([
         database.query(`
-          SELECT * FROM species_traits 
-          WHERE species_id = ? 
-          ORDER BY generation DESC 
+          SELECT * FROM species_traits_history
+          WHERE species_id = ?
+          ORDER BY generation DESC
           LIMIT 1
         `, [speciesId1]),
         database.query(`
-          SELECT * FROM species_traits 
-          WHERE species_id = ? 
-          ORDER BY generation DESC 
+          SELECT * FROM species_traits_history
+          WHERE species_id = ?
+          ORDER BY generation DESC
           LIMIT 1
         `, [speciesId2])
       ]);
-      
+
       const traitNames = [
-        'trait_size', 'trait_speed', 'trait_strength', 'trait_intelligence',
-        'trait_longevity', 'trait_resistance', 'trait_metabolism', 'trait_sociability',
-        'trait_adaptability', 'trait_vision_range', 'trait_camouflage', 'trait_reproduction_rate'
+        'avg_size', 'avg_speed', 'avg_intelligence', 'avg_endurance', 'avg_aggression',
+        'avg_sociability', 'avg_fertility', 'avg_longevity', 'avg_adaptation', 'avg_resistance'
       ];
       
       const comparison = {

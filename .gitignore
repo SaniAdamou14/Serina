@@ -54,6 +54,8 @@ package-lock.json.bak
 results_*/
 *.jsonl
 snapshot_gen_*.json
+.serina-state/
+serina_state.json
 
 # Editor / OS
 .vscode/*

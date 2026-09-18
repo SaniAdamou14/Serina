@@ -5,12 +5,11 @@
 const express = require('express');
 const router = express.Router();
 
-// Le service sera injecté lors de l'initialisation
-let serinaService = null;
+// Le moteur de simulation sera injecté lors de l'initialisation de server.js
+let simulationEngine = null;
 
-// Injection du service
-function setSerinaService(service) {
-  serinaService = service;
+function setSimulationEngine(engine) {
+  simulationEngine = engine;
 }
 
 /**
@@ -27,36 +26,73 @@ function setSerinaService(service) {
  */
 router.post('/start', async (req, res) => {
   try {
-    if (!serinaService) {
-      return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+    if (!simulationEngine) {
+      return res.status(500).json({ error: 'Simulation engine not initialized' });
+    }
+    if (!simulationEngine.isAvailable()) {
+      return res.status(503).json({
+        error: 'Serina C++ engine not built',
+        details: 'Run "cmake --build build" (see README) then restart the API server.'
       });
     }
 
-    const options = {
-      simulationId: req.body.simulationId || 'serina-' + Date.now()
-    };
-    
-    const result = await serinaService.startSimulation(options);
-    
-    console.log(`🌍 Unified Serina simulation started: ${options.simulationId}`);
-    
-    res.json({
+    const result = await simulationEngine.startSimulation({
+      simulationId: req.body.simulationId,
+      name: req.body.name,
+      worldSize: req.body.worldSize,
+      initialSpecies: req.body.initialSpecies
+    });
+
+    if (result.success) {
+      console.log(`🌍 Serina simulation started: ${result.simulationId}`);
+    }
+
+    res.status(result.success ? 200 : 500).json({
       success: result.success,
       simulationId: result.simulationId,
-      message: result.success 
-        ? 'Simulation Serina authentique démarrée avec CLI moderne'
+      message: result.success
+        ? 'Simulation Serina démarrée'
         : 'Échec du démarrage de simulation',
       data: result.data || null,
       error: result.error || null
     });
   } catch (error) {
     console.error('❌ Error starting Serina simulation:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to start Serina simulation',
-      details: error.message 
+      details: error.message
     });
   }
+});
+
+/**
+ * @swagger
+ * /api/serina/pause/{simulationId}:
+ *   post:
+ *     summary: Met en pause une simulation Serina (l'état est conservé)
+ *     tags: [Serina]
+ */
+router.post('/pause/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = simulationEngine.pauseSimulation(req.params.simulationId);
+  res.status(result.success ? 200 : 404).json(result);
+});
+
+/**
+ * @swagger
+ * /api/serina/resume/{simulationId}:
+ *   post:
+ *     summary: Reprend une simulation Serina mise en pause
+ *     tags: [Serina]
+ */
+router.post('/resume/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = simulationEngine.resumeSimulation(req.params.simulationId);
+  res.status(result.success ? 200 : 404).json(result);
 });
 
 /**
@@ -79,14 +115,14 @@ router.post('/start', async (req, res) => {
  */
 router.post('/stop/:simulationId', async (req, res) => {
   try {
-    if (!serinaService) {
+    if (!simulationEngine) {
       return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+        error: 'Simulation engine not initialized' 
       });
     }
 
     const { simulationId } = req.params;
-    const result = await serinaService.stopSimulation(simulationId);
+    const result = await simulationEngine.stopSimulation(simulationId);
     
     console.log(`🛑 Serina simulation stopped: ${simulationId}`);
     
@@ -127,14 +163,14 @@ router.post('/stop/:simulationId', async (req, res) => {
  */
 router.get('/status/:simulationId', async (req, res) => {
   try {
-    if (!serinaService) {
+    if (!simulationEngine) {
       return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+        error: 'Simulation engine not initialized' 
       });
     }
 
     const { simulationId } = req.params;
-    const data = serinaService.getSimulationData(simulationId);
+    const data = simulationEngine.getSimulationData(simulationId);
     
     res.json(data);
   } catch (error) {
@@ -164,13 +200,13 @@ router.get('/status/:simulationId', async (req, res) => {
  */
 router.get('/list', async (req, res) => {
   try {
-    if (!serinaService) {
+    if (!simulationEngine) {
       return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+        error: 'Simulation engine not initialized' 
       });
     }
 
-    const result = serinaService.listSimulations();
+    const result = simulationEngine.listSimulations();
     
     res.json({
       success: result.success,
@@ -204,14 +240,14 @@ router.get('/list', async (req, res) => {
  */
 router.get('/data/:simulationId', async (req, res) => {
   try {
-    if (!serinaService) {
+    if (!simulationEngine) {
       return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+        error: 'Simulation engine not initialized' 
       });
     }
 
     const { simulationId } = req.params;
-    const simulationData = serinaService.getSimulationData(simulationId);
+    const simulationData = simulationEngine.getSimulationData(simulationId);
     
     if (!simulationData.latestData) {
       return res.status(200).json({ 
@@ -252,13 +288,13 @@ router.get('/data/:simulationId', async (req, res) => {
  */
 router.get('/check-executable', async (req, res) => {
   try {
-    if (!serinaService) {
+    if (!simulationEngine) {
       return res.status(500).json({ 
-        error: 'Serina service not initialized' 
+        error: 'Simulation engine not initialized' 
       });
     }
 
-    const executablePath = serinaService.findSerinaExecutable();
+    const executablePath = simulationEngine.findSerinaExecutable();
     
     res.json({
       available: !!executablePath,
@@ -276,4 +312,4 @@ router.get('/check-executable', async (req, res) => {
   }
 });
 
-module.exports = { router, setSerinaService };
+module.exports = { router, setSimulationEngine };

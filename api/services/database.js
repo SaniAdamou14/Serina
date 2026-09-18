@@ -156,7 +156,7 @@ class DatabaseService {
         fitness_average FLOAT DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX (simulation_id),
+        UNIQUE KEY uq_species_sim_name (simulation_id, name),
         CONSTRAINT fk_species_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
       `CREATE TABLE IF NOT EXISTS individuals (
@@ -375,25 +375,27 @@ class DatabaseService {
   }
   async saveSpecies(simulationId, species) {
     const sql = `
-      INSERT INTO species (simulation_id, name, population_count, generation_span, 
-                          extinction_risk, ecological_niche, traits, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      INSERT INTO species (simulation_id, name, population_count, generation_span,
+                          extinction_risk, ecological_niche, traits, fitness_average, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       ON DUPLICATE KEY UPDATE
         population_count = VALUES(population_count),
         generation_span = VALUES(generation_span),
         extinction_risk = VALUES(extinction_risk),
         traits = VALUES(traits),
+        fitness_average = VALUES(fitness_average),
         updated_at = NOW()
     `;
-    
+
     return await this.query(sql, [
       simulationId,
       species.name,
-      species.populationCount,
-      species.generationSpan,
-      species.extinctionRisk,
-      species.ecologicalNiche,
-      JSON.stringify(species.averageTrait)
+      species.populationCount ?? 0,
+      species.generationSpan ?? 0,
+      species.extinctionRisk ?? 0,
+      species.ecologicalNiche ?? 'generalist',
+      JSON.stringify(species.averageTrait ?? {}),
+      species.fitnessAverage ?? 0
     ]);
   }
 

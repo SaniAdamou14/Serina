@@ -2,21 +2,21 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 
 // Import services
 const database = require('./services/database');
 const websocketService = require('./services/websocket');
-const EvolutionEngine = require('./services/evolution');
-const UnifiedSerinaService = require('./services/unifiedSerinaService');
+const SimulationEngine = require('./services/simulationEngine');
 
 // Import routes
 const speciesRoutes = require('./routes/species');
 const simulationRoutes = require('./routes/simulations');
 const environmentRoutes = require('./routes/environment');
-const simulationControlRoutes = require('./routes/simulation-control');
 const speciesAnalyticsRoutes = require('./routes/species-analytics');
-const { router: serinaRoutes, setSerinaService } = require('./routes/serina');
+const { router: serinaRoutes, setSimulationEngine: setSerinaEngine } = require('./routes/serina');
 
 // Swagger setup
 const swaggerUi = require('swagger-ui-express');
@@ -39,10 +39,14 @@ const swaggerSpec = swaggerJSDoc({
 const app = express();
 const server = http.createServer(app);
 
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim());
+
 // Configure Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: corsOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true
   },
@@ -50,19 +54,25 @@ const io = new Server(server, {
 });
 
 // Security and middleware
+app.use(helmet());
 app.use(cors({
-  origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+  origin: corsOrigins,
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: (process.env.CORS_METHODS || "GET,POST,PUT,DELETE,PATCH,OPTIONS").split(','),
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
+
+const apiLimiter = rateLimit({
+  windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100),
+  standardHeaders: true,
+  legacyHeaders: false
+});
+app.use('/api', apiLimiter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Static files
-app.use('/static', express.static(path.join(__dirname, 'public')));
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -71,10 +81,7 @@ app.use((req, res, next) => {
 });
 
 // Services initialization
-let evolutionEngine = null;
-let unifiedSerinaService = null;
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+let simulationEngine = null;
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -83,8 +90,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     services: {
       database: database.isConnected(),
-      evolutionEngine: evolutionEngine ? evolutionEngine.isRunning : false,
-      simulation: unifiedSerinaService ? (unifiedSerinaService.isRunning || false) : false,
+      simulationEngine: simulationEngine ? simulationEngine.isAvailable() : false,
       websocket: websocketService.isInitialized
     }
   });
@@ -96,52 +102,26 @@ async function initializeServices() {
     console.log('🚀 Initializing services...');
 
     // Initialize database
-    if (typeof database.initialize === 'function') {
-      await database.initialize();
-    } else {
-      await database.connect();
-    }
-    console.log('✅ Database service initialized');
-
-    const dbConnected = database.isConnected && database.isConnected();
-    if (!dbConnected) {
-      console.warn('⚠️ Database is not connected. Starting server in degraded mode (no evolution engine).');
-    }
-
-    // Initialize services
+    await database.initialize();
+    const dbConnected = database.isConnected();
     if (dbConnected) {
-      evolutionEngine = new EvolutionEngine();
-      await evolutionEngine.initialize();
-      console.log('✅ Evolution Engine initialized');
+      console.log('✅ Database service initialized');
     } else {
-      evolutionEngine = null;
+      console.warn('⚠️ Database is not connected. Simulation history/analytics will be unavailable.');
     }
 
-    try {
-      // Note: Ancien simulationService remplacé par unifiedSerinaService
-      console.log('✅ Legacy simulation service bypassed - using unified service');
-    } catch (simErr) {
-      console.warn('⚠️ Legacy simulation note:', simErr.message);
-    }
-
-    // Initialize Serina unified service
-    unifiedSerinaService = new UnifiedSerinaService();
-    await unifiedSerinaService.initialize();
-    unifiedSerinaService.setWebSocketServer({ 
-      broadcastToRoom: (room, message) => {
-        io.to(room).emit('message', message);
-      }
-    });
-    setSerinaService(unifiedSerinaService); // Inject service into routes
-    console.log('✅ Unified Serina Service initialized');
+    // Initialize the simulation engine (bridge to the real C++ CLI)
+    simulationEngine = new SimulationEngine();
+    await simulationEngine.initialize();
+    setSerinaEngine(simulationEngine);
+    console.log('✅ Simulation Engine initialized');
 
     // Initialize WebSocket service
-    websocketService.setUnifiedSerinaService(unifiedSerinaService);
+    websocketService.setSimulationEngine(simulationEngine);
     websocketService.initialize(io);
     console.log('✅ WebSocket Service initialized');
 
     console.log('✅ All services initialized successfully');
-
   } catch (error) {
     console.error('❌ Failed to initialize services:', error);
     process.exit(1);
@@ -152,60 +132,9 @@ async function initializeServices() {
 app.use('/api/species', speciesRoutes);
 app.use('/api/species', speciesAnalyticsRoutes);
 app.use('/api/simulations', simulationRoutes);
-app.use('/api', speciesAnalyticsRoutes); // For /api/simulations/{id}/species-comparison/{generation}
 app.use('/api/environment', environmentRoutes);
-app.use('/api/simulation', simulationControlRoutes);
-app.use('/api/serina', serinaRoutes); // Add Serina C++ simulation routes
+app.use('/api/serina', serinaRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-// Evolution control endpoints
-app.post('/api/evolution/start', async (req, res) => {
-  try {
-    if (!evolutionEngine) {
-      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
-    }
-    await evolutionEngine.start();
-    res.json({ success: true, message: 'Evolution started' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/evolution/stop', async (req, res) => {
-  try {
-    if (!evolutionEngine) {
-      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
-    }
-    evolutionEngine.stop();
-    res.json({ success: true, message: 'Evolution stopped' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.post('/api/evolution/reset', async (req, res) => {
-  try {
-    if (!evolutionEngine) {
-      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
-    }
-    await evolutionEngine.reset();
-    res.json({ success: true, message: 'Evolution reset' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-app.get('/api/evolution/status', async (req, res) => {
-  try {
-    if (!evolutionEngine) {
-      return res.status(500).json({ success: false, error: 'Evolution engine not initialized' });
-    }
-    const data = await evolutionEngine.getSimulationData();
-    res.json({ success: true, data: data });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
 // 404 handler
 app.use('*', (req, res) => {
@@ -232,7 +161,7 @@ const PORT = process.env.PORT || 3001;
 async function startServer() {
   try {
     await initializeServices();
-    
+
     server.listen(PORT, () => {
       console.log(`🌟 Serina Evolution Server running on port ${PORT}`);
       console.log(`📡 WebSocket server ready for connections`);
@@ -246,11 +175,10 @@ async function startServer() {
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('\n📡 Received SIGTERM, initiating graceful shutdown...');
+async function shutdown(signal) {
+  console.log(`\n📡 Received ${signal}, initiating graceful shutdown...`);
   try {
-    if (evolutionEngine) evolutionEngine.stop();
-    if (unifiedSerinaService) await unifiedSerinaService.cleanup();
+    if (simulationEngine) await simulationEngine.cleanup();
     websocketService.cleanup();
     await database.close();
     process.exit(0);
@@ -258,21 +186,10 @@ process.on('SIGTERM', async () => {
     console.error('❌ Error during graceful shutdown:', error);
     process.exit(1);
   }
-});
+}
 
-process.on('SIGINT', async () => {
-  console.log('\n📡 Received SIGINT, initiating graceful shutdown...');
-  try {
-    if (evolutionEngine) evolutionEngine.stop();
-    if (unifiedSerinaService) await unifiedSerinaService.cleanup();
-    websocketService.cleanup();
-    await database.close();
-    process.exit(0);
-  } catch (error) {
-    console.error('❌ Error during graceful shutdown:', error);
-    process.exit(1);
-  }
-});
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 // Start the server if this file is run directly
 if (require.main === module) {

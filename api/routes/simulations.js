@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { param, validationResult } = require('express-validator');
 const database = require('../services/database');
 
 // GET /api/simulations - Get all simulations
@@ -302,6 +303,81 @@ router.get('/:id/performance', async (req, res) => {
       error: 'Failed to fetch performance metrics',
       details: error.message
     });
+  }
+});
+
+/**
+ * @swagger
+ * /api/simulations/{simulationId}/species-comparison/{generation}:
+ *   get:
+ *     summary: Compare traits across all species in a generation
+ *     tags: [Species Analytics]
+ *     parameters:
+ *       - in: path
+ *         name: simulationId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Simulation ID
+ *       - in: path
+ *         name: generation
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Generation number
+ *     responses:
+ *       200:
+ *         description: Species traits comparison
+ *       404:
+ *         description: Simulation not found
+ */
+router.get('/:simulationId/species-comparison/:generation', [
+  param('simulationId').isInt({ min: 1 }).withMessage('Simulation ID must be a positive integer'),
+  param('generation').isInt({ min: 0 }).withMessage('Generation must be >= 0')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
+
+    const { simulationId, generation } = req.params;
+
+    const simulation = await database.getSimulation(simulationId);
+    if (!simulation) {
+      return res.status(404).json({ success: false, error: 'Simulation not found' });
+    }
+
+    const comparison = await database.getSpeciesTraitsComparison(simulationId, parseInt(generation));
+
+    const formattedComparison = comparison.map(species => ({
+      species_id: species.species_id,
+      population_count: species.population_count,
+      fitness_average: species.fitness_average,
+      traits: {
+        size: species.avg_size,
+        speed: species.avg_speed,
+        intelligence: species.avg_intelligence,
+        endurance: species.avg_endurance,
+        aggression: species.avg_aggression,
+        sociability: species.avg_sociability,
+        fertility: species.avg_fertility,
+        longevity: species.avg_longevity,
+        adaptation: species.avg_adaptation,
+        resistance: species.avg_resistance
+      }
+    }));
+
+    res.json({
+      success: true,
+      simulation_id: parseInt(simulationId),
+      generation: parseInt(generation),
+      species_count: comparison.length,
+      comparison: formattedComparison
+    });
+  } catch (error) {
+    console.error('Error getting species comparison:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
