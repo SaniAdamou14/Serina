@@ -1,5 +1,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <pybind11/stl_bind.h>
 #include "Serina/SimulationAPI.hpp"
 #include "Serina/Genome.hpp"
 #include "Serina/Species.hpp"
@@ -8,7 +9,19 @@
 
 namespace py = pybind11;
 
+// PhysicsEngine::update() takes std::vector<Entity>& and mutates it in
+// place. With the default pybind11/stl.h conversion, passing a Python
+// list would silently convert it into a throwaway std::vector<Entity>
+// copy: update() would run, but every mutation (position, velocity...)
+// would vanish once the call returns, with no error to indicate it.
+// Declaring the vector opaque and binding it as EntityVector instead
+// makes Python hold the real std::vector<Entity>, so mutations are
+// actually visible to the caller.
+PYBIND11_MAKE_OPAQUE(std::vector<Serina::Entity>);
+
 PYBIND11_MODULE(serina_py, m) {
+    py::bind_vector<std::vector<Serina::Entity>>(m, "EntityVector");
+
     // TraitType enum
     py::enum_<Serina::TraitType>(m, "TraitType")
         .value("SIZE", Serina::TraitType::SIZE)

@@ -15,8 +15,9 @@ Merci de votre intérêt ! Ce projet vise à construire un simulateur évolutif 
 | NEAT / IA comportementale | ❌ | Planifié (roadmap) |
 | API Node intégrée au core C++ | ⏳ | Actuellement indépendante / mock partiel |
 | Export / Import complet état simulation | Partiel | `World::toJson()` seulement |
-| Tests unitaires structurés (framework) | ❌ | Assertions manuelles pour l’instant |
-| CI (build + tests) | ❌ | À ajouter (GitHub Actions) |
+| Tests unitaires structurés (framework) | ✅ | Catch2 v3, intégré à CTest (`ctest` depuis `build/`) |
+| Bindings Python testés | ✅ | `pytest python/tests` (a trouvé et corrigé un vrai bug de binding sur `PhysicsEngine.update()`) |
+| CI (build + tests) | ✅ | GitHub Actions : build+ctest (Linux/GCC), lint+typecheck+build web, sanity-check API |
 | Packaging Python (wheel) | ❌ | Pas de `pyproject.toml` encore |
 
 ## Principes de Contribution
@@ -60,12 +61,11 @@ cmake -S . -B build -DPYBIND11_ROOT="C:/path/vers/pybind11"
 
 ## Roadmap Immédiate (Suggestions)
 
-- [ ] CI (GitHub Actions) multi-plateforme
-- [ ] Migration vers un framework de tests (Catch2 / GoogleTest)
-- [ ] Intégration interactions écologiques dans boucle avancée
-- [ ] Ajout index spatial (grid) pour collisions
+- [ ] Étendre la CI à Windows/MSVC (actuellement Linux/GCC uniquement)
+- [ ] Wiring réel de NEAT/AdvancedGenetics dans `SerinaEcosystemSimulator::simulateGeneration()` (le code existe dans `NEAT.hpp`/`AdvancedGenetics.hpp` mais n'est appelé par aucun chemin d'exécution — voir `SerinaSimulator.hpp`)
+- [ ] Historique de tendances réel côté frontend (le backend expose déjà `/api/simulations/:id/trends`, non consommé par `web/`)
 - [ ] Packaging Python (scikit-build-core)
-- [ ] Uniformisation API backend Node → Core
+- [ ] Authentification sur les routes API destructrices (aucune actuellement)
 
 ## Process Pull Request
 

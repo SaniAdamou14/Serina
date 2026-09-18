@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  cpp-tests:
+    name: C++ build & tests (Linux, GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=OFF -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release -- -j$(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
+
+  api-web:
+    name: Node API & web frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install API dependencies
+        working-directory: api
+        run: npm install
+
+      - name: Install web dependencies
+        working-directory: web
+        run: npm install
+
+      - name: Type-check web frontend
+        working-directory: web
+        run: npm run type-check
+
+      - name: Lint web frontend
+        working-directory: web
+        run: npm run lint
+
+      - name: Build web frontend
+        working-directory: web
+        run: npm run build
+
+      - name: Sanity-check API modules load
+        working-directory: api
+        run: |
+          node -e "
+            require('./routes/species.js');
+            require('./routes/simulations.js');
+            require('./routes/environment.js');
+            require('./routes/species-analytics.js');
+            require('./routes/serina.js');
+            require('./services/simulationEngine.js');
+            require('./services/websocket.js');
+            require('./services/database.js');
+            console.log('All API modules load OK');
+          "
