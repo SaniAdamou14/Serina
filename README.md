@@ -1,685 +1,217 @@
-# Serina - Simulateur Évolutionnaire Autonome
+# Serina
 
-![C++20](https://img.shields.io/badge/C%2B%2B-20-brightgreen?style=flat-square)
-![Python](https://img.shields.io/badge/Python-3.8%2B-brightgreen?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-brightgreen?style=flat-square)
+[![CI](https://github.com/SaniAdamou14/Serina/actions/workflows/ci.yml/badge.svg)](https://github.com/SaniAdamou14/Serina/actions/workflows/ci.yml)
 
-**Serina** est un simulateur évolutionnaire scientifique inspiré de l'univers "Serina - The World of Birds" de Dylan Bajda. Il simule l'évolution d'espèces virtuelles dans des environnements complexes, avec des interactions écologiques et une génétique réalistes, de manière autonome.
+An evolutionary ecosystem simulator — a C++20 engine, a Node.js/MySQL API,
+and a React dashboard — built around the speculative-evolution premise of
+*Serina: A World Without Humans*: five founder species (canaries, tropical
+fish, crickets, fire ants, giant land snails) introduced to an empty world
+and left to diversify.
 
-## ✨ Fonctionnalités Principales
+> **State of the project, up front.** This repository went through a
+> five-phase consolidation (documented commit by commit in `git log`) that
+> deleted roughly 49,700 build artifacts and dead files, made the C++ engine
+> compile and run for the first time, collapsed four competing simulation
+> engines in the API down to one real one, rebuilt the frontend against data
+> the backend actually produces, and replaced a test suite that couldn't
+> fail with one that does (and immediately found a real pybind11 bug — see
+> [Engineering decisions](#engineering-decisions-and-why)). What's described
+> below is what is verified to work today, not a roadmap dressed up as a
+> feature list. The [Known limitations](#known-limitations-deliberately)
+> section is not an afterthought; read it before you read the feature list.
 
-- 🧬 **Système génétique avancé** : traits évolutionnaires multiples avec mutations et croisements réalistes
-- 🌍 **Environnements multiples** : plusieurs zones climatiques avec conditions spécifiques
-- 🔄 **Évolution continue** : simulations pouvant tourner indéfiniment avec progression sauvegardée
-- 📊 **Statistiques complètes** : métriques d'évolution en temps réel et historiques
-- 🚀 **Mode autonome** : runner indépendant avec gestion des signaux et snapshots automatiques
-- 🐍 **Bindings Python** : API complète pour l'intégration et l'analyse de données
-- 🌐 **API REST** : interface web pour contrôle à distance (optionnel)
+## What actually works today
 
-## 🛠️ Installation
+**The C++ engine** (`include/Serina/`, `src/`) implements two distinct
+simulation models, both real and both compiled:
 
-### Prérequis
+- `SerinaEcosystemSimulator` — the richer model: named species with
+  per-species population, fitness and genetic-diversity scalars, ecosystem-
+  wide biodiversity/stability/speciation/extinction counters, and real
+  acquired adaptations and evolutionary innovations drawn from a biological
+  constraint system (`EvolutionaryConstraints.hpp`, `EcologicalInteractions.hpp`,
+  `EnvironmentalAdaptation.hpp`). This is the model behind `serina_cli` and
+  the web dashboard.
+- `SimulationAPI` / `Genome` — a simpler, single-genome model (8 numeric
+  traits, mutation, crossover, fitness) behind `serina_demo` (an interactive
+  console demo) and `serina_runner` (an autonomous runner that logs, snapshots
+  and reports over an arbitrary number of generations — verified with a live
+  20-generation run). This is also what the Python bindings expose.
 
-- **C++20** compatible compiler (MSVC 2022, GCC 10+, Clang 12+)
-- **CMake 3.20+**
-- **Python 3.8+** (pour les bindings, optionnel)
-- **pybind11** (pour les bindings Python)
+Both are exercised by an automated test suite: 8 Catch2 test cases over the
+C++ layer, 21 pytest cases over the Python bindings — all passing in CI on
+every push (`ctest` and `pytest python/tests`, see badge above).
 
-### Compilation
+**The API → dashboard pipeline** is a single real path, verified end to end
+with Playwright screenshots against a live simulation, not just typechecked:
+`web` (React) talks over Socket.IO / REST to `api` (Express), which spawns
+`build/bin/serina_cli` per command and ticks the simulation forward for
+real — the dashboard's generation counter, species list, fitness and genetic-
+diversity numbers are the actual `SerinaEcosystemSimulator` state, not
+placeholder or randomly-generated data. When MySQL is connected, every tick
+is also persisted (`evolution_history`, `species` tables) for the history/
+trends endpoints; without it, the API degrades to live-only mode rather than
+failing. Full request/response contract: [`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md).
+
+## Why this project exists
+
+*Serina: A World Without Humans* is a speculative-evolution web serial: a
+scientifically-grounded, multi-million-year thought experiment about how a
+handful of introduced species would radiate to fill every ecological niche
+on an empty continent. The appeal for a simulation project is obvious and
+the trap is too — it is easy to *describe* procedural speciation, biological
+constraint, and emergent ecology in a README, and much harder to actually
+compute them. This project's real subject is that gap: what a genetically-
+and ecologically-constrained simulation loop looks like when it has to
+survive contact with a compiler, a test suite, and a browser rendering its
+output — and what's still missing once it does.
+
+## Architecture
+
+```
+serina_cli (C++, one process per command)
+  init / run N / status / world / genetics  ->  JSON on stdout
+        ^
+        | --state-file <id>.json  (state persists between invocations)
+        |
+api/services/simulationEngine.js (Node)
+  spawns serina_cli, ticks it on an interval, persists snapshots to MySQL
+        |
+        | Socket.IO ('simulation-data' ticks) + REST (/api/serina/*, /api/simulations/*)
+        v
+web (React + TypeScript + Vite)
+  SimulationContext -> SimulationDashboard -> {PopulationChart, SpeciesPanel,
+  GeneticAnalysis, SpeciesEvolutionTree, EnvironmentView, EngineStatus}
+```
+
+`serina_cli` is a plain request/response CLI, not a daemon — the Node layer
+spawns a fresh process for every `init`/`run`/`status`/`world`/`genetics`
+call. That only produces a coherent, continuously-evolving simulation
+because state round-trips through a JSON file between calls (one file per
+simulation, named by that simulation's database row id); see
+[`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md) for the exact
+contract and [Engineering decisions](#engineering-decisions-and-why) for why
+it's built this way instead of as a long-running process.
+
+## Engineering decisions, and why
+
+**One simulation engine, not four.** Earlier in this project's history, the
+API had a from-scratch JavaScript evolution loop, two independent bridges to
+the C++ CLI, and a fourth, never-imported 1,000-line service — running in
+parallel, none reconciled, with `server.js` wiring all of them up at once.
+`api/services/simulationEngine.js` is now the only one. When
+`serina_cli` isn't built, the API returns a clear `503` rather than
+falling back to plausible-looking fabricated data — a fallback that
+existed in an earlier version specifically to paper over the engine being
+unavailable, which is a worse failure mode than an honest error.
+
+**Simulation identity is the database row, not an ad-hoc string.** A
+simulation's id is now its `simulations` table auto-increment primary key,
+used unchanged as the state-file name, the WebSocket room name, and the
+foreign key for history rows. Earlier code minted a fresh `serina-<timestamp>`
+string per run and passed it into `INT` foreign-key columns.
+
+**Catch2 instead of bare `assert()`.** `assert()` compiles to a no-op under
+`NDEBUG` — i.e., silently, in most Release builds. The suite previously used
+raw `assert()` with no test runner wired into CMake at all (`ctest` found
+zero tests, by construction, since nothing called `enable_testing()`).
+Catch2 + `catch_discover_tests` fixes both problems at once.
+
+**`std::vector<Entity>` is bound opaque in the Python bindings, not via
+`pybind11/stl.h`'s default conversion.** `PhysicsEngine::update()` mutates
+its vector argument in place. Bound the default way, passing a Python list
+silently converts it to a throwaway C++ copy — physics runs, gravity is
+applied, and every mutation is discarded the moment the call returns, with
+no error. This was found by the Python test suite's first real run, not
+designed in ahead of time: `python/tests/test_serina_py.py` now asserts the
+mutation is actually visible (it is, since the fix), and separately asserts
+that passing a plain list raises `TypeError` rather than silently doing
+nothing — a stricter, safer failure mode than either the bug or a merely
+documented gotcha.
+
+## Running it
+
+### C++ engine
 
 ```bash
-git clone https://github.com/SaniAdamou14/Serina.git
-cd Serina
-
 cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=ON
 cmake --build build --config Release
+ctest --test-dir build --output-on-failure
 ```
 
-Les exécutables sont dans `build/bin/`.
+Executables land in `build/bin/`: `serina_cli` (used by the API), `serina_demo`
+(interactive console demo of the ecosystem model), `serina_runner`
+(autonomous multi-generation runner — `./run_serina.sh -g 5000 -o my_run`).
 
-Si CMake ne trouve pas pybind11 automatiquement :
+Building the Python bindings needs `pybind11` (`pip install pybind11`) —
+CMake finds it automatically, or point it at a specific install with
+`-DPYBIND11_ROOT=/path/to/pybind11`. Run the binding tests with:
 
 ```bash
-cmake -S . -B build -DPYBIND11_ROOT="/chemin/vers/pybind11"
+pytest python/tests
 ```
 
-## ⚡ Démarrage Rapide
+On Windows with a MinGW-built module, `python/tests/conftest.py` works
+around a real Python 3.8+ behavior change (the DLL loader stops consulting
+`PATH` for an extension module's dependencies) automatically; nothing extra
+to do.
 
-Le moyen le plus simple de démarrer une simulation évolutionnaire :
+### Full stack (API + dashboard)
 
 ```bash
-# Windows
-run_serina.bat
-
-# Linux/macOS
-chmod +x run_serina.sh
-./run_serina.sh
+npm run install:all   # installs api/ and web/ workspaces
+npm run dev           # runs api (port 3001) and web (port 3000) together
 ```
 
-**Options du runner :**
-
-- `-g N` : nombre maximum de générations (0 = infini)
-- `-s N` : intervalle de snapshots (défaut : 100)
-- `-l N` : intervalle de logs (défaut : 10)
-- `-o DIR` : répertoire de sortie
-- `-p N` : taille de population en mode avancé (défaut : 1000)
-- `--simple` : mode évolution simple (plus rapide, moins de détails)
-
-Exemples :
-
-```bash
-# 1000 générations avec snapshots fréquents
-./run_serina.sh -g 1000 -s 50
-
-# Expérience personnalisée
-./run_serina.sh -g 5000 -o mon_experience -p 2000
-
-# Mode simple (sans PopulationManager avancé)
-./run_serina.sh --simple
-```
-
-**Modes d'évolution :**
-
-1. **Mode Simple** (`--simple`) : évolution basique, plus rapide
-2. **Mode Avancé** (défaut) : PopulationManager complet avec individus distincts
-
-## 📊 Données Générées
-
-Chaque simulation produit :
-
-```text
-results_YYYYMMDD_HHMMSS/
-├── evolution_log.txt        # Événements détaillés
-├── evolution_stats.jsonl    # Métriques par génération
-├── snapshot_gen_*.json      # États périodiques
-└── final_report.txt         # Résumé final
-```
-
-## 🐍 Utilisation via l'API Python
-
-```python
-import serina_py
-
-sim = serina_py.SimulationAPI()
-sim.enableAdvancedPopulation(True, 1000)
-
-for gen in range(1000):
-    sim.step()
-    if gen % 100 == 0:
-        stats = sim.getStatistics()
-        print(f"Gen {gen}: {stats.totalSpecies} espèces")
-```
-
-## 🏗️ Architecture
-
-Le projet est organisé en modules C++20 modernes :
-
-```text
-├── 📁 src/                     # Implémentations C++
-│   ├── 📁 core/                # Composants du moteur de simulation
-│   ├── 📁 physics/             # Moteur physique et systèmes spatiaux
-│   ├── 📁 utils/                # Classes utilitaires
-│   └── 📁 api/                 # Implémentation de l'API Python
-├── 📁 python/                  # Intégration Python
-│   ├── 🎮 advanced_simulation.py   # Runner d'écosystème autonome
-│   ├── 🔍 visualization_test.py    # Visualisation temps réel
-│   ├── 📡 api_test.py              # Tests fonctionnels de l'API
-│   └── 🔗 bindings.cpp             # Interface PyBind11
-├── 📁 tests/                   # Suite de tests unitaires et d'intégration
-├── 📁 config/                  # Modèles de configuration
-└── 📁 build/                   # Artefacts de build
-```
-
-### Core Systems
-
-#### 🧬 Advanced Genetic System (`Genome.hpp`)
-
-The genetic system implements 11 evolutionary traits:
-
-```cpp
-enum class TraitType {
-    SIZE,              // Organism size (affects metabolism & reproduction)
-    SPEED,             // Movement velocity & agility
-    STRENGTH,          // Physical power & dominance
-    INTELLIGENCE,      // Cognitive capacity & learning ability
-    LONGEVITY,         // Lifespan & aging resistance
-    RESISTANCE,        // Disease & environmental stress resistance
-    METABOLISM,        // Energy processing efficiency
-    SOCIABILITY,       // Group behavior & cooperation tendencies
-    ADAPTABILITY,      // Environmental flexibility
-    VISION_RANGE,      // Sensory perception distance
-    CAMOUFLAGE         // Predator evasion capability
-};
-```
-
-**Advanced Features:**
-
-- Stochastic genetic mutations with realistic probability distributions
-- Sophisticated crossover mechanisms during reproduction
-- Trait dominance and recessiveness modeling
-- Mendelian inheritance patterns with genetic drift simulation
-- Phenotype expression with environmental interactions
-- Metabolic rate calculations affecting survival and reproduction
-
-#### 🐾 Species Management (`Species.hpp`)
-
-Each species features:
-
-- **Unique identifier** with taxonomic classification
-- **Complete genome** encoding all 11 evolutionary traits
-- **Dynamic energy systems** influenced by environmental factors
-- **Reproduction mechanics** with genetic compatibility checks
-- **Behavioral patterns** emerging from genetic programming
-- **Phenotype expression** translating genotype to observable traits
-- **Metabolic modeling** affecting energy consumption and reproduction thresholds
-
-#### 🌍 World Simulation (`World.hpp`)
-
-The ecosystem simulates complex environmental dynamics:
-
-```cpp
-enum class TerrainType {
-    LAND, WATER, MOUNTAIN, FOREST, DESERT, 
-    WETLAND, GRASSLAND, TUNDRA, CAVES, VOLCANIC
-};
-
-enum class ClimateZone {
-    TROPICAL, TEMPERATE, ARCTIC, DESERT, OCEANIC,
-    MONTANE, SUBTROPICAL, BOREAL, MEDITERRANEAN
-};
-```
-
-**Environmental Systems:**
-
-- **10 terrain types** with unique ecological properties
-- **9 climate zones** creating diverse selection pressures  
-- **Temporal cycles** including day/night and seasonal variations
-- **Dynamic resource distribution** affecting population carrying capacity
-- **Weather simulation** with temperature, humidity, and precipitation patterns
-
-#### ⚡ Physics Engine (`PhysicsEngine.hpp`)
-
-Advanced 2D physics engine with SIMD optimizations:
-
-- **Spatial hash grid** for efficient collision detection and optimization
-- **Gravitational forces** and realistic physics interactions
-- **Collision detection** with accurate response and resolution
-- **World boundary constraints** maintaining ecosystem limits
-- **Friction and drag modeling** for realistic movement patterns
-- **SIMD vectorization** using AVX2 for high-performance calculations
-
-#### 🔌 Simulation API (`SimulationAPI.hpp`)
-
-Comprehensive Python interface for ecosystem control:
-
-```cpp
-class SimulationAPI {
-public:
-    void initialize(const Config& config);        // System initialization
-    void step();                                  // Single simulation step
-    void runAutonomous(int generations);         // Autonomous evolution
-    std::string getPopulationData();            // Real-time population JSON
-    std::string getWorldState();                // Complete world state
-    void addSpecies(const Species& species);    // Dynamic species management
-    std::string getGeneticAnalysis();           // Evolutionary analytics
-    void saveSimulation(const std::string& path); // State persistence
-};
-```
-
-## 🛠️ Guide d'installation détaillé (Windows / Visual Studio)
-
-### Prerequisites
-
-#### System Requirements
-
-- **Windows 10/11** (tested and optimized)
-- **Visual Studio 2022** with MSVC toolchain
-- **CMake 3.20+** for build configuration
-- **Python 3.11+** with development headers
-
-#### C++ Dependencies
-
-- **PyBind11** for seamless Python integration
-- **C++20 Standard Library** with SIMD support
-- **OpenMP** for parallel processing capabilities
-
-#### Python Libraries
-
-- **matplotlib** for real-time visualization and plotting
-- **numpy** for high-performance numerical computations
-- **seaborn** for advanced statistical graphics and analysis
-
-### Step-by-Step Installation
-
-#### 1. Clone the Repository
-
-```bash
-git clone https://github.com/SaniAdamou14/Serina.git
-cd Serina
-```
-
-#### 2. Create Python Environment
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-pip install matplotlib numpy seaborn pybind11
-```
-
-#### 3. CMake Configuration
-
-```bash
-mkdir build
-cd build
-cmake .. -G "Visual Studio 17 2022" -A x64
-```
-
-#### 4. Build Project
-
-```bash
-cmake --build . --config Release
-```
-
-#### 5. Verify Installation
-
-```bash
-cd python
-python api_test.py
-```
-
-### Build Output Structure
-
-After successful compilation:
-
-```text
-build/
-├── 📦 serina_py.cp311-win_amd64.pyd  # Python extension module
-├── 📚 serina_core.lib                # Core simulation library
-├── 📚 serina_physics.lib             # Physics engine library  
-├── 📚 serina_viewmodel.lib           # API interface layer
-└── 📚 serina_utils.lib               # Utility functions library
-```
-
-## 📖 Exemples d'utilisation avancés
-
-### Basic Simulation
-
-```python
-import serina_py
-
-# Create simulation with world dimensions
-sim = serina_py.SimulationAPI(1920, 1080)
-sim.initialize()
-
-# Run evolution for 10 generations
-for generation in range(10):
-    sim.step()
-    population_data = sim.getPopulationData()
-    print(f"Generation {generation+1}: {population_data}")
-```
-
-### Autonomous Evolution
-
-```bash
-cd python
-python advanced_simulation.py
-```
-
-This launches the complete autonomous ecosystem featuring:
-
-- **Multi-panel matplotlib interface** with real-time updates
-- **Population dynamics graphs** showing species abundance over time  
-- **Energy distribution histograms** revealing metabolic patterns
-- **Environmental temperature maps** and resource distribution visualization
-- **Temporal information display** including day/night cycles and seasonal changes
-
-### Integration Testing
-
-```bash
-python visualization_test.py
-```
-
-Comprehensive validation suite testing:
-
-- Seamless `serina_py` module import and initialization
-- Simulation creation with realistic world parameters
-- Step-by-step evolution execution with data collection
-- Interactive visualization with user controls and real-time feedback
-
-## 📊 Data Formats and API Reference
-
-### Population JSON Structure
-
-```json
-{
-  "population_count": 15247,
-  "generation": 342,
-  "world_state": {
-    "temperature": 23.5,
-    "day_cycle": 0.73,
-    "season": "spring"
-  },
-  "species": [
-    {
-      "name": "Serina_Alpha",
-      "id": "sp_001",
-      "energy": 127.83,
-      "age": 156,
-      "position": {"x": 480.2, "y": 721.9},
-      "phenotype": {
-        "size": 0.847,
-        "speed": 0.623,
-        "strength": 0.729,
-        "intelligence": 0.855,
-        "longevity": 0.421,
-        "metabolism": 0.634,
-        "vision_range": 0.778,
-        "camouflage": 0.382
-      },
-      "metabolic_rate": 1.47,
-      "reproduction_threshold": 95.0,
-      "fitness_score": 0.763
-    }
-  ]
-}
-```
-
-### Comprehensive API Methods
-
-| Method | Description | Parameters | Return Type |
-|--------|-------------|------------|-------------|
-| `initialize(config)` | Initialize simulation with configuration | Config object | void |
-| `step()` | Advance one temporal step | None | void |
-| `runAutonomous(generations)` | Run autonomous evolution | int generations | void |
-| `getPopulationData()` | Complete population JSON data | None | string |
-| `getWorldState()` | Environmental state information | None | string |
-| `getGeneticAnalysis()` | Evolutionary statistics and trends | None | string |
-| `saveSimulation(path)` | Persist simulation state | string filepath | void |
-| `loadSimulation(path)` | Restore simulation state | string filepath | bool |
-| `setSpeed(double)` | Modify simulation speed multiplier | double speed | void |
-| `pause() / start()` | Control simulation playback | None | void |
-
-## 🔬 Simulation Mechanics and Scientific Foundation
-
-### Advanced Genetic Evolution
-
-#### Mutation System
-
-- **Adaptive mutation rates**: 1-5% per generation with environmental pressure modulation
-- **Gaussian distribution**: Realistic trait variations around current phenotype values
-- **Constraint boundaries**: All traits normalized between 0.0 and 1.0 with biological limits
-- **Epigenetic effects**: Environmental factors influencing gene expression patterns
-
-#### Sophisticated Reproduction
-
-- **Energy thresholds**: Dynamic reproduction requirements based on metabolic rate (75+ energy units)
-- **Genetic crossover**: Advanced recombination algorithms with realistic genetic dominance
-- **Inheritance patterns**: Mendelian genetics with epistatic interactions between traits
-- **Population naming**: Hierarchical nomenclature system ("Parent_offspring_generation") for lineage tracking
-
-#### Natural Selection Pressures
-
-- **Energetic constraints**: Individuals with insufficient energy face mortality pressure
-- **Reproductive advantages**: Optimal trait combinations confer fitness benefits
-- **Resource competition**: Limited environmental resources create selection gradients
-- **Predator-prey dynamics**: Camouflage and speed traits affect survival probability
-
-### Environmental Dynamics
-
-#### Temporal Cycles
-
-```text
-Circadian: Day (12h active) → Night (12h reduced activity) = 24h cycle
-Seasonal: Spring → Summer → Autumn → Winter = Annual environmental variation
-Climate: Multi-year oscillations affecting long-term population trends
-```
-
-#### Environmental Effects on Organisms
-
-- **Temperature regulation**: Metabolic rate adjustments affecting energy consumption
-- **Seasonal resource availability**: Food abundance cycles influencing reproduction timing
-- **Breeding seasons**: Optimal reproduction windows during favorable environmental conditions
-- **Migration patterns**: Climate-driven movement between ecological zones
-
-### High-Performance Physics Engine
-
-#### SIMD-Optimized Spatial Systems
-
-- **2D hash grid**: Efficient spatial partitioning for collision detection optimization
-- **Broad-phase elimination**: Rapid exclusion of distant object pairs
-- **Narrow-phase precision**: Accurate collision detection and response calculations
-- **Computational complexity**: O(n) scaling instead of naive O(n²) pairwise checks
-
-#### Physical Force Integration
-
-```cpp
-Total_Force = Gravity + Locomotion + Friction + Inter_organism_interactions + Environmental_pressures
-```
-
-## 📈 Performance Analytics and Benchmarks
-
-### Observed Simulation Metrics
-
-#### Standard Benchmark (100 generations)
-
-- **Initial population**: 100 individuals across 5 species archetypes
-- **Final population**: 15,000+ individuals with emergent subspeciation
-- **Genetic diversity**: 200+ unique trait combinations
-- **Mutation events**: ~2,500 documented genetic changes
-- **Reproduction events**: 7,500+ successful breeding pairs
-- **Execution performance**: <2ms per generation step
-
-#### Stress Test (10,000 generations)
-
-- **Peak population**: 50,000+ concurrent individuals
-- **Evolutionary lineages**: 15+ distinct species with specialized niches
-- **Genetic complexity**: 500+ stable trait combinations
-- **System stability**: Zero memory leaks or crashes over extended runtime
-- **Performance scaling**: Linear complexity maintenance throughout execution
-
-### Advanced Performance Optimizations
-
-#### Algorithmic Improvements
-
-- **Spatial hash grids**: Sub-millisecond collision detection for large populations
-- **Memory pooling**: Reduced allocation overhead with object reuse patterns
-- **SIMD vectorization**: AVX2 instructions for parallel trait calculations
-- **OpenMP parallelization**: Multi-threaded evolution processing across CPU cores
-
-#### Memory Management
-
-- **Compact data structures**: Optimized memory layout for cache efficiency
-- **Smart pointer systems**: Automatic resource management with reference counting
-- **Cache-friendly access**: Sequential memory patterns for optimal performance
-- **Garbage collection**: Efficient cleanup of deceased organisms
-
-## 🧪 Comprehensive Testing and Validation
-
-### Integration Test Suite
-
-#### `api_test.py` - Python Interface Validation
-
-```python
-✓ Successful serina_py module import and initialization
-✓ SimulationAPI object creation with proper parameter validation
-✓ Complete method availability confirmation
-```
-
-#### `visualization_test.py` - Workflow Validation
-
-Comprehensive testing of the complete simulation pipeline:
-
-```python
-✓ Simulation execution for 100+ generations
-✓ JSON data validation and parsing
-✓ Genetic evolution observation with statistical analysis
-✓ Real-time matplotlib interface functionality
-✓ Performance benchmarking under various loads
-```
-
-### Unit Test Suite (C++)
-
-Planned comprehensive testing structure:
-
-```cpp
-tests/
-├── test_genome.cpp      # Genetic system validation
-├── test_species.cpp     # Species management testing
-├── test_physics.cpp     # Physics engine verification
-├── test_world.cpp       # Environmental simulation testing
-├── test_api.cpp         # Complete API interface testing
-├── test_performance.cpp # Benchmarking and optimization validation
-└── test_integration.cpp # End-to-end system testing
-```
-
-## 🔧 Development and Extensibility
-
-### Adding New Species Archetypes
-
-```cpp
-// Create advanced genome with specialized traits
-std::vector<GeneticTrait> predatorTraits = {
-    GeneticTrait(TraitType::SIZE, 0.85),
-    GeneticTrait(TraitType::SPEED, 0.7),
-    GeneticTrait(TraitType::STRENGTH, 0.9),
-    GeneticTrait(TraitType::INTELLIGENCE, 0.8),
-    GeneticTrait(TraitType::VISION_RANGE, 0.95),
-    GeneticTrait(TraitType::CAMOUFLAGE, 0.3)
-};
-Genome predatorGenome(predatorTraits);
-
-// Create specialized species with behavioral patterns
-Species apexPredator("Serina_Predator", predatorGenome);
-apexPredator.setBehavioralPattern(BehaviorType::HUNTING);
-simulation.addSpecies(apexPredator);
-```
-
-### Trait System Extension
-
-```cpp
-// Enhanced trait system with new evolutionary pressures
-enum class TraitType {
-    // ... existing core traits
-    TOOL_USE,          // Technology adoption capability
-    SOCIAL_COOPERATION, // Group coordination efficiency
-    LEARNING_RATE,     // Behavioral adaptation speed
-    MEMORY_CAPACITY,   // Information retention ability
-    PROBLEM_SOLVING,   // Cognitive flexibility
-    TERRITORIAL_INSTINCT // Spatial dominance behavior
-};
-```
-
-### Environmental Diversity Expansion
-
-```cpp
-enum class TerrainType {
-    // ... existing terrain types
-    WETLAND,      // Marsh and swamp ecosystems
-    CAVE_SYSTEM,  // Underground networks
-    CORAL_REEF,   // Marine biodiversity hotspots
-    URBAN,        // Human-modified environments
-    VOLCANIC,     // High-stress thermal environments
-    TUNDRA        // Arctic and alpine conditions
-};
-```
-
-## 🛣️ Development Roadmap and Future Enhancements
-
-### Version 1.1 (Short-term: Q1 2024)
-
-- [ ] **Complete C++ unit test suite** with 90%+ code coverage
-- [ ] **Comprehensive Doxygen documentation** for all APIs
-- [ ] **Web-based control interface** with WebSocket real-time updates
-- [ ] **Advanced save/load system** with simulation state versioning
-
-### Version 1.2 (Medium-term: Q2-Q3 2024)
-
-- [ ] **NEAT neural network integration** for adaptive behaviors
-- [ ] **Machine learning** behavioral pattern recognition
-- [ ] **Predefined ecosystem templates** (rainforest, deep ocean, arctic)
-- [ ] **Multi-user collaborative mode** with shared evolution experiments
-
-### Version 2.0 (Long-term: Q4 2024+)
-
-- [ ] **Full 3D simulation** with advanced graphics engine
-- [ ] **VR/AR interface** for immersive ecosystem exploration
-- [ ] **IA avancée** pour comportements complexes
-- [ ] **Procedural world generation** with infinite ecosystem diversity
-- [ ] **Cloud-based simulation** for large-scale distributed evolution experiments
-
-## 🐛 Known Issues and Solutions
-
-### MSVC Compilation
-
-**Issue**: Linking errors with certain compiler versions  
-**Solution**: Use Visual Studio 2022 with CMake 3.20+ and ensure all dependencies are properly configured
-
-### Python Performance Scaling
-
-**Issue**: Performance degradation with very large populations (>50,000 individuals)  
-**Solution**: Automatic population limiting and SIMD optimizations maintain stable performance
-
-### Matplotlib Visualization
-
-**Issue**: GUI windows occasionally fail to close properly on Windows  
-**Solution**: Use `plt.close('all')` in session cleanup and implement proper event handling
-
-## 👥 Contributing to Serina
-
-### Development Guidelines
-
-1. **Modern C++ Standards**: Adhere to C++20 best practices and idioms
-2. **Comprehensive Testing**: Every feature must include corresponding unit tests
-3. **Documentation Requirements**: Detailed comments and API documentation mandatory
-4. **Performance Considerations**: Profile before optimizing, maintain benchmarks
-
-### Commit Message Structure
-
-```text
-[TYPE] Brief description
-
-Detailed explanation if needed
-
-Types:
-- feat: New feature implementation
-- fix: Bug correction and patches
-- docs: Documentation updates
-- test: Test suite additions
-- refactor: Code restructuring
-- perf: Performance optimizations
-```
-
-## 📜 License
-
-This project is licensed under the MIT License. See the `LICENSE` file for comprehensive details.
-
-## 🙏 Acknowledgments
-
-- **PyBind11**: Exceptional C++/Python integration framework
-- **Matplotlib**: Professional-grade scientific visualization
-- **CMake**: Modern and flexible build system architecture
-- **C++ Community**: Standards development and best practices guidance
-
-## 📞 Contact and Support
-
-- **GitHub Repository**: [SaniAdamou14/Serina](https://github.com/SaniAdamou14/Serina)
-- **Issue Tracking**: Use GitHub Issues for bug reports and feature requests
-- **Documentation**: Project Wiki contains detailed guides and tutorials
-
----
-
-## 📊 Project Statistics
-
-- **C++ Source Lines**: ~5,000 (including comprehensive comments)
-- **Python Scripts**: 8 modules with full integration testing
-- **Test Coverage**: 95%+ target with continuous integration
-- **Performance**: 2,000+ generations/second sustained execution
-- **Memory Efficiency**: <50MB for 10,000+ concurrent organisms
-
-**Serina** represents a cutting-edge evolutionary ecosystem simulator, combining advanced genetic algorithms, realistic physics simulation, and interactive visualization to create a comprehensive virtual evolution laboratory for scientific research and educational exploration.
-
----
-
-**Inspiré par "Serina - The World of Birds"** de Dylan Bajda
-
-🌍 *L'évolution ne s'arrête jamais...*
+MySQL is optional: without it, the API serves live simulation data but no
+history/trends persistence (see `api/.env.example` for connection settings).
+The web dev server proxies `/api` and `/socket.io` to the API, so no ports
+need to be hardcoded on the frontend side.
+
+## Known limitations, deliberately
+
+**NEAT and the advanced per-trait genetic system exist as real code and are
+not wired into the running simulation.** `include/Serina/NEAT.hpp` (620
+lines: nodes, connections, mutation, speciation distance, crossover) and
+`include/Serina/AdvancedGenetics.hpp` (513 lines: diploid genomes, BLX-α
+crossover, 12 bounded traits) are substantial, not stubs — but
+`SerinaEcosystemSimulator` never instantiates either; the class it would
+need, `AI::NEATEvolution`, doesn't exist, and genetic evolution in the live
+loop is a small Gaussian mutation on three scalar traits instead. This is
+the single largest gap between what the codebase contains and what the
+running simulation actually does.
+
+**The "genetic diversity" percentage shown per species is redrawn at random
+every generation, not computed from genome distance.** With the advanced
+genetic system unwired (above), `SerinaEcosystemSimulator::updateSpeciesStats()`
+sets it to `uniform(0.1, 1.0)` each tick (`SerinaSimulator.hpp:594`) rather
+than measuring divergence between individuals. Fitness, extinction risk,
+adaptations and innovations are computed from real simulation state;
+genetic diversity, specifically, is not yet — it's a placeholder for where a
+real distance metric would go once the advanced genetics are wired in.
+
+**The dashboard shows one environment.** `serina_cli world` reports the
+grassland biome every founder species starts in; `EnvironmentType` supports
+several others internally, but nothing currently drives migration into them
+or surfaces their state.
+
+**No spatial or terrain visualization.** An earlier dashboard component drew
+a procedural canvas map with no backing data — literally random shapes
+labeled as Serina's geography. It was deleted rather than kept as
+decoration; there is currently no terrain grid in the live ecosystem model
+for a map to honestly represent.
+
+**No authentication on the API.** Every route, including destructive ones,
+is open. Acceptable for local development against your own database; not
+for deploying this anywhere reachable by anyone else.
+
+**No individual-level tracking in the live pipeline.** The database schema
+still has an `individuals` table (population-count history at the species
+level is real; per-organism records are not currently written by anything).
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full feature-status table
+and the active roadmap.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE).
