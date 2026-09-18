@@ -1,0 +1,71 @@
+# Build artifacts (CMake, MSVC, ninja...)
+/build/
+/build_*/
+/out/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.tlog
+*.recipe
+*.obj
+*.o
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.exe
+!run_serina.sh
+_deps/
+
+# Python build outputs / bindings
+python/CMakeFiles/
+python/*.dir/
+python/x64/
+python/Release/
+python/Debug/
+python/_deps/
+python/bin/
+python/*.sln
+python/*.vcxproj*
+python/*.pyd
+python/cmake_install.cmake
+*.pyd
+*.pyc
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+npm-debug.log*
+package-lock.json.bak
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Simulation run outputs
+results_*/
+*.jsonl
+snapshot_gen_*.json
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Web build output
+web/dist/
+web/build/
+web/node_modules/
