@@ -22,17 +22,26 @@ const BIOME_COLORS: Record<string, string> = {
 const FALLBACK_BIOME_COLOR = '#9ca3af';
 
 const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 5;
+const MAX_ZOOM = 8;
+const DEFAULT_ZOOM = 1.6;
 /** Sous ce niveau de zoom, une silhouette détaillée fait quelques pixels et
- * son détail est invisible -- on rend un simple point coloré à la place
- * plutôt que de payer le coût de rendu pour rien. */
-const DETAIL_ZOOM_THRESHOLD = 1.5;
+ * son détail est illisible -- on rend un simple point coloré à la place
+ * plutôt que de payer le coût de rendu pour rien. La carte occupant
+ * maintenant tout l'écran, le zoom par défaut dépasse déjà ce seuil. */
+const DETAIL_ZOOM_THRESHOLD = 1.2;
 
+/**
+ * Carte plein écran façon RimWorld : occupe tout l'espace disponible de son
+ * conteneur (voir SimulationDashboard, qui lui donne tout le viewport moins
+ * une fine barre supérieure/inférieure), avec les panneaux d'information en
+ * survol flottant par-dessus plutôt que de pousser la carte dans une petite
+ * boîte encadrée.
+ */
 export function WorldMap() {
   const { simulationData } = useSimulation();
   const [selectedRegion, setSelectedRegion] = useState<RegionInfo | null>(null);
   const [selectedIndividual, setSelectedIndividual] = useState<IndividualInfo | null>(null);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragState = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -47,11 +56,8 @@ export function WorldMap() {
 
   if (!simulationData) {
     return (
-      <div className="card">
-        <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
-          <div className="h-96 bg-gray-200 rounded"></div>
-        </div>
+      <div className="h-full w-full flex items-center justify-center bg-slate-900 text-slate-400 text-sm">
+        En attente d'une simulation active...
       </div>
     );
   }
@@ -94,30 +100,15 @@ export function WorldMap() {
   };
 
   const resetView = () => {
-    setZoom(1);
+    setZoom(DEFAULT_ZOOM);
     setPan({ x: 0, y: 0 });
   };
 
   return (
-    <div className="card">
-      <div className="flex justify-between items-center mb-4">
-        <div>
-          <h3 className="text-lg font-semibold">🗺️ Carte du Monde de Serina</h3>
-          <p className="text-sm text-gray-600">
-            {gridWidth}×{gridHeight} régions réelles — {individuals.length} individus vivants observés en direct
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm">
-          <button className="button-secondary px-2 py-1" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 1.25))}>−</button>
-          <span className="w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <button className="button-secondary px-2 py-1" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.25))}>+</button>
-          <button className="button-secondary px-2 py-1" onClick={resetView}>Recentrer</button>
-        </div>
-      </div>
-
+    <div className="relative h-full w-full bg-slate-950 overflow-hidden">
       <div
-        className="relative overflow-hidden border border-gray-300 rounded-lg bg-slate-900"
-        style={{ height: 480, cursor: isDragging ? 'grabbing' : 'grab' }}
+        className="absolute inset-0"
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -174,45 +165,61 @@ export function WorldMap() {
         </svg>
       </div>
 
-      {/* Légende des biomes réellement présents sur cette carte */}
-      <div className="mt-4 flex flex-wrap gap-3 text-xs">
-        {distinctBiomes.map((name) => (
-          <div key={name} className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-sm inline-block" style={{ background: BIOME_COLORS[name] ?? FALLBACK_BIOME_COLOR }} />
-            <span className="text-gray-600">{name}</span>
+      {/* Barre d'info flottante en haut */}
+      <div className="absolute top-3 left-3 right-3 flex justify-between items-start gap-3 pointer-events-none">
+        <div className="bg-slate-900/85 backdrop-blur-sm text-slate-200 rounded-lg px-3 py-2 text-xs pointer-events-auto shadow-lg">
+          <div className="font-semibold text-sm">🗺️ Monde de Serina</div>
+          <div className="text-slate-400">
+            {gridWidth}×{gridHeight} régions — {individuals.length} individus en direct
           </div>
-        ))}
-      </div>
-
-      {/* Légende des espèces (teinte de lignée réelle, sans mélange de camouflage) */}
-      <div className="mt-2 flex flex-wrap gap-3 text-xs">
-        {(lineages ?? []).map((lineage) => (
-          <div key={lineage.speciesName} className="flex items-center gap-1">
-            <span
-              className="w-2.5 h-2.5 rounded-full inline-block"
-              style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
-            />
-            <span className="text-gray-600">{lineage.speciesName} ({lineage.population})</span>
-          </div>
-        ))}
+        </div>
+        <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-2 py-1.5 flex items-center gap-1.5 pointer-events-auto shadow-lg">
+          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => setZoom((z) => Math.max(MIN_ZOOM, z / 1.25))}>−</button>
+          <span className="text-slate-300 text-xs w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => setZoom((z) => Math.min(MAX_ZOOM, z * 1.25))}>+</button>
+          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-xs ml-1" onClick={resetView}>Recentrer</button>
+        </div>
       </div>
 
       {!detailed && (
-        <p className="mt-2 text-xs text-amber-600">
-          Zoomez (≥ {Math.round(DETAIL_ZOOM_THRESHOLD * 100)}%) pour voir les silhouettes détaillées de chaque individu.
-        </p>
+        <div className="absolute top-16 left-3 bg-amber-900/85 backdrop-blur-sm text-amber-200 rounded-lg px-3 py-1.5 text-xs pointer-events-none shadow-lg">
+          Zoomez (≥ {Math.round(DETAIL_ZOOM_THRESHOLD * 100)}%) pour voir les silhouettes détaillées.
+        </div>
       )}
 
-      {/* Panneau d'inspection : région sélectionnée */}
+      {/* Légendes flottantes en bas à gauche */}
+      <div className="absolute bottom-3 left-3 max-w-sm bg-slate-900/85 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg space-y-2">
+        <div className="flex flex-wrap gap-2">
+          {distinctBiomes.map((name) => (
+            <div key={name} className="flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BIOME_COLORS[name] ?? FALLBACK_BIOME_COLOR }} />
+              <span className="text-slate-300">{name}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 border-t border-slate-700 pt-2">
+          {(lineages ?? []).map((lineage) => (
+            <div key={lineage.speciesName} className="flex items-center gap-1">
+              <span
+                className="w-2.5 h-2.5 rounded-full inline-block"
+                style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
+              />
+              <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Panneau d'inspection flottant en bas à droite : région ou individu sélectionné */}
       {selectedRegion && (
-        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm">
-          <h4 className="font-semibold text-blue-800">
+        <div className="absolute bottom-3 right-3 w-72 max-h-[60%] overflow-y-auto bg-blue-950/90 backdrop-blur-sm rounded-lg border border-blue-800 p-3 text-sm shadow-lg">
+          <h4 className="font-semibold text-blue-200">
             {selectedRegion.environmentName || 'Biome inconnu'} — case ({selectedRegion.gridX}, {selectedRegion.gridY})
           </h4>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-blue-700">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-blue-300 text-xs">
             <div>🌡️ Température : {selectedRegion.temperature.toFixed(1)}°C</div>
             <div>🌱 Producteurs primaires : {(selectedRegion.primaryProducers * 100).toFixed(0)}%</div>
-            <div>🦁 Pression de prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
+            <div>🦁 Prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
             <div>⚔️ Compétition : {(selectedRegion.competitionIntensity * 100).toFixed(0)}%</div>
             <div>❄️ Stress climatique : {(selectedRegion.climaticStress * 100).toFixed(0)}%</div>
             <div>👥 Individus ici : {selectedRegion.population}</div>
@@ -220,11 +227,10 @@ export function WorldMap() {
         </div>
       )}
 
-      {/* Panneau d'inspection : individu sélectionné */}
       {selectedIndividual && (
-        <div className="mt-4 p-3 bg-amber-50 rounded-lg border border-amber-200 text-sm">
-          <h4 className="font-semibold text-amber-800">{selectedIndividual.species} — individu #{selectedIndividual.id}</h4>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-amber-700">
+        <div className="absolute bottom-3 right-3 w-72 max-h-[60%] overflow-y-auto bg-amber-950/90 backdrop-blur-sm rounded-lg border border-amber-800 p-3 text-sm shadow-lg">
+          <h4 className="font-semibold text-amber-200">{selectedIndividual.species} — individu #{selectedIndividual.id}</h4>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-amber-300 text-xs">
             <div>⚡ Énergie : {selectedIndividual.energy.toFixed(1)}</div>
             <div>🕒 Âge : {selectedIndividual.age.toFixed(1)}</div>
             <div className="col-span-2">📍 Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
@@ -233,9 +239,9 @@ export function WorldMap() {
       )}
 
       {!selectedRegion && !selectedIndividual && (
-        <p className="mt-4 text-xs text-gray-500">
-          Cliquez sur une région pour voir son climat réel, ou sur un individu pour l'inspecter. Molette pour zoomer, glisser pour déplacer la carte.
-        </p>
+        <div className="absolute bottom-3 right-3 bg-slate-900/70 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-slate-400 pointer-events-none shadow-lg">
+          Cliquez une région ou un individu pour l'inspecter. Molette : zoom. Glisser : déplacer.
+        </div>
       )}
     </div>
   );
