@@ -228,13 +228,11 @@ TEST_CASE("the real JSON-lines protocol round-trips over an actual TCP socket", 
         Net::TcpServer server(port);
         ready = true;
         Net::TcpConnection conn = server.accept();
-        std::string line;
-        while (conn.readLine(line))
-        {
-            if (line.empty()) continue;
-            auto response = Daemon::handleCommand(registry, json::parse(line));
-            if (!conn.writeLine(response.dump())) break;
-        } });
+        // La vraie boucle de connexion (voir DaemonProtocol.hpp), pas une
+        // version simplifiée -- ce test exerce le code qui tourne
+        // réellement dans serina_daemon, y compris son dispatch concurrent
+        // par requête.
+        Daemon::handleConnection(registry, std::move(conn)); });
 
     while (!ready.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -255,6 +253,82 @@ TEST_CASE("the real JSON-lines protocol round-trips over an actual TCP socket", 
     json statusResp = json::parse(responseLine);
     REQUIRE(statusResp["status"] == "success");
     REQUIRE(statusResp["speciesCount"] == 5);
+
+    client.close();
+    serverThread.detach();
+}
+
+TEST_CASE("a slow command for one simulation does not block a concurrent command for another", "[daemon][integration]")
+{
+    // Regression test for a real bug: the connection loop used to process
+    // one request fully (including waiting for whatever lock a slow
+    // step() might be holding) before even reading the next line off the
+    // socket. Two long-forgotten simulations left ticking for hours ended
+    // up starving every other request on the same shared connection,
+    // including a brand new "create" -- exactly the failure the user hit
+    // ("Failed to start Serina simulation" with no other simulation
+    // reachable either). DaemonProtocol.hpp's handleConnection() now reads
+    // a line and dispatches its handling to its own thread immediately,
+    // never blocking the next read.
+    Daemon::SimulationRegistry registry;
+    uint16_t port = 17332;
+
+    std::atomic<bool> ready{false};
+    std::thread serverThread([&]()
+                              {
+        Net::TcpServer server(port);
+        ready = true;
+        Net::TcpConnection conn = server.accept();
+        Daemon::handleConnection(registry, std::move(conn)); });
+
+    while (!ready.load())
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+    Net::TcpConnection client = Net::connectTo("127.0.0.1", port);
+
+    // Deux simulations réelles, distinctes.
+    for (const std::string id : {"sim-a", "sim-b"})
+    {
+        REQUIRE(client.writeLine(makeRequest("create", id, {{"founderCount", 5}}).dump()));
+        std::string line;
+        REQUIRE(client.readLine(line));
+        REQUIRE(json::parse(line)["status"] == "success");
+    }
+
+    // Beaucoup de requêtes rapides et entrelacées pour les deux
+    // simulations, envoyées sans attendre chaque réponse -- si le dispatch
+    // concurrent mélangeait les réponses entre elles, l'un des ids
+    // manquerait ou une réponse porterait le mauvais contenu.
+    constexpr int kRequestsPerSim = 25;
+    std::unordered_map<int, std::string> expectedSimForId;
+    int nextId = 100;
+    for (int i = 0; i < kRequestsPerSim; ++i)
+    {
+        for (const std::string id : {"sim-a", "sim-b"})
+        {
+            json req = makeRequest("status", id);
+            req["id"] = nextId;
+            expectedSimForId[nextId] = id;
+            REQUIRE(client.writeLine(req.dump()));
+            ++nextId;
+        }
+    }
+
+    std::unordered_map<int, json> received;
+    for (size_t i = 0; i < expectedSimForId.size(); ++i)
+    {
+        std::string line;
+        REQUIRE(client.readLine(line));
+        json response = json::parse(line);
+        received[response["id"].get<int>()] = response;
+    }
+
+    REQUIRE(received.size() == expectedSimForId.size());
+    for (const auto &[id, response] : received)
+    {
+        REQUIRE(response["status"] == "success");
+        REQUIRE(response["population"] == 25); // 5 founders x 5 individuals, same for both sims
+    }
 
     client.close();
     serverThread.detach();

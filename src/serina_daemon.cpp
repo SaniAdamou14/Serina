@@ -5,10 +5,11 @@
 // avancer en continu sur un fil d'exécution dédié, et répond aux requêtes
 // JSON-lines de l'API Node sur une connexion TCP locale persistante — pas de
 // resérialisation du génome diploïde complet de chaque individu à chaque
-// appel. Le protocole lui-même (registre + dispatch de commandes) vit dans
-// Serina/DaemonProtocol.hpp pour rester testable sans socket ; ce fichier ne
-// fait que le brancher sur une vraie connexion réseau. Voir
-// docs/SERINA_DAEMON_PROTOCOL.md pour le contrat complet.
+// appel. Le protocole lui-même (registre, dispatch de commandes, boucle de
+// connexion) vit dans Serina/DaemonProtocol.hpp pour rester testable sans
+// vraiment lancer ce binaire ; ce fichier ne fait que le brancher sur un
+// vrai serveur TCP. Voir docs/SERINA_DAEMON_PROTOCOL.md pour le contrat
+// complet.
 
 #include "Serina/DaemonProtocol.hpp"
 #include "Serina/NetSocket.hpp"
@@ -21,33 +22,6 @@
 #include <vector>
 
 using namespace Serina;
-
-namespace
-{
-    void handleConnection(Daemon::SimulationRegistry &registry, Net::TcpConnection connection)
-    {
-        std::string line;
-        while (connection.readLine(line))
-        {
-            if (line.empty())
-                continue;
-
-            Daemon::json response;
-            try
-            {
-                Daemon::json request = Daemon::json::parse(line);
-                response = Daemon::handleCommand(registry, request);
-            }
-            catch (const std::exception &e)
-            {
-                response = Daemon::errorJson(std::string("malformed request: ") + e.what());
-            }
-
-            if (!connection.writeLine(response.dump()))
-                break;
-        }
-    }
-} // namespace
 
 int main(int argc, char *argv[])
 {
@@ -82,7 +56,7 @@ int main(int argc, char *argv[])
             Net::TcpConnection conn = server.accept();
             connectionThreads.emplace_back(
                 [&registry](Net::TcpConnection c)
-                { handleConnection(registry, std::move(c)); },
+                { Daemon::handleConnection(registry, std::move(c)); },
                 std::move(conn));
             connectionThreads.back().detach();
         }

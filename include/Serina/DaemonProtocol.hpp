@@ -8,6 +8,7 @@
 // serina_daemon.cpp et ses tests — jamais par les headers de simulation
 // principaux — pour ne pas leur ajouter la dépendance nlohmann/json.
 
+#include "NetSocket.hpp"
 #include "WorldSimulation.hpp"
 #include <nlohmann/json.hpp>
 
@@ -16,6 +17,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -341,6 +343,62 @@ namespace Serina::Daemon
         for (auto it = result.begin(); it != result.end(); ++it)
             response[it.key()] = it.value();
         return response;
+    }
+
+    /// @brief Une connexion partagée entre le fil qui la lit (une ligne à
+    /// la fois, jamais concurrent avec lui-même) et les fils qui y écrivent
+    /// une réponse (protégés par writeMutex, jamais deux écritures
+    /// entrelacées). recv()/send() sur un même socket depuis des fils
+    /// différents est sûr côté OS ; seule l'écriture doit être sérialisée
+    /// pour ne jamais mélanger deux lignes JSON.
+    struct SharedConnection
+    {
+        Net::TcpConnection conn;
+        std::mutex writeMutex;
+        explicit SharedConnection(Net::TcpConnection c) : conn(std::move(c)) {}
+    };
+
+    /// @brief Traite une ligne déjà lue sur son propre fil, pour qu'une
+    /// commande lente sur une simulation (un step() qui met du temps à
+    /// cause d'une population nombreuse, par exemple) ne bloque jamais la
+    /// lecture de la ligne suivante -- l'ancien design traitait chaque
+    /// requête en série sur le fil de lecture, si bien qu'une seule
+    /// simulation lente ou bloquée pouvait affamer toutes les autres, y
+    /// compris une nouvelle commande "create" (bug réel observé : deux
+    /// simulations abandonnées ont fini par empêcher toute nouvelle
+    /// simulation de démarrer).
+    inline void handleLine(SimulationRegistry &registry, std::shared_ptr<SharedConnection> shared, std::string line)
+    {
+        json response;
+        try
+        {
+            json request = json::parse(line);
+            response = handleCommand(registry, request);
+        }
+        catch (const std::exception &e)
+        {
+            response = errorJson(std::string("malformed request: ") + e.what());
+        }
+
+        std::lock_guard<std::mutex> lock(shared->writeMutex);
+        shared->conn.writeLine(response.dump());
+    }
+
+    /// @brief Boucle de connexion réelle : lit une ligne, dispatch son
+    /// traitement sur un fil détaché, boucle immédiatement sur la ligne
+    /// suivante sans attendre la réponse. Utilisée par serina_daemon.cpp ET
+    /// par les tests, pour que les tests exercent exactement le code qui
+    /// tourne réellement plutôt qu'une version simplifiée dupliquée.
+    inline void handleConnection(SimulationRegistry &registry, Net::TcpConnection connection)
+    {
+        auto shared = std::make_shared<SharedConnection>(std::move(connection));
+        std::string line;
+        while (shared->conn.readLine(line))
+        {
+            if (line.empty())
+                continue;
+            std::thread(handleLine, std::ref(registry), shared, line).detach();
+        }
     }
 
 } // namespace Serina::Daemon
