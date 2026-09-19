@@ -590,11 +590,13 @@ namespace Serina::Simulation
                 lineageBrain.hasCheckpoint = true;
 
                 // Nouveau candidat pour la prochaine fenêtre : toujours une
-                // perturbation de poids, rarement un changement structurel.
+                // perturbation de poids, rarement un changement structurel
+                // (taux définis par params_.neat, pas de constante dupliquée
+                // ici).
                 lineageBrain.brain.mutateWeights(params_.neat);
-                if (chance(rng_) < 0.05)
+                if (chance(rng_) < params_.neat.addConnectionMutationRate)
                     lineageBrain.brain.addConnection(params_.neat);
-                if (chance(rng_) < 0.03)
+                if (chance(rng_) < params_.neat.addNodeMutationRate)
                     lineageBrain.brain.addNode(params_.neat);
             }
         }

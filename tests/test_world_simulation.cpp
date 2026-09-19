@@ -254,6 +254,15 @@ TEST_CASE("brain-driven movement is a deterministic function of state, replayabl
 TEST_CASE("lineage brains evolve structurally over generations via (1+1)-ES", "[worldsim][neat]") {
     WorldSimulationParameters params;
     params.brainEvolutionInterval = 3; // evolve often enough to observe change in a short test
+    // Force a structural mutation attempt on every evolution window, so the
+    // only randomness left is the (1+1)-ES's real accept/revert fitness
+    // gate -- otherwise this test's pass/fail depends on both the rare
+    // addNode/addConnection roll AND the fitness gate lining up within a
+    // fixed generation budget, which is exactly what made it flaky across
+    // platforms (unordered_map iteration order, and hence which RNG draws
+    // land on which lineage, is not portable).
+    params.neat.addNodeMutationRate = 1.0;
+    params.neat.addConnectionMutationRate = 1.0;
 
     UnifiedWorldSimulator sim(params, 909);
     sim.seedFounderSpecies(30);
@@ -262,7 +271,7 @@ TEST_CASE("lineage brains evolve structurally over generations via (1+1)-ES", "[
     for (const auto &snap : sim.getLineageSnapshots())
         initialComplexity[snap.speciesName] = sim.getBrainComplexity(snap.speciesName);
 
-    for (int i = 0; i < 60; ++i)
+    for (int i = 0; i < 90; ++i)
         sim.step();
 
     // At least one surviving lineage must show a brain that has actually
