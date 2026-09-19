@@ -61,7 +61,14 @@ namespace Serina::Daemon
             {"x", ind.x},
             {"y", ind.y},
             {"energy", ind.energy},
-            {"age", ind.age}};
+            {"age", ind.age},
+            {"biologicalType", static_cast<int>(ind.biologicalType)},
+            {"sizeScale", ind.sizeScale},
+            {"elongation", ind.elongation},
+            {"camouflage", ind.camouflage},
+            {"ornamentTier", ind.ornamentTier},
+            {"sensoryProminence", ind.sensoryProminence},
+            {"patternTier", ind.patternTier}};
     }
 
     inline json lineageToJson(const Simulation::LineageSnapshot &l, const Simulation::UnifiedWorldSimulator &sim)

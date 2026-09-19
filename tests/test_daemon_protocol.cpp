@@ -114,6 +114,28 @@ TEST_CASE("individuals reports one real entry per living organism", "[daemon]")
         REQUIRE(ind.contains("x"));
         REQUIRE(ind.contains("y"));
         REQUIRE(ind.contains("energy"));
+
+        // Projection visuelle réelle du génome (voir IndividualSnapshot) --
+        // toutes bornées [0,1] sauf les paliers entiers.
+        REQUIRE(ind.contains("biologicalType"));
+        double sizeScale = ind["sizeScale"];
+        double elongation = ind["elongation"];
+        double camouflage = ind["camouflage"];
+        double sensoryProminence = ind["sensoryProminence"];
+        int ornamentTier = ind["ornamentTier"];
+        int patternTier = ind["patternTier"];
+        REQUIRE(sizeScale >= 0.0);
+        REQUIRE(sizeScale <= 1.0);
+        REQUIRE(elongation >= 0.0);
+        REQUIRE(elongation <= 1.0);
+        REQUIRE(camouflage >= 0.0);
+        REQUIRE(camouflage <= 1.0);
+        REQUIRE(sensoryProminence >= 0.0);
+        REQUIRE(sensoryProminence <= 1.0);
+        REQUIRE(ornamentTier >= 0);
+        REQUIRE(ornamentTier <= 3);
+        REQUIRE(patternTier >= 0);
+        REQUIRE(patternTier <= 4);
     }
 }
 

@@ -7,6 +7,21 @@
 // region grid, and a real per-species NEAT brain, all exposed here. Do not
 // add fields the backend does not actually send.
 
+// Serina::Taxonomy::BiologicalType (include/Serina/EcosystemTaxonomy.hpp) enum
+// ordinals, in declaration order. Only BIRD/FISH/ARTHROPOD/MOLLUSC are
+// actually used by the five founders today; the rest exist in the enum but
+// no founder or (so far) descendant lineage has been observed with them.
+export const BIOLOGICAL_TYPE_NAMES = [
+  'BIRD',
+  'FISH',
+  'ARTHROPOD',
+  'MOLLUSC',
+  'CNIDARIAN',
+  'ANNELID',
+  'PLANT',
+  'CRUSTACEAN'
+] as const
+
 // === status command -> latestData.status ===
 
 export interface LineageStatus {
@@ -73,6 +88,19 @@ export interface IndividualInfo {
   y: number
   energy: number
   age: number
+  /** Serina::Taxonomy::BiologicalType enum ordinal, see BIOLOGICAL_TYPE_NAMES */
+  biologicalType: number
+  /** A real, normalized ([0,1] or an integer tier) projection of this individual's
+   * actual genome onto a small set of legible rendering channels -- computed once,
+   * server-side (see IndividualSnapshot in WorldSimulation.hpp), not invented by
+   * the frontend. Deliberately excludes traits with no honest visual analog
+   * (ENERGY_EFFICIENCY, REPRODUCTION_RATE, LONGEVITY, RESISTANCE, INTELLIGENCE). */
+  sizeScale: number
+  elongation: number
+  camouflage: number
+  ornamentTier: number
+  sensoryProminence: number
+  patternTier: number
 }
 
 export interface IndividualsResult {

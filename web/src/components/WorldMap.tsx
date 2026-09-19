@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { useSimulation } from '@services/SimulationContext';
 import { RegionInfo, IndividualInfo } from '../types';
+import { computeLineageHues, creatureColor } from '../utils/lineageColor';
+import { CreatureIcon } from './CreatureIcon';
 
 /** Couleurs réelles par biome (nom exact renvoyé par le backend, voir
  * EnvironmentalAdaptation.hpp) -- pas une palette générique par index, pour
@@ -19,10 +21,12 @@ const BIOME_COLORS: Record<string, string> = {
 };
 const FALLBACK_BIOME_COLOR = '#9ca3af';
 
-const SPECIES_DOT_COLORS = ['#e11d48', '#2563eb', '#f59e0b', '#7c3aed', '#059669', '#db2777', '#0891b2', '#ca8a04'];
-
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 5;
+/** Sous ce niveau de zoom, une silhouette détaillée fait quelques pixels et
+ * son détail est invisible -- on rend un simple point coloré à la place
+ * plutôt que de payer le coût de rendu pour rien. */
+const DETAIL_ZOOM_THRESHOLD = 1.5;
 
 export function WorldMap() {
   const { simulationData } = useSimulation();
@@ -34,11 +38,12 @@ export function WorldMap() {
   const [isDragging, setIsDragging] = useState(false);
 
   const lineages = simulationData?.status.lineages;
-  const speciesColor = useMemo(() => {
-    const map = new Map<string, string>();
-    (lineages ?? []).forEach((lineage, index) => map.set(lineage.speciesName, SPECIES_DOT_COLORS[index % SPECIES_DOT_COLORS.length]));
-    return map;
-  }, [lineages]);
+  const speciationEvents = simulationData?.lineages.speciationEvents;
+
+  const lineageHues = useMemo(() => {
+    const names = (lineages ?? []).map((l) => l.speciesName);
+    return computeLineageHues(speciationEvents ?? [], names);
+  }, [lineages, speciationEvents]);
 
   if (!simulationData) {
     return (
@@ -56,6 +61,14 @@ export function WorldMap() {
   const worldWidth = gridWidth * cellSize;
   const worldHeight = gridHeight * cellSize;
   const distinctBiomes = Array.from(new Set(regions.map((r) => r.environmentName))).filter(Boolean);
+  const detailed = zoom >= DETAIL_ZOOM_THRESHOLD;
+
+  const biomeColorAt = (x: number, y: number): string => {
+    const gx = Math.max(0, Math.min(gridWidth - 1, Math.floor(x / cellSize)));
+    const gy = Math.max(0, Math.min(gridHeight - 1, Math.floor(y / cellSize)));
+    const region = regions.find((r) => r.gridX === gx && r.gridY === gy);
+    return region ? BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR : FALLBACK_BIOME_COLOR;
+  };
 
   const handleWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -141,25 +154,23 @@ export function WorldMap() {
             </rect>
           ))}
 
-          {individuals.map((individual) => (
-            <circle
-              key={individual.id}
-              cx={individual.x}
-              cy={individual.y}
-              r={Math.max(cellSize * 0.05, 0.5)}
-              fill={speciesColor.get(individual.species) ?? '#ffffff'}
-              stroke="#00000099"
-              strokeWidth={cellSize * 0.008}
-              onClick={(e) => {
-                e.stopPropagation();
-                setSelectedIndividual(individual);
-                setSelectedRegion(null);
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              <title>{`${individual.species} #${individual.id}`}</title>
-            </circle>
-          ))}
+          {individuals.map((individual) => {
+            const hue = lineageHues.get(individual.species) ?? 0;
+            const color = creatureColor(hue, individual.camouflage, biomeColorAt(individual.x, individual.y));
+            return (
+              <CreatureIcon
+                key={individual.id}
+                individual={individual}
+                color={color}
+                detailed={detailed}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedIndividual(individual);
+                  setSelectedRegion(null);
+                }}
+              />
+            );
+          })}
         </svg>
       </div>
 
@@ -173,15 +184,24 @@ export function WorldMap() {
         ))}
       </div>
 
-      {/* Légende des espèces (couleur des points) */}
+      {/* Légende des espèces (teinte de lignée réelle, sans mélange de camouflage) */}
       <div className="mt-2 flex flex-wrap gap-3 text-xs">
         {(lineages ?? []).map((lineage) => (
           <div key={lineage.speciesName} className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full inline-block" style={{ background: speciesColor.get(lineage.speciesName) }} />
+            <span
+              className="w-2.5 h-2.5 rounded-full inline-block"
+              style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
+            />
             <span className="text-gray-600">{lineage.speciesName} ({lineage.population})</span>
           </div>
         ))}
       </div>
+
+      {!detailed && (
+        <p className="mt-2 text-xs text-amber-600">
+          Zoomez (≥ {Math.round(DETAIL_ZOOM_THRESHOLD * 100)}%) pour voir les silhouettes détaillées de chaque individu.
+        </p>
+      )}
 
       {/* Panneau d'inspection : région sélectionnée */}
       {selectedRegion && (

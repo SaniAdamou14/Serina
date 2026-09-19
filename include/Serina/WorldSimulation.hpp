@@ -72,7 +72,13 @@ namespace Serina::Simulation
 
     /// @brief Snapshot en lecture seule d'un individu réel : de quoi
     /// dessiner un point sur la carte et l'inspecter, sans exposer le
-    /// génome complet ni permettre de le muter depuis l'extérieur.
+    /// génome complet ni permettre de le muter depuis l'extérieur. Les
+    /// champs visuels ci-dessous sont une projection normalisée ([0,1] ou
+    /// un palier entier) d'un sous-ensemble de traits génétiques réels vers
+    /// un petit nombre de canaux de rendu délibérément lisibles (voir
+    /// docs/UNIFIED_ENGINE_DESIGN.md, "créatures procédurales") — la
+    /// formule de correspondance vit ici, une seule fois ; le frontend ne
+    /// fait que dessiner à partir de ces valeurs déjà calculées.
     struct IndividualSnapshot
     {
         uint64_t id = 0;
@@ -81,6 +87,13 @@ namespace Serina::Simulation
         double y = 0.0;
         double energy = 0.0;
         double age = 0.0;
+        Taxonomy::BiologicalType biologicalType = Taxonomy::BiologicalType::BIRD;
+        double sizeScale = 0.5;         ///< SIZE normalisé [0,1]
+        double elongation = 0.5;        ///< silhouette fuselée (rapide/léger) vs trapue (lent/lourd), [0,1]
+        double camouflage = 0.0;        ///< trait CAMOUFLAGE réel, déjà borné [0,1]
+        uint8_t ornamentTier = 0;       ///< AGGRESSION quantifiée en 4 paliers [0,3]
+        double sensoryProminence = 0.0; ///< moyenne normalisée de VISION_RANGE et HEARING_ACUITY, [0,1]
+        uint8_t patternTier = 0;        ///< SOCIAL_BEHAVIOR quantifiée en 5 paliers [0,4]
     };
 
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
@@ -290,8 +303,9 @@ namespace Serina::Simulation
         }
 
         /// @brief Un instantané par individu vivant réel — position,
-        /// espèce, énergie, âge — pour un frontend qui veut afficher chaque
-        /// organisme sur la carte plutôt qu'un agrégat par espèce.
+        /// espèce, énergie, âge, et une projection visuelle réelle de son
+        /// génome — pour un frontend qui veut afficher chaque organisme sur
+        /// la carte plutôt qu'un agrégat par espèce.
         std::vector<IndividualSnapshot> getIndividualSnapshots() const
         {
             std::vector<IndividualSnapshot> result;
@@ -307,6 +321,31 @@ namespace Serina::Simulation
                 snap.y = organism.getY();
                 snap.energy = organism.getEnergy();
                 snap.age = organism.getAge();
+
+                auto typeIt = biologicalTypeOf_.find(organism.getSpecies());
+                snap.biologicalType = (typeIt != biologicalTypeOf_.end()) ? typeIt->second : Taxonomy::BiologicalType::BIRD;
+
+                const auto &genome = organism.getGenome();
+                double speedNorm = normalizeTrait(Genetics::TraitType::SPEED, genome.getTrait(Genetics::TraitType::SPEED));
+                snap.sizeScale = normalizeTrait(Genetics::TraitType::SIZE, genome.getTrait(Genetics::TraitType::SIZE));
+                // Élongation : un organisme relativement plus rapide que
+                // grand paraît fuselé (proche de 1), l'inverse trapu (proche
+                // de 0) -- un ratio dérivé plutôt qu'exposer SPEED comme son
+                // propre canal visuel indépendant.
+                snap.elongation = std::clamp(0.5 + (speedNorm - snap.sizeScale) * 0.5, 0.0, 1.0);
+                snap.camouflage = std::clamp(genome.getTrait(Genetics::TraitType::CAMOUFLAGE), 0.0, 1.0);
+                snap.ornamentTier = static_cast<uint8_t>(std::clamp(
+                    static_cast<int>(normalizeTrait(Genetics::TraitType::AGGRESSION, genome.getTrait(Genetics::TraitType::AGGRESSION)) * 4.0),
+                    0, 3));
+                snap.sensoryProminence = std::clamp(
+                    (normalizeTrait(Genetics::TraitType::VISION_RANGE, genome.getTrait(Genetics::TraitType::VISION_RANGE)) +
+                     normalizeTrait(Genetics::TraitType::HEARING_ACUITY, genome.getTrait(Genetics::TraitType::HEARING_ACUITY))) *
+                        0.5,
+                    0.0, 1.0);
+                snap.patternTier = static_cast<uint8_t>(std::clamp(
+                    static_cast<int>(normalizeTrait(Genetics::TraitType::SOCIAL_BEHAVIOR, genome.getTrait(Genetics::TraitType::SOCIAL_BEHAVIOR)) * 5.0),
+                    0, 4));
+
                 result.push_back(std::move(snap));
             }
             return result;
@@ -331,6 +370,18 @@ namespace Serina::Simulation
 
         double worldWidth() const { return params_.gridWidth * params_.cellSize; }
         double worldHeight() const { return params_.gridHeight * params_.cellSize; }
+
+        /// @brief Ramène une valeur réelle de trait (bornée par
+        /// Genetics::TRAIT_BOUNDS, pas [0,1]) à [0,1] -- utilisé pour
+        /// projeter des traits génétiques réels vers des canaux visuels
+        /// comparables entre eux (voir IndividualSnapshot).
+        static double normalizeTrait(Genetics::TraitType type, double realValue)
+        {
+            const auto &bounds = Genetics::TRAIT_BOUNDS[static_cast<size_t>(type)];
+            if (bounds.max <= bounds.min)
+                return 0.5;
+            return std::clamp((realValue - bounds.min) / (bounds.max - bounds.min), 0.0, 1.0);
+        }
 
         std::pair<int, int> regionOf(const Evolution::Organism &o) const
         {
