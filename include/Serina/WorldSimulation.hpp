@@ -135,6 +135,16 @@ namespace Serina::Simulation
         uint32_t brainEvolutionInterval = 8;
 
         NEAT::NEATConfig neat{};
+
+        /// Énergie gagnée par génération par un organisme au maximum
+        /// d'efficacité (ENERGY_EFFICIENCY = 1.0) dans une région à
+        /// ressources maximales (primaryProducers = 1.0) : le seul revenu
+        /// énergétique positif de la simulation, avant cette constante il
+        /// n'y en avait aucun (voir applySurvivalAndInteractions()) — tout
+        /// organisme ne faisait que perdre de l'énergie au métabolisme
+        /// jusqu'à une extinction totale garantie, sans rapport avec les
+        /// gènes ou l'environnement.
+        double foragingRate = 0.15;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -435,6 +445,19 @@ namespace Serina::Simulation
                 auto [gx, gy] = regionOf(organism);
                 auto environmentType = grid_.at(gx, gy).environmentType;
                 const auto &localCounts = regionSpeciesCounts[regionKey(gx, gy)];
+
+                // Alimentation réelle : l'organisme puise de l'énergie dans
+                // les ressources primaires réelles de sa région, modulée par
+                // son efficacité énergétique réelle (trait diploïde) — le
+                // seul revenu positif de toute la boucle de survie. Sans ce
+                // terme, organism.update() ci-dessus ne fait que drainer
+                // l'énergie et rien ne la remplace jamais.
+                const auto *localEnv = environments_.getEnvironment(environmentType);
+                double resourceLevel = localEnv ? localEnv->resources.primaryProducers : 0.5;
+                double efficiency = organism.getGenome().getTrait(Genetics::TraitType::ENERGY_EFFICIENCY);
+                double foragingIncome = resourceLevel * efficiency * params_.foragingRate;
+                if (foragingIncome > 0.0)
+                    organism.setEnergy(organism.getEnergy() + foragingIncome);
 
                 double energyDelta = 0.0;
                 for (const auto &interaction : interactions_.getSpeciesInteractions(organism.getSpecies()))

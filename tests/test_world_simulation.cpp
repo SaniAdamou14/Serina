@@ -164,6 +164,39 @@ TEST_CASE("stepping the simulation advances the generation counter and keeps pop
     REQUIRE(sim.getPopulationCount() < initialPopulation * 10);
 }
 
+TEST_CASE("population survives a long run instead of guaranteed total extinction from starvation", "[worldsim][energy]") {
+    // Regression test for a real bug found by actually running the
+    // simulation for a long time (reported after ~2000 generations at 20x
+    // speed in the web UI): applySurvivalAndInteractions() drained energy
+    // via metabolism every generation but had no positive energy income
+    // mechanic at all -- the only "income" path was ecological interactions
+    // that could never fire (species-name mismatches with the legacy
+    // interaction catalog, and referenced partner species that don't exist
+    // in this engine's population). Every organism was on a one-way path to
+    // starvation: total collapse was mathematically guaranteed by whatever
+    // generation metabolism alone drained a typical founder's starting
+    // energy to zero (~2000 generations for the observed default trait/
+    // environment values), independent of genetics or environment quality.
+    // A short-horizon test (like the one above, 10 generations) could not
+    // catch this -- the fix is a real foraging income term
+    // (WorldSimulationParameters::foragingRate), so this test runs long
+    // enough to have hit total extinction under the old code.
+    UnifiedWorldSimulator sim({}, 2024);
+    sim.seedFounderSpecies(10);
+    size_t initialPopulation = sim.getPopulationCount();
+
+    for (int i = 0; i < 2000; ++i)
+        sim.step();
+
+    REQUIRE(sim.getGeneration() == 2000);
+    REQUIRE(sim.getPopulationCount() > 0);
+    // The fix should produce a real equilibrium (observed in a scratch run:
+    // population settles around 1.5-1.7x its start and oscillates there for
+    // the full 2000 generations), not just "barely nonzero" -- and not
+    // unbounded growth either now that there's a real energy income.
+    REQUIRE(sim.getPopulationCount() < initialPopulation * 5);
+}
+
 TEST_CASE("reproduction respects biological constraints instead of producing arbitrary offspring", "[worldsim][constraints]") {
     UnifiedWorldSimulator sim({}, 55);
     sim.seedFounderSpecies(25);

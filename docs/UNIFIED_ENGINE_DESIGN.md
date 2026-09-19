@@ -92,10 +92,19 @@ does it, just scoped to one taxon's members instead of the whole pool.
    isolated unit tests) falls back to a random walk rather than crashing.
 3. **Metabolism & survival**: energy cost from `SIZE`/`SPEED`/
    `ENERGY_EFFICIENCY` (as `Organism::update()` already computes), *plus* a
-   region-local ecological-interaction modifier: an organism's survival
-   probability is adjusted by `EcologicalInteractionManager::calculatePopulationImpact()`
-   evaluated against the actual count of interacting-species individuals
-   **in the same region**, not a single global population-level dice roll.
+   real foraging income (`params_.foragingRate` × local `resources.primaryProducers`
+   × the organism's own `ENERGY_EFFICIENCY`) that replenishes it — added after
+   a real bug found by actually running the simulation long enough to see it:
+   for the first three phases, there was no positive energy term anywhere in
+   the loop, so every organism was on a mathematically guaranteed path to
+   starvation, just a slow one (~2000 generations for typical trait draws).
+   The ecological-interaction modifier
+   (`EcologicalInteractionManager::calculatePopulationImpact()`, evaluated
+   against the actual count of interacting-species individuals **in the same
+   region**) still applies on top of this, but it was never a substitute for
+   a baseline energy source — the founder species' names don't even match
+   the (legacy, richer-ecosystem) interaction catalog's, so it was inert for
+   all five founders regardless.
 4. **Reproduction**: unchanged mechanism
    (`PopulationManager::blendCrossover` + `AdvancedGenome::mutate`), but the
    offspring's mutated traits are checked against
