@@ -12,6 +12,7 @@ import { useSimulation } from '@services/SimulationContext'
 export function SimulationDashboard() {
   const { simulationData, isConnected, isRunning } = useSimulation()
   const [activeTab, setActiveTab] = useState<'map' | 'overview' | 'genetics' | 'evolution' | 'species'>('map')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const tabs = [
     { id: 'map', label: 'Carte', icon: '🗺️' },
@@ -56,6 +57,15 @@ export function SimulationDashboard() {
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {isMapTab && (
+                <button
+                  onClick={() => setSidebarCollapsed((v) => !v)}
+                  className="px-2.5 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  title={sidebarCollapsed ? 'Afficher le panneau de contrôle' : 'Masquer le panneau de contrôle'}
+                >
+                  {sidebarCollapsed ? '☰' : '✕'} <span className="hidden lg:inline">Contrôles</span>
+                </button>
+              )}
               <div className={`status-indicator ${isConnected ? 'status-running' : 'status-stopped'}`}>
                 <div className={`w-2 h-2 rounded-full mr-1.5 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
                 <span className="hidden lg:inline">{isConnected ? 'Connecté' : 'Déconnecté'}</span>
@@ -69,13 +79,21 @@ export function SimulationDashboard() {
       </header>
 
       {/* Contenu principal : la carte occupe tout l'espace restant façon
-          RimWorld (les panneaux flottent par-dessus, voir WorldMap.tsx) ;
-          les autres onglets gardent la disposition classique en grille. */}
+          RimWorld (seules de petites info-bulles flottent par-dessus, voir
+          WorldMap.tsx) ; le panneau de contrôle est ancré à côté d'elle
+          (une vraie colonne qui réduit l'espace de la carte, jamais une
+          superposition qui la cache) et peut se replier pour lui rendre
+          toute la largeur. Les autres onglets gardent la disposition
+          classique en grille. */}
       {isMapTab ? (
-        <div className="flex-1 relative min-h-0">
-          <WorldMap />
-          <div className="absolute top-3 left-3 z-20 w-72 max-h-[calc(100%-1.5rem)] overflow-y-auto">
-            <SimulationControl />
+        <div className="flex-1 flex min-h-0">
+          {!sidebarCollapsed && (
+            <div className="w-72 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 p-3">
+              <SimulationControl />
+            </div>
+          )}
+          <div className="flex-1 relative min-h-0">
+            <WorldMap />
           </div>
         </div>
       ) : (
