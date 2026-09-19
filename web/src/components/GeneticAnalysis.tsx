@@ -27,7 +27,7 @@ export function GeneticAnalysis() {
   const { simulationData } = useSimulation()
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null)
 
-  if (!simulationData || simulationData.status.species.length === 0) {
+  if (!simulationData || simulationData.status.lineages.length === 0) {
     return (
       <div className="card">
         <h3 className="text-lg font-semibold mb-4">🧬 Analyse Génétique — Serina</h3>
@@ -44,50 +44,42 @@ export function GeneticAnalysis() {
     )
   }
 
-  const species = simulationData.status.species
-  const genetics = simulationData.genetics.species
-  const current = (selectedSpecies ? species.find((s) => s.name === selectedSpecies) : species[0]) ?? species[0]
-  const currentGenetics = genetics.find((g) => g.name === current.name)
+  const lineages = simulationData.status.lineages
+  const current = (selectedSpecies ? lineages.find((l) => l.speciesName === selectedSpecies) : lineages[0]) ?? lineages[0]
 
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-lg font-semibold">🧬 Analyse Génétique — Monde de Serina</h3>
-        {species.length > 1 && (
+        {lineages.length > 1 && (
           <select
-            value={current.name}
+            value={current.speciesName}
             onChange={(e) => setSelectedSpecies(e.target.value)}
             className="px-3 py-1 border rounded-md text-sm"
           >
-            {species.map((s) => (
-              <option key={s.name} value={s.name}>{s.name}</option>
+            {lineages.map((l) => (
+              <option key={l.speciesName} value={l.speciesName}>{l.speciesName}</option>
             ))}
           </select>
         )}
       </div>
 
       <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-        <h4 className="font-semibold text-blue-800">{current.name}</h4>
-        <p className="text-sm text-blue-600 mt-1">{getSpeciesOrigin(current.name)}</p>
+        <h4 className="font-semibold text-blue-800">{current.speciesName}</h4>
+        <p className="text-sm text-blue-600 mt-1">{getSpeciesOrigin(current.speciesName)}</p>
         <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
           <div>
             <span className="font-medium">Population :</span> {current.population.toLocaleString()}
           </div>
           <div>
-            <span className="font-medium">Fitness moyenne :</span> {(current.fitness * 100).toFixed(0)}%
+            <span className="font-medium">Fitness moyenne :</span> {(current.averageFitness * 100).toFixed(0)}%
           </div>
           <div>
-            <span className="font-medium">Générations sans innovation :</span> {currentGenetics?.generationsSinceLastInnovation ?? '—'}
+            <span className="font-medium">Régions occupées :</span> {current.regionsOccupied}
           </div>
           <div>
-            <span className="font-medium">Risque d'extinction :</span>{' '}
-            <span className={`ml-1 px-2 py-1 rounded text-xs ${
-              current.extinctionRisk > 0.7 ? 'bg-red-100 text-red-700' :
-              current.extinctionRisk > 0.4 ? 'bg-yellow-100 text-yellow-700' :
-              'bg-green-100 text-green-700'
-            }`}>
-              {(current.extinctionRisk * 100).toFixed(0)}%
-            </span>
+            <span className="font-medium">Complexité du cerveau (NEAT) :</span>{' '}
+            {current.hasBrain ? `${current.brainComplexity} nœuds/connexions` : '—'}
           </div>
         </div>
       </div>
@@ -98,7 +90,7 @@ export function GeneticAnalysis() {
       <div className="space-y-3 mb-6">
         {[
           { label: 'Diversité génétique', value: current.geneticDiversity },
-          { label: 'Fitness moyenne', value: current.fitness }
+          { label: 'Fitness moyenne', value: current.averageFitness }
         ].map(({ label, value }) => (
           <div key={label} className="p-3 bg-gray-50 rounded-lg">
             <div className="flex justify-between items-center mb-1">

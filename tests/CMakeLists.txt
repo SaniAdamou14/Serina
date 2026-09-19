@@ -37,3 +37,19 @@ target_link_libraries(test_world_simulation PRIVATE Catch2::Catch2WithMain)
 target_include_directories(test_world_simulation PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_features(test_world_simulation PRIVATE cxx_std_20)
 catch_discover_tests(test_world_simulation)
+
+# Serina/DaemonProtocol.hpp (registry + command dispatch) plus the real
+# sockets in Serina/NetSocket.hpp for the one end-to-end wire-format test.
+find_package(Threads REQUIRED)
+add_executable(test_daemon_protocol test_daemon_protocol.cpp)
+target_link_libraries(test_daemon_protocol PRIVATE
+    Catch2::Catch2WithMain
+    nlohmann_json::nlohmann_json
+    Threads::Threads
+)
+target_include_directories(test_daemon_protocol PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_daemon_protocol PRIVATE cxx_std_20)
+if(WIN32)
+    target_link_libraries(test_daemon_protocol PRIVATE ws2_32)
+endif()
+catch_discover_tests(test_daemon_protocol)

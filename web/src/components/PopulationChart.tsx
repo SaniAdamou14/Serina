@@ -16,27 +16,31 @@ export function PopulationChart() {
     )
   }
 
-  const { ecosystem, species } = simulationData.status
+  const { status } = simulationData
+  const lineages = status.lineages
+  const averageDiversity = lineages.length
+    ? lineages.reduce((sum, l) => sum + l.geneticDiversity, 0) / lineages.length
+    : 0
 
   return (
     <div className="card">
       <div className="border-b border-gray-200 pb-4 mb-6">
         <h3 className="text-lg font-semibold text-gray-900">Dynamique de Population</h3>
-        <p className="text-sm text-gray-600">État réel de l'écosystème, génération {ecosystem.generation}</p>
+        <p className="text-sm text-gray-600">État réel de l'écosystème, génération {status.generation}</p>
       </div>
 
       {/* Current Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="text-center">
-          <div className="text-2xl font-bold text-primary-600">{ecosystem.total_population}</div>
+          <div className="text-2xl font-bold text-primary-600">{status.population}</div>
           <div className="text-sm text-gray-600">Population Totale</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-genetic-600">{ecosystem.generation}</div>
+          <div className="text-2xl font-bold text-genetic-600">{status.generation}</div>
           <div className="text-sm text-gray-600">Génération</div>
         </div>
         <div className="text-center">
-          <div className="text-2xl font-bold text-ecosystem-600">{ecosystem.total_species}</div>
+          <div className="text-2xl font-bold text-ecosystem-600">{status.speciesCount}</div>
           <div className="text-sm text-gray-600">Espèces</div>
         </div>
       </div>
@@ -44,14 +48,14 @@ export function PopulationChart() {
       {/* Species Breakdown */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium text-gray-700">Répartition par espèce</h4>
-        {species.map((sp, index) => {
-          const percentage = ecosystem.total_population > 0 ? (sp.population / ecosystem.total_population) * 100 : 0
+        {lineages.map((lineage, index) => {
+          const percentage = status.population > 0 ? (lineage.population / status.population) * 100 : 0
 
           return (
-            <div key={sp.name} className="space-y-2">
+            <div key={lineage.speciesName} className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-700">{sp.name}</span>
-                <span className="text-gray-600">{sp.population} ({percentage.toFixed(1)}%)</span>
+                <span className="font-medium text-gray-700">{lineage.speciesName}</span>
+                <span className="text-gray-600">{lineage.population} ({percentage.toFixed(1)}%)</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div
@@ -70,19 +74,11 @@ export function PopulationChart() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div className="flex justify-between">
             <span className="text-gray-600">Spéciations</span>
-            <span className="font-medium">{ecosystem.total_speciations}</span>
+            <span className="font-medium">{status.speciationEventCount}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Extinctions</span>
-            <span className="font-medium">{ecosystem.total_extinctions}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Stabilité écosystème</span>
-            <span className="font-medium">{(ecosystem.ecosystem_stability * 100).toFixed(0)}%</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Biodiversité</span>
-            <span className="font-medium">{ecosystem.biodiversity_index.toFixed(2)}</span>
+            <span className="text-gray-600">Diversité génétique moyenne</span>
+            <span className="font-medium">{averageDiversity.toFixed(2)}</span>
           </div>
         </div>
       </div>

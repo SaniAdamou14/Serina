@@ -1,13 +1,25 @@
-# serina_cli JSON contract
+# serina_cli JSON contract (legacy, no longer the web backend)
 
-`serina_cli` (`src/serina_cli.cpp`) is the bridge between the C++ ecosystem
-simulator (`Simulation::SerinaEcosystemSimulator`, `include/Serina/SerinaSimulator.hpp`)
-and the Node API (`api/services/simulationEngine.js`). This is a different,
-richer engine than `SimulationAPI` (documented in
+> **As of Phase 9, the Node API talks to `serina_daemon`, not `serina_cli`.**
+> See [`SERINA_DAEMON_PROTOCOL.md`](SERINA_DAEMON_PROTOCOL.md) for the
+> contract that `api/services/simulationEngine.js` actually uses today —
+> real individuals, a real region grid, real per-lineage NEAT brains,
+> served from a live in-memory `UnifiedWorldSimulator` instead of a
+> process-per-command aggregate-stats engine. This document is kept for
+> `serina_cli` itself, which still exists, still works, and is still backed
+> by `SerinaEcosystemSimulator` as described below — useful for one-off
+> scripting against the older engine, no longer wired into the website.
+
+`serina_cli` (`src/serina_cli.cpp`) is a one-shot bridge to the C++ ecosystem
+simulator (`Simulation::SerinaEcosystemSimulator`, `include/Serina/SerinaSimulator.hpp`).
+This is a different, richer engine than `SimulationAPI` (documented in
 [`STATISTICS_SCHEMA.md`](STATISTICS_SCHEMA.md)): it tracks named species
 ("Serinus canaria", "Xiphophorus hellerii", ...) with ecosystem-level
 biodiversity, speciation and extinction counters, acquired adaptations and
 evolutionary innovations, rather than a single genome with 8 numeric traits.
+Its known limitation — genetic diversity redrawn at random each generation
+instead of computed — is exactly what `UnifiedWorldSimulator`/`serina_daemon`
+fixed; see `docs/UNIFIED_ENGINE_DESIGN.md`.
 
 Every invocation is a separate OS process (there is no long-running daemon),
 so state is persisted to a JSON file between calls and reloaded on the next

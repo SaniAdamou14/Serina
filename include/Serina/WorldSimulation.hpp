@@ -50,6 +50,39 @@ namespace Serina::Simulation
         double geneticDistanceAtSplit;
     };
 
+    /// @brief Snapshot en lecture seule d'une case de la carte : son biome
+    /// réel et les valeurs d'environnement réellement utilisées par la
+    /// simulation pour cette case (pas une constante globale), plus le
+    /// compte réel d'individus vivants actuellement dedans — pour un
+    /// frontend qui veut dessiner une vraie carte de régions, pas un
+    /// placeholder.
+    struct RegionSnapshot
+    {
+        int gridX = 0;
+        int gridY = 0;
+        Ecosystem::EnvironmentType environmentType = Ecosystem::EnvironmentType::GRASSLAND;
+        std::string environmentName;
+        double temperature = 0.0;
+        double primaryProducers = 0.0;
+        double predationPressure = 0.0;
+        double competitionIntensity = 0.0;
+        double climaticStress = 0.0;
+        uint32_t population = 0;
+    };
+
+    /// @brief Snapshot en lecture seule d'un individu réel : de quoi
+    /// dessiner un point sur la carte et l'inspecter, sans exposer le
+    /// génome complet ni permettre de le muter depuis l'extérieur.
+    struct IndividualSnapshot
+    {
+        uint64_t id = 0;
+        std::string species;
+        double x = 0.0;
+        double y = 0.0;
+        double energy = 0.0;
+        double age = 0.0;
+    };
+
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
     /// tous ses individus (pas un par individu — voir
     /// docs/UNIFIED_ENGINE_DESIGN.md, "échelle cible"), piloté par
@@ -202,6 +235,65 @@ namespace Serina::Simulation
         {
             auto it = brains_.find(species);
             return it != brains_.end() ? it->second.stableBrain.getComplexity() : 0;
+        }
+
+        /// @brief Un instantané par case de la carte, avec le compte réel
+        /// d'individus vivants dedans à cet instant — pour dessiner une
+        /// vraie carte de régions plutôt qu'un seul environnement global.
+        std::vector<RegionSnapshot> getRegionSnapshots() const
+        {
+            auto counts = populationCountsByRegion();
+
+            std::vector<RegionSnapshot> result;
+            result.reserve(static_cast<size_t>(grid_.getWidth()) * grid_.getHeight());
+            for (int y = 0; y < grid_.getHeight(); ++y)
+            {
+                for (int x = 0; x < grid_.getWidth(); ++x)
+                {
+                    const auto &cell = grid_.at(x, y);
+                    RegionSnapshot snap;
+                    snap.gridX = x;
+                    snap.gridY = y;
+                    snap.environmentType = cell.environmentType;
+                    const auto *env = environments_.getEnvironment(cell.environmentType);
+                    if (env)
+                    {
+                        snap.environmentName = env->name;
+                        snap.temperature = env->climate.temperature;
+                        snap.primaryProducers = env->resources.primaryProducers;
+                        snap.predationPressure = env->pressures.predationPressure;
+                        snap.competitionIntensity = env->pressures.competitionIntensity;
+                        snap.climaticStress = env->pressures.climaticStress;
+                    }
+                    auto it = counts.find(regionKey(x, y));
+                    snap.population = (it != counts.end()) ? it->second : 0;
+                    result.push_back(std::move(snap));
+                }
+            }
+            return result;
+        }
+
+        /// @brief Un instantané par individu vivant réel — position,
+        /// espèce, énergie, âge — pour un frontend qui veut afficher chaque
+        /// organisme sur la carte plutôt qu'un agrégat par espèce.
+        std::vector<IndividualSnapshot> getIndividualSnapshots() const
+        {
+            std::vector<IndividualSnapshot> result;
+            result.reserve(population_.size());
+            for (const auto &organism : population_)
+            {
+                if (!organism.isAlive())
+                    continue;
+                IndividualSnapshot snap;
+                snap.id = organism.getId();
+                snap.species = organism.getSpecies();
+                snap.x = organism.getX();
+                snap.y = organism.getY();
+                snap.energy = organism.getEnergy();
+                snap.age = organism.getAge();
+                result.push_back(std::move(snap));
+            }
+            return result;
         }
 
     private:
@@ -649,6 +741,19 @@ namespace Serina::Simulation
             std::unordered_map<std::string, uint32_t> counts;
             for (const auto &organism : population_)
                 counts[organism.getSpecies()]++;
+            return counts;
+        }
+
+        std::unordered_map<long long, uint32_t> populationCountsByRegion() const
+        {
+            std::unordered_map<long long, uint32_t> counts;
+            for (const auto &organism : population_)
+            {
+                if (!organism.isAlive())
+                    continue;
+                auto [gx, gy] = regionOf(organism);
+                counts[regionKey(gx, gy)]++;
+            }
             return counts;
         }
 

@@ -68,7 +68,7 @@ export function EngineStatus() {
           <>
             <StatusRow label="API Backend" ok={health.status === 'healthy'} okLabel="En ligne" koLabel="Hors ligne" />
             <StatusRow
-              label="Moteur C++ (serina_cli)"
+              label="Moteur C++ (serina_daemon)"
               ok={health.services.simulationEngine}
               okLabel="Construit et disponible"
               koLabel="Non construit — voir README"
@@ -91,19 +91,19 @@ export function EngineStatus() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Génération</span>
-              <span className="font-medium">{simulationData.status.ecosystem.generation}</span>
+              <span className="font-medium">{simulationData.status.generation}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Stabilité écosystème</span>
-              <span className="font-medium">{(simulationData.status.ecosystem.ecosystem_stability * 100).toFixed(0)}%</span>
+              <span className="text-gray-600">Population</span>
+              <span className="font-medium">{simulationData.status.population.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-600">Espèces vivantes</span>
+              <span className="font-medium">{simulationData.status.speciesCount}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Spéciations</span>
-              <span className="font-medium">{simulationData.status.ecosystem.total_speciations}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Extinctions</span>
-              <span className="font-medium">{simulationData.status.ecosystem.total_extinctions}</span>
+              <span className="font-medium">{simulationData.status.speciationEventCount}</span>
             </div>
           </div>
         ) : (

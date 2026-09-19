@@ -35,15 +35,32 @@ target_include_directories(serina_cli PRIVATE ../include)
 
 # Build autonomous evolution runner
 add_executable(serina_runner serina_runner.cpp)
-target_link_libraries(serina_runner PRIVATE 
-    serina_core 
-    serina_viewmodel 
+target_link_libraries(serina_runner PRIVATE
+    serina_core
+    serina_viewmodel
     serina_utils
 )
 target_include_directories(serina_runner PRIVATE ../include)
 target_compile_features(serina_runner PRIVATE cxx_std_20)
 
+# Live backend for the web API: keeps real UnifiedWorldSimulator instances in
+# memory and serves them over a local TCP JSON-lines protocol instead of
+# reloading full state from disk on every command (see Phase 9,
+# docs/SERINA_DAEMON_PROTOCOL.md). Header-only simulation code + nlohmann/json
+# + sockets/threads, no dependency on serina_core.
+find_package(Threads REQUIRED)
+add_executable(serina_daemon serina_daemon.cpp)
+target_link_libraries(serina_daemon PRIVATE
+    nlohmann_json::nlohmann_json
+    Threads::Threads
+)
+target_include_directories(serina_daemon PRIVATE ../include)
+target_compile_features(serina_daemon PRIVATE cxx_std_20)
+if(WIN32)
+    target_link_libraries(serina_daemon PRIVATE ws2_32)
+endif()
+
 # Set output directories
-set_target_properties(serina_demo serina_cli serina_runner PROPERTIES
+set_target_properties(serina_demo serina_cli serina_runner serina_daemon PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

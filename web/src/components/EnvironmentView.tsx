@@ -4,6 +4,13 @@ interface EnvironmentViewProps {
   showDetails?: boolean
 }
 
+/**
+ * Phase 9 a remplacé le seul environnement global qu'exposait l'ancien
+ * moteur par une vraie grille de régions (voir docs/SERINA_DAEMON_PROTOCOL.md),
+ * chacune avec son propre biome. Ce composant montre donc une moyenne sur
+ * toutes les régions plutôt qu'un "environnement principal" -- une vraie
+ * carte des régions (Phase 10, façon RimWorld) remplacera cette vue agrégée.
+ */
 export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
   const { simulationData } = useSimulation()
 
@@ -18,28 +25,31 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
     )
   }
 
-  const { world } = simulationData.world
-  const { climate, resources, pressures } = world
+  const { regions } = simulationData.regions
+  const status = simulationData.status
+  const count = regions.length || 1
+  const avg = (pick: (r: (typeof regions)[number]) => number) =>
+    regions.reduce((sum, r) => sum + pick(r), 0) / count
+  const distinctBiomes = new Set(regions.map((r) => r.environmentName)).size
 
   const climateMetrics = [
-    { label: 'Température', value: `${climate.temperature.toFixed(1)}°C`, color: 'text-red-600' },
-    { label: 'Humidité', value: `${(climate.humidity * 100).toFixed(0)}%`, color: 'text-blue-600' },
-    { label: 'Précipitations', value: `${climate.precipitation.toFixed(0)}mm/an`, color: 'text-cyan-600' },
-    { label: 'Ensoleillement', value: `${(climate.sunlightIntensity * 100).toFixed(0)}%`, color: 'text-yellow-600' }
+    { label: 'Température moyenne', value: `${avg((r) => r.temperature).toFixed(1)}°C`, color: 'text-red-600' },
+    { label: 'Producteurs primaires', value: `${(avg((r) => r.primaryProducers) * 100).toFixed(0)}%`, color: 'text-green-600' }
   ]
 
   const pressureMetrics = [
-    { label: 'Prédation', value: pressures.predationPressure, color: 'text-red-500' },
-    { label: 'Compétition', value: pressures.competitionIntensity, color: 'text-purple-500' },
-    { label: 'Rareté des ressources', value: pressures.resourceScarcity, color: 'text-orange-500' },
-    { label: 'Stress climatique', value: pressures.climaticStress, color: 'text-amber-500' }
+    { label: 'Prédation', value: avg((r) => r.predationPressure), color: 'text-red-500' },
+    { label: 'Compétition', value: avg((r) => r.competitionIntensity), color: 'text-purple-500' },
+    { label: 'Stress climatique', value: avg((r) => r.climaticStress), color: 'text-amber-500' }
   ]
 
   return (
     <div className="card">
       <div className="border-b border-gray-200 pb-4 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">Environnement — {world.primaryEnvironment}</h3>
-        <p className="text-sm text-gray-600">{world.description || 'Environnement principal où les espèces d\'origine ont été introduites'}</p>
+        <h3 className="text-lg font-semibold text-gray-900">
+          Environnement — {distinctBiomes} biome{distinctBiomes > 1 ? 's' : ''} sur {regions.length} régions
+        </h3>
+        <p className="text-sm text-gray-600">Moyennes sur toute la carte réelle (grille procédurale de biomes)</p>
       </div>
 
       {/* Climate Metrics */}
@@ -54,7 +64,7 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
 
       {/* Environmental Pressures */}
       <div className="space-y-3 mb-6">
-        <h4 className="text-sm font-medium text-gray-700">Pressions Environnementales</h4>
+        <h4 className="text-sm font-medium text-gray-700">Pressions Environnementales (moyenne)</h4>
         {pressureMetrics.map((pressure) => {
           const percentage = pressure.value * 100
           return (
@@ -77,20 +87,19 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
       {showDetails && (
         <div className="grid grid-cols-2 gap-4">
           <div className="ecosystem-stat">
-            <div className="text-sm font-medium text-ecosystem-800 mb-2">Ressources disponibles</div>
+            <div className="text-sm font-medium text-ecosystem-800 mb-2">Biomes présents</div>
             <div className="space-y-1 text-xs">
-              <div>🌱 Producteurs primaires : {(resources.primaryProducers * 100).toFixed(0)}%</div>
-              <div>🦗 Petites proies : {(resources.smallPrey * 100).toFixed(0)}%</div>
-              <div>💧 Qualité de l'eau : {(resources.waterQuality * 100).toFixed(0)}%</div>
-              <div>🏠 Abris : {(resources.shelter * 100).toFixed(0)}%</div>
+              {Array.from(new Set(regions.map((r) => r.environmentName))).map((name) => (
+                <div key={name}>🌍 {name}</div>
+              ))}
             </div>
           </div>
           <div className="ecosystem-stat">
-            <div className="text-sm font-medium text-ecosystem-800 mb-2">Capacité de charge</div>
+            <div className="text-sm font-medium text-ecosystem-800 mb-2">État de la simulation</div>
             <div className="space-y-1 text-xs">
-              <div>👥 Capacité totale : {world.carryingCapacity.toLocaleString()}</div>
-              <div>📅 Génération : {simulationData.status.ecosystem.generation}</div>
-              <div>🐾 Espèces présentes : {simulationData.status.ecosystem.total_species}</div>
+              <div>📅 Génération : {status.generation}</div>
+              <div>🐾 Espèces présentes : {status.speciesCount}</div>
+              <div>👥 Population totale : {status.population}</div>
             </div>
           </div>
         </div>

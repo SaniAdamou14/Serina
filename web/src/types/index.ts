@@ -1,112 +1,107 @@
 // Types reflecting the REAL shape of data produced by the backend
-// (api/services/simulationEngine.js), which itself mirrors the real JSON
-// serina_cli emits (see src/serina_cli.cpp and
-// include/Serina/SerinaSimulator.hpp). There is no per-trait genome exposed
-// by this pipeline — only aggregate fitness and genetic diversity per
-// species. Do not add fields here that the backend does not actually send;
-// that mismatch is exactly what made this file useless before.
+// (api/services/simulationEngine.js -> serina_daemon, see
+// docs/SERINA_DAEMON_PROTOCOL.md and include/Serina/DaemonProtocol.hpp).
+// Phase 9 replaced the old aggregate-only pipeline (SerinaEcosystemSimulator
+// via serina_cli) with the unified engine (UnifiedWorldSimulator via
+// serina_daemon): real individuals with real positions, a real per-cell
+// region grid, and a real per-species NEAT brain, all exposed here. Do not
+// add fields the backend does not actually send.
 
-// === /api/serina/status/:id -> latestData.status ===
+// === status command -> latestData.status ===
 
-export interface SpeciesStatus {
-  name: string
+export interface LineageStatus {
+  speciesName: string
+  /** Serina::Taxonomy::BiologicalType enum ordinal, see BIOLOGICAL_TYPE_NAMES */
+  biologicalType: number
   population: number
-  fitness: number
+  averageFitness: number
+  /** Real average pairwise genome distance (AdvancedGenome::geneticDistance), not a random draw. */
   geneticDiversity: number
-  extinctionRisk: number
+  regionsOccupied: number
   adaptations: string[]
   innovations: string[]
-}
-
-export interface EcosystemStatus {
-  generation: number
-  total_species: number
-  total_population: number
-  biodiversity_index: number
-  ecosystem_stability: number
-  total_speciations: number
-  total_extinctions: number
+  hasBrain: boolean
+  /** Node + connection count of this lineage's real NEAT brain. */
+  brainComplexity: number
 }
 
 export interface StatusResult {
   status: 'success' | 'error'
-  action: 'status'
-  ecosystem: EcosystemStatus
-  species: SpeciesStatus[]
-  timestamp: number
+  generation: number
+  population: number
+  running: boolean
+  speciesCount: number
+  lineages: LineageStatus[]
+  /** A count -- see the `lineages` command for the full event history. */
+  speciationEventCount: number
   error?: string
 }
 
-// === /api/serina/status/:id -> latestData.world ===
+// === regions command -> latestData.regions ===
 
-export interface WorldClimate {
+export interface RegionInfo {
+  gridX: number
+  gridY: number
+  /** Serina::Ecosystem::EnvironmentType enum ordinal */
+  environmentType: number
+  environmentName: string
   temperature: number
-  humidity: number
-  precipitation: number
-  windSpeed: number
-  sunlightIntensity: number
-}
-
-export interface WorldResources {
   primaryProducers: number
-  smallPrey: number
-  waterQuality: number
-  shelter: number
-}
-
-export interface WorldPressures {
   predationPressure: number
   competitionIntensity: number
-  resourceScarcity: number
   climaticStress: number
+  /** Real count of living organisms currently in this cell. */
+  population: number
 }
 
-export interface WorldInfo {
-  primaryEnvironment: string
-  description: string
-  climate: WorldClimate
-  resources: WorldResources
-  pressures: WorldPressures
-  carryingCapacity: number
-}
-
-export interface WorldResult {
+export interface RegionsResult {
   status: 'success' | 'error'
-  action: 'world_data'
-  world: WorldInfo
+  gridWidth: number
+  gridHeight: number
+  regions: RegionInfo[]
+  error?: string
+}
+
+// === individuals command -> latestData.individuals ===
+
+export interface IndividualInfo {
+  id: number
+  species: string
+  x: number
+  y: number
+  energy: number
+  age: number
+}
+
+export interface IndividualsResult {
+  status: 'success' | 'error'
+  individuals: IndividualInfo[]
+  error?: string
+}
+
+// === lineages command -> latestData.lineages ===
+
+export interface SpeciationEventInfo {
+  parentSpecies: string
+  newSpecies: string
   generation: number
-  timestamp: number
-  error?: string
+  geneticDistanceAtSplit: number
 }
 
-// === /api/serina/status/:id -> latestData.genetics ===
-
-export interface GeneticsSpecies {
-  name: string
-  geneticDiversity: number
-  averageFitness: number
-  generationsSinceLastInnovation: number
-}
-
-export interface GeneticsResult {
+export interface LineagesResult {
   status: 'success' | 'error'
-  action: 'genetics'
-  genetic_diversity: {
-    overall_diversity: number
-    average_fitness: number
-    species_count: number
-  }
-  species: GeneticsSpecies[]
-  timestamp: number
+  lineages: LineageStatus[]
+  speciationEvents: SpeciationEventInfo[]
   error?: string
 }
 
-/** Emitted at every real simulation tick (see SimulationEngine.tick()). */
+/** Emitted at every real poll of the daemon (see SimulationEngine.pull()). */
 export interface SimulationTick {
   timestamp: number
   status: StatusResult
-  world: WorldResult
-  genetics: GeneticsResult
+  regions: RegionsResult
+  individuals: IndividualsResult
+  lineages: LineagesResult
 }
 
 // === Simulation lifecycle (api/routes/serina.js) ===

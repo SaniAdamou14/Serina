@@ -19,7 +19,7 @@ export function SimulationDashboard() {
     { id: 'species', label: 'Espèces', icon: '🐾' }
   ] as const
 
-  const ecosystem = simulationData?.status.ecosystem
+  const status = simulationData?.status
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -118,14 +118,13 @@ export function SimulationDashboard() {
       <footer className="bg-white border-t border-gray-200 px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between text-sm text-gray-500">
           <div className="flex items-center space-x-4">
-            <span>🕒 Génération : {ecosystem?.generation ?? 0}</span>
-            <span>👥 Population : {ecosystem?.total_population ?? 0}</span>
-            <span>🐾 Espèces : {ecosystem?.total_species ?? 0}</span>
+            <span>🕒 Génération : {status?.generation ?? 0}</span>
+            <span>👥 Population : {status?.population ?? 0}</span>
+            <span>🐾 Espèces : {status?.speciesCount ?? 0}</span>
             <span>🌍 Monde de Serina</span>
           </div>
           <div className="flex items-center space-x-4">
-            <span>🌱 Spéciations : {ecosystem?.total_speciations ?? 0}</span>
-            <span>💀 Extinctions : {ecosystem?.total_extinctions ?? 0}</span>
+            <span>🌱 Spéciations : {status?.speciationEventCount ?? 0}</span>
           </div>
         </div>
       </footer>

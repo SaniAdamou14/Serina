@@ -1,6 +1,12 @@
 import { useSimulation } from '@services/SimulationContext';
 import { useState, useEffect, useRef } from 'react';
-import { SpeciesStatus } from '../types';
+import { LineageStatus } from '../types';
+
+/** Population en dessous de laquelle une lignée est affichée comme
+ * critique -- un fait directement observé (le compte réel d'individus
+ * vivants), pas un score de risque calculé : UnifiedWorldSimulator ne
+ * modélise pas encore de risque d'extinction (voir CONTRIBUTING.md). */
+const CRITICAL_POPULATION_THRESHOLD = 5;
 
 interface TreeNode {
   id: string;
@@ -45,13 +51,13 @@ export function SpeciesEvolutionTree() {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
 
   useEffect(() => {
-    if (simulationData?.status.species) {
-      generateEvolutionTree(simulationData.status.species);
+    if (simulationData?.status.lineages) {
+      generateEvolutionTree(simulationData.status.lineages);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationData]);
 
-  const generateEvolutionTree = (species: SpeciesStatus[]) => {
+  const generateEvolutionTree = (lineages: LineageStatus[]) => {
     const tree: TreeNode[] = FOUNDER_LINEAGES.map((root) => ({
       id: root.id,
       name: root.name,
@@ -62,16 +68,16 @@ export function SpeciesEvolutionTree() {
       children: []
     }));
 
-    species.forEach((sp) => {
-      const parentId = getParentLineage(sp.name);
+    lineages.forEach((lineage) => {
+      const parentId = getParentLineage(lineage.speciesName);
       const parent = tree.find((p) => p.id === parentId);
       if (parent) {
         parent.children.push({
-          id: sp.name,
-          name: sp.name,
-          population: sp.population,
-          fitness: sp.fitness,
-          extinct: sp.extinctionRisk > 0.8,
+          id: lineage.speciesName,
+          name: lineage.speciesName,
+          population: lineage.population,
+          fitness: lineage.averageFitness,
+          extinct: lineage.population <= CRITICAL_POPULATION_THRESHOLD,
           isRoot: false,
           children: []
         });
@@ -171,14 +177,21 @@ export function SpeciesEvolutionTree() {
     return `${baseStory} Cette lignée a développé des adaptations spécialisées pour sa niche écologique.`;
   };
 
-  const ecosystem = simulationData?.status.ecosystem;
+  const status = simulationData?.status;
+  const regions = simulationData?.regions.regions ?? [];
+  const avgPredationPressure = regions.length
+    ? regions.reduce((sum, r) => sum + r.predationPressure, 0) / regions.length
+    : 0;
+  const avgTemperature = regions.length
+    ? regions.reduce((sum, r) => sum + r.temperature, 0) / regions.length
+    : 0;
 
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold">🌳 Arbre Évolutif de Serina</h3>
         <div className="text-sm text-gray-600">
-          Génération actuelle : {ecosystem?.generation ?? 0}
+          Génération actuelle : {status?.generation ?? 0}
         </div>
       </div>
 
@@ -220,7 +233,7 @@ export function SpeciesEvolutionTree() {
                     <div><strong>Fitness :</strong> {(selectedNode.fitness * 100).toFixed(0)}%</div>
                   </>
                 )}
-                <div><strong>Statut :</strong> {selectedNode.extinct ? '💀 En danger critique' : '✅ Active'}</div>
+                <div><strong>Statut :</strong> {selectedNode.extinct ? `⚠️ Population critique (≤ ${CRITICAL_POPULATION_THRESHOLD})` : '✅ Active'}</div>
               </div>
               <p className="text-xs text-amber-600 mt-2">{getEvolutionaryStory(selectedNode)}</p>
             </div>
@@ -231,19 +244,19 @@ export function SpeciesEvolutionTree() {
             <div className="space-y-1 text-sm text-green-700">
               <div>Lignées actives : {treeData.filter((t) => t.children.length > 0).length}</div>
               <div>Espèces totales : {treeData.reduce((sum, t) => sum + t.children.length, 0)}</div>
-              <div>Espèces en danger : {treeData.reduce((sum, t) => sum + t.children.filter((c) => c.extinct).length, 0)}</div>
-              <div>Biodiversité : {ecosystem?.biodiversity_index.toFixed(2) ?? 'N/A'}</div>
-              <div>Spéciations totales : {ecosystem?.total_speciations ?? 'N/A'}</div>
+              <div>Espèces en population critique : {treeData.reduce((sum, t) => sum + t.children.filter((c) => c.extinct).length, 0)}</div>
+              <div>Diversité génétique moyenne : {status && status.lineages.length
+                ? (status.lineages.reduce((sum, l) => sum + l.geneticDiversity, 0) / status.lineages.length).toFixed(2)
+                : 'N/A'}</div>
+              <div>Spéciations totales : {status?.speciationEventCount ?? 'N/A'}</div>
             </div>
           </div>
 
           <div className="bg-amber-50 p-3 rounded-lg">
-            <h4 className="font-semibold text-amber-800 mb-2">⚡ Pressions Sélectives</h4>
+            <h4 className="font-semibold text-amber-800 mb-2">⚡ Pressions Sélectives (moyenne sur toutes les régions)</h4>
             <div className="space-y-1 text-sm text-amber-700">
-              <div>Prédation : {((simulationData?.world.world.pressures.predationPressure ?? 0) * 100).toFixed(0)}%</div>
-              <div>Compétition : {((simulationData?.world.world.pressures.competitionIntensity ?? 0) * 100).toFixed(0)}%</div>
-              <div>Stress climatique : {((simulationData?.world.world.pressures.climaticStress ?? 0) * 100).toFixed(0)}%</div>
-              <div>Température : {simulationData?.world.world.climate.temperature.toFixed(1) ?? 'N/A'}°C</div>
+              <div>Prédation : {(avgPredationPressure * 100).toFixed(0)}%</div>
+              <div>Température : {avgTemperature.toFixed(1)}°C</div>
             </div>
           </div>
         </div>

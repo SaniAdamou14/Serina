@@ -158,3 +158,26 @@ confirming `evolveBrains()` is a real, non-inert (1+1)-ES and not a no-op.
 seeding, deterministic/replayable evaluation, structural evolution over
 generations, inheritance at speciation) pass, 185 assertions. Still *not*
 wired into `serina_cli`/the API/the frontend — that is Phase 9.
+
+## What Phase 9 delivers, specifically
+
+Everything above is now reachable from the web stack — through a new
+process, not the CLI. `serina_daemon` (`src/serina_daemon.cpp`,
+`include/Serina/DaemonProtocol.hpp`) keeps real `UnifiedWorldSimulator`
+instances alive in memory and steps them on its own scheduler thread; the
+Node API (`api/services/simulationEngine.js`, `daemonClient.js`) connects
+over a persistent TCP JSON-lines protocol instead of respawning
+`serina_cli` per command. Full contract in
+`docs/SERINA_DAEMON_PROTOCOL.md`. Three new read-only projections were
+added to `UnifiedWorldSimulator` to make this possible without exposing
+internal mutable state: `getRegionSnapshots()` (real per-cell biome +
+climate/resources/pressures + live population count),
+`getIndividualSnapshots()` (real per-organism id/position/energy/age), and
+`getBrainComplexity()`/`hasBrain()` (already existed from Phase 8, now
+surfaced over the wire). The frontend (`web/src/types/index.ts` and every
+component consuming simulation data) was retyped against this real schema
+and re-verified (`tsc`, `eslint`, `vite build`) — no fabricated field was
+carried over from the old schema; where the new engine doesn't yet model
+something the old one claimed to (extinction risk, a single ecosystem
+stability index), the UI was changed to show what's real instead of
+inventing an equivalent.
