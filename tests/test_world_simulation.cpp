@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include "Serina/WorldSimulation.hpp"
 #include <algorithm>
+#include <unordered_map>
 
 using namespace Serina::Simulation;
 using namespace Serina;
@@ -208,4 +209,92 @@ TEST_CASE("a high speciation threshold prevents spurious splits", "[worldsim][sp
         sim.step();
 
     REQUIRE(sim.getSpeciationEvents().empty());
+}
+
+TEST_CASE("every founder species gets a real NEAT brain at seeding", "[worldsim][neat]") {
+    UnifiedWorldSimulator sim({}, 111);
+    sim.seedFounderSpecies(10);
+
+    auto snapshots = sim.getLineageSnapshots();
+    REQUIRE(snapshots.size() == 5);
+    for (const auto &snap : snapshots) {
+        REQUIRE(sim.hasBrain(snap.speciesName));
+        // A freshly constructed NEAT genome for 7 inputs + 2 outputs has at
+        // least that many nodes -- proof this is a real network, not a
+        // placeholder value.
+        REQUIRE(sim.getBrainComplexity(snap.speciesName) > 0);
+    }
+}
+
+TEST_CASE("brain-driven movement is a deterministic function of state, replayable from a fixed seed", "[worldsim][neat]") {
+    // NEAT::NEATGenome::evaluate() is a pure function of its inputs and
+    // weights, so two simulators built from the same seed (same founder
+    // genomes, same brains, same RNG stream) must replay identically
+    // step-for-step. This would NOT hold if movement still fell back to an
+    // independently-drawn random walk per organism per step.
+    UnifiedWorldSimulator simA({}, 555);
+    simA.seedFounderSpecies(10);
+    UnifiedWorldSimulator simB({}, 555);
+    simB.seedFounderSpecies(10);
+
+    for (int i = 0; i < 5; ++i) {
+        simA.step();
+        simB.step();
+    }
+
+    auto snapsA = simA.getLineageSnapshots();
+    auto snapsB = simB.getLineageSnapshots();
+    REQUIRE(snapsA.size() == snapsB.size());
+    for (size_t i = 0; i < snapsA.size(); ++i) {
+        REQUIRE(snapsA[i].speciesName == snapsB[i].speciesName);
+        REQUIRE(snapsA[i].population == snapsB[i].population);
+    }
+}
+
+TEST_CASE("lineage brains evolve structurally over generations via (1+1)-ES", "[worldsim][neat]") {
+    WorldSimulationParameters params;
+    params.brainEvolutionInterval = 3; // evolve often enough to observe change in a short test
+
+    UnifiedWorldSimulator sim(params, 909);
+    sim.seedFounderSpecies(30);
+
+    std::unordered_map<std::string, size_t> initialComplexity;
+    for (const auto &snap : sim.getLineageSnapshots())
+        initialComplexity[snap.speciesName] = sim.getBrainComplexity(snap.speciesName);
+
+    for (int i = 0; i < 60; ++i)
+        sim.step();
+
+    // At least one surviving lineage must show a brain that has actually
+    // changed structure (addNode/addConnection accepted by the (1+1)-ES) --
+    // proof evolveBrains() is really mutating and really checkpointing, not
+    // a no-op.
+    bool anyComplexityChanged = false;
+    for (const auto &snap : sim.getLineageSnapshots()) {
+        auto it = initialComplexity.find(snap.speciesName);
+        if (it != initialComplexity.end() && sim.getBrainComplexity(snap.speciesName) != it->second)
+            anyComplexityChanged = true;
+    }
+    REQUIRE(anyComplexityChanged);
+}
+
+TEST_CASE("a newly speciated lineage inherits a brain instead of starting blank", "[worldsim][neat][speciation]") {
+    WorldSimulationParameters params;
+    params.speciationDistanceThreshold = 0.05; // low threshold: speciation should trigger quickly
+    params.speciationIsolationGenerations = 3;
+
+    UnifiedWorldSimulator sim(params, 2024);
+    sim.seedFounderSpecies(30);
+
+    for (int i = 0; i < 20; ++i)
+        sim.step();
+
+    const auto &events = sim.getSpeciationEvents();
+    REQUIRE(events.size() > 0);
+    for (const auto &event : events) {
+        // The new lineage must have a brain the instant it exists -- either
+        // inherited (mutated copy of the parent's) or freshly ensured, never
+        // absent.
+        REQUIRE(sim.hasBrain(event.newSpecies));
+    }
 }

@@ -15,7 +15,7 @@ Merci de votre intérêt ! Ce projet vise à construire un simulateur évolutif 
 | Adaptations / innovations évolutives | ✅ | Réellement acquises et persistées (vu en production : `lateral_line_enhancement`) |
 | Physique (collisions simples) | ✅ | Pas encore d'optimisation SIMD/partition spatiale (code existe dans `PerformanceOptimizations.hpp`, non branché) |
 | Spéciation / Extinction réelles | ✅ | `simulateSpeciation()`/`simulateExtinction()` appelées et comptées à chaque génération |
-| NEAT / IA comportementale | ❌ | Code réel (`NEAT.hpp`) mais jamais instancié — `AI::NEATEvolution` référencée n'existe pas |
+| NEAT / IA comportementale | ✅ (mouvement) | Un cerveau NEAT réel par lignée (`WorldSimulation.hpp`), pilote le mouvement, évolue par (1+1)-ES sur la fitness réellement mesurée — voir Phase 8. Pas encore branché sur `serina_cli`/le frontend |
 | API Node intégrée au core C++ | ✅ | Un seul moteur (`simulationEngine.js`), état persisté entre appels CLI |
 | Export / Import complet état simulation | Partiel | `World::toJson()` (mode simple) ; état écosystème persisté via `--state-file` JSON |
 | Tests unitaires structurés (framework) | ✅ | Catch2 v3, intégré à CTest (`ctest` depuis `build/`) |
@@ -74,7 +74,7 @@ Selon le moteur concerné (voir README §Architecture pour la distinction) :
 ## Roadmap Immédiate (Suggestions)
 
 - [x] Phase 7 — Moteur unifié (fondation) : `include/Serina/WorldSimulation.hpp` fusionne individus à génome diploïde réel (`PopulationManager.hpp`), grille spatiale procédurale (`Region.hpp`), taxonomie, interactions écologiques et contraintes biologiques par individu. Diversité génétique calculée depuis `AdvancedGenome::geneticDistance()` (plus de tirage aléatoire), spéciation qui émerge d'une divergence génétique mesurée et soutenue géographiquement. 17 tests Catch2. Voir `docs/UNIFIED_ENGINE_DESIGN.md`. **Pas encore branché sur `serina_cli`/l'API/le frontend — voir phases suivantes.**
-- [ ] Phase 8 — Mouvement piloté par NEAT (une lignée = un réseau, pas un individu, pour rester à l'échelle visée)
+- [x] Phase 8 — Mouvement piloté par NEAT : `include/Serina/WorldSimulation.hpp` donne à chaque lignée vivante un vrai génome NEAT (`NEAT.hpp`, un réseau par espèce, pas par individu), évalué à chaque tick contre 7 entrées sensorielles réelles (énergie, ressources locale + 4 voisines, pression de prédation). Le cerveau évolue par ES (1+1) sur la fitness réellement mesurée de la lignée, hérité (muté, pas random) à la spéciation. Run de vérification (30 fondateurs, 80 générations) : population 150→182, 17 espèces émergentes, complexité de cerveau qui augmente réellement pour plusieurs lignées (23→26→29) via mutations structurelles acceptées. 4 nouveaux tests Catch2 (13 au total, 185 assertions). Voir `docs/UNIFIED_ENGINE_DESIGN.md`. **Toujours pas branché sur `serina_cli`/le frontend — Phase 9.**
 - [ ] Phase 9 — Nouveau contrat `serina_cli`/API exposant régions + individus + arbre de lignées réel (remplace `SerinaEcosystemSimulator`, aujourd'hui backend du CLI, par `UnifiedWorldSimulator`)
 - [ ] Phase 10 — Interface façon RimWorld : carte de régions 2D, panneaux d'inspection, écrans de paramétrage réels
 - [ ] Étendre la CI à Windows/MSVC (actuellement Linux/GCC uniquement)

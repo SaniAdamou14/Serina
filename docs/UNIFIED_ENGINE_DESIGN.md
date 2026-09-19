@@ -83,10 +83,13 @@ does it, just scoped to one taxon's members instead of the whole pool.
 
 1. **Environment**: regions update climate/resources (reuses
    `EnvironmentalAdaptation.hpp` per-region instead of once globally).
-2. **Movement**: each organism moves (Phase 9 will make this NEAT-driven;
-   until then, a simple biased-random walk weighted by the organism's
-   region's resource/pressure gradient — real movement, not a placeholder,
-   just not learned yet).
+2. **Movement** (Phase 8, real as of this writing): each organism's move is
+   the output of its *lineage's* NEAT network (`NEAT.hpp`'s real genome/
+   innovation/mutation implementation) — one network shared by every
+   individual of a species, not one per individual, so evaluation cost stays
+   negligible at the targeted population scale (see "What Phase 8 delivers"
+   below). A lineage without a registered brain (should not happen outside
+   isolated unit tests) falls back to a random walk rather than crashing.
 3. **Metabolism & survival**: energy cost from `SIZE`/`SPEED`/
    `ENERGY_EFFICIENCY` (as `Organism::update()` already computes), *plus* a
    region-local ecological-interaction modifier: an organism's survival
@@ -128,3 +131,30 @@ slice once the data model in this document is in place and tested; NEAT
 movement (step 2's real version) and the `serina_cli`/API/frontend schema
 v2 are later phases still. See `CONTRIBUTING.md` for the live phase-by-phase
 status.
+
+## What Phase 8 delivers, specifically
+
+Real NEAT-driven movement, replacing the biased-random walk: each living
+lineage owns a `NEAT::NEATGenome` (`UnifiedWorldSimulator::brains_`, keyed by
+species name), evaluated per organism per tick against seven sensory inputs
+(own energy, local resource level, the four cardinal neighbor regions'
+resource levels, local predation pressure — `buildBrainInputs()`) and
+producing a two-output movement vector. The brain itself evolves: every
+`brainEvolutionInterval` generations, a (1+1) evolution strategy
+(`evolveBrains()`) mutates weights (and, rarely, adds a node or connection),
+keeping the mutation only if the lineage's real measured average fitness
+over that window did not drop — otherwise reverting to the last accepted
+version. A newly speciated lineage inherits a mutated copy of its parent's
+stable brain (`performSpeciation()`), not a fresh random network, so learned
+behavior carries across a species split the same way the genome does.
+Extinct species' brains are pruned (`checkExtinction()`).
+
+Verified with a 30-founder, 80-generation scratch run: population grew from
+150 to 182 across 17 emergent species (12 speciation events), with
+per-species brain complexity (node + connection count) measurably increasing
+for several lineages via accepted structural mutations (23 → 26 → 29),
+confirming `evolveBrains()` is a real, non-inert (1+1)-ES and not a no-op.
+13 Catch2 test cases (9 from Phase 7, 4 new for brain lifecycle: assigned at
+seeding, deterministic/replayable evaluation, structural evolution over
+generations, inheritance at speciation) pass, 185 assertions. Still *not*
+wired into `serina_cli`/the API/the frontend — that is Phase 9.

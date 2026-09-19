@@ -13,6 +13,7 @@
 #include "EcologicalInteractions.hpp"
 #include "EvolutionaryConstraints.hpp"
 #include "EnvironmentalAdaptation.hpp"
+#include "NEAT.hpp"
 
 #include <vector>
 #include <unordered_map>
@@ -21,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <array>
 
 namespace Serina::Simulation
 {
@@ -48,6 +50,23 @@ namespace Serina::Simulation
         double geneticDistanceAtSplit;
     };
 
+    /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
+    /// tous ses individus (pas un par individu — voir
+    /// docs/UNIFIED_ENGINE_DESIGN.md, "échelle cible"), piloté par
+    /// évolution (1+1) : `brain` est le candidat actuellement à l'essai,
+    /// `stableBrain` la dernière version dont la fitness mesurée de la
+    /// lignée a confirmé qu'elle n'était pas pire.
+    struct LineageBrain
+    {
+        NEAT::NEATGenome brain;
+        NEAT::NEATGenome stableBrain;
+        double fitnessAtCheckpoint = 0.0;
+        bool hasCheckpoint = false;
+
+        LineageBrain(NEAT::NEATGenome initial)
+            : brain(initial), stableBrain(std::move(initial)) {}
+    };
+
     struct WorldSimulationParameters
     {
         int gridWidth = 12;
@@ -70,6 +89,19 @@ namespace Serina::Simulation
         uint32_t speciationIsolationGenerations = 10;
 
         uint32_t maxAttemptsPerConstraintRetry = 3;
+
+        /// Nombre d'entrées/sorties du cerveau NEAT de chaque lignée : voir
+        /// buildBrainInputs()/applyBrainOutputs() pour ce qu'elles
+        /// signifient concrètement.
+        static constexpr uint32_t brainInputCount = 7;
+        static constexpr uint32_t brainOutputCount = 2;
+
+        /// Tous les combien de générations un cerveau de lignée est
+        /// réévalué : sa fitness mesurée sur la fenêtre écoulée décide si
+        /// la mutation à l'essai est gardée ou annulée (évolution (1+1)).
+        uint32_t brainEvolutionInterval = 8;
+
+        NEAT::NEATConfig neat{};
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -111,6 +143,7 @@ namespace Serina::Simulation
             for (const auto &founder : founders)
             {
                 biologicalTypeOf_[founder.commonName] = founder.type;
+                ensureBrain(founder.commonName);
 
                 auto candidateRegions = grid_.regionsOfType(founder.preferredBiome);
                 if (candidateRegions.empty())
@@ -143,6 +176,9 @@ namespace Serina::Simulation
             reproduce();
             checkSpeciation();
             checkExtinction();
+
+            if (generation_ % params_.brainEvolutionInterval == 0)
+                evolveBrains();
         }
 
         uint32_t getGeneration() const { return generation_; }
@@ -157,6 +193,17 @@ namespace Serina::Simulation
             return buildSnapshots();
         }
 
+        bool hasBrain(const std::string &species) const { return brains_.find(species) != brains_.end(); }
+
+        /// @brief Nombre de nœuds + connexions du cerveau stable d'une
+        /// lignée — utile pour vérifier qu'une mutation structurelle
+        /// (addNode/addConnection) a bien eu lieu au fil des générations.
+        size_t getBrainComplexity(const std::string &species) const
+        {
+            auto it = brains_.find(species);
+            return it != brains_.end() ? it->second.stableBrain.getComplexity() : 0;
+        }
+
     private:
         WorldSimulationParameters params_;
         Spatial::RegionGrid grid_;
@@ -168,6 +215,7 @@ namespace Serina::Simulation
         std::vector<Evolution::Organism> population_;
         std::unordered_map<std::string, Taxonomy::BiologicalType> biologicalTypeOf_;
         std::unordered_map<std::string, uint32_t> divergentStreak_; ///< par espèce
+        std::unordered_map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
 
         uint32_t generation_ = 0;
@@ -187,17 +235,81 @@ namespace Serina::Simulation
             organism.setPosition(gx * params_.cellSize + jitter(rng_), gy * params_.cellSize + jitter(rng_));
         }
 
+        /// @brief Déplace chaque organisme selon la décision de sa lignée :
+        /// le cerveau NEAT de son espèce évalue son environnement local
+        /// (énergie, ressources alentour, pression de prédation) et sort
+        /// une direction. Un individu sans cerveau enregistré (ne devrait
+        /// pas arriver hors tests unitaires isolés) se rabat sur une
+        /// marche aléatoire plutôt que de planter.
         void moveOrganisms()
         {
-            std::uniform_real_distribution<double> step(-params_.cellSize * 0.5, params_.cellSize * 0.5);
+            std::uniform_real_distribution<double> fallback(-params_.cellSize * 0.5, params_.cellSize * 0.5);
+
             for (auto &organism : population_)
             {
                 if (!organism.isAlive())
                     continue;
-                double nx = std::clamp(organism.getX() + step(rng_), 0.0, worldWidth() - 1e-6);
-                double ny = std::clamp(organism.getY() + step(rng_), 0.0, worldHeight() - 1e-6);
+
+                double dx, dy;
+                auto brainIt = brains_.find(organism.getSpecies());
+                if (brainIt != brains_.end())
+                {
+                    auto inputs = buildBrainInputs(organism);
+                    auto outputs = brainIt->second.brain.evaluate(inputs);
+                    // Les neurones de sortie de NEATGenome utilisent
+                    // l'activation SIGMOID par défaut (image [0,1]) ; on
+                    // remet à l'échelle [-1,1] nous-mêmes plutôt que de
+                    // modifier NEAT.hpp pour un besoin propre à cet appelant.
+                    double moveX = outputs[0] * 2.0 - 1.0;
+                    double moveY = outputs[1] * 2.0 - 1.0;
+                    double speed = organism.getGenome().getTrait(Genetics::TraitType::SPEED);
+                    dx = moveX * params_.cellSize * speed;
+                    dy = moveY * params_.cellSize * speed;
+                }
+                else
+                {
+                    dx = fallback(rng_);
+                    dy = fallback(rng_);
+                }
+
+                double nx = std::clamp(organism.getX() + dx, 0.0, worldWidth() - 1e-6);
+                double ny = std::clamp(organism.getY() + dy, 0.0, worldHeight() - 1e-6);
                 organism.setPosition(nx, ny);
             }
+        }
+
+        /// @brief Construit les entrées sensorielles d'un organisme pour
+        /// son cerveau de lignée : énergie propre, ressources locales et
+        /// des quatre régions voisines (le signal dont le réseau a besoin
+        /// pour apprendre "aller vers plus de ressources"), pression de
+        /// prédation locale. Toutes normalisées dans [0,1].
+        std::vector<double> buildBrainInputs(const Evolution::Organism &organism) const
+        {
+            auto [gx, gy] = regionOf(organism);
+            const auto *localEnv = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
+            double localResource = localEnv ? localEnv->resources.primaryProducers : 0.5;
+            double localPredation = localEnv ? localEnv->pressures.predationPressure : 0.3;
+
+            // N, S, E, W — retombe sur la ressource locale (gradient nul)
+            // si la région est en bord de carte.
+            std::array<double, 4> neighborResources = {localResource, localResource, localResource, localResource};
+            const std::array<std::pair<int, int>, 4> offsets = {{{0, -1}, {0, 1}, {1, 0}, {-1, 0}}};
+            for (size_t i = 0; i < offsets.size(); ++i)
+            {
+                int nx = gx + offsets[i].first;
+                int ny = gy + offsets[i].second;
+                if (nx < 0 || nx >= grid_.getWidth() || ny < 0 || ny >= grid_.getHeight())
+                    continue;
+                const auto *neighborEnv = environments_.getEnvironment(grid_.at(nx, ny).environmentType);
+                if (neighborEnv)
+                    neighborResources[i] = neighborEnv->resources.primaryProducers;
+            }
+
+            return {
+                std::clamp(organism.getEnergy() / 200.0, 0.0, 1.0),
+                localResource,
+                neighborResources[0], neighborResources[1], neighborResources[2], neighborResources[3],
+                localPredation};
         }
 
         void applySurvivalAndInteractions()
@@ -394,17 +506,96 @@ namespace Serina::Simulation
 
             interactions_.evolveInteractions(parentSpecies, newName);
 
+            // Le comportement diverge en même temps que le génome : la
+            // nouvelle lignée hérite du cerveau (stable, éprouvé) du
+            // parent, puis mute — pas un cerveau neuf au hasard.
+            auto parentBrainIt = brains_.find(parentSpecies);
+            if (parentBrainIt != brains_.end())
+            {
+                LineageBrain newBrain(parentBrainIt->second.stableBrain);
+                newBrain.brain.mutateWeights(params_.neat);
+                brains_.emplace(newName, std::move(newBrain));
+            }
+            else
+            {
+                ensureBrain(newName);
+            }
+
             speciationEvents_.push_back({parentSpecies, newName, generation_, distance});
         }
 
         void checkExtinction()
         {
             auto counts = populationCountsBySpecies();
-            for (const auto &[species, count] : counts)
+            for (auto it = brains_.begin(); it != brains_.end();)
             {
-                if (count > 0)
-                    continue;
-                divergentStreak_.erase(species);
+                if (counts.find(it->first) == counts.end())
+                {
+                    divergentStreak_.erase(it->first);
+                    it = brains_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
+        void ensureBrain(const std::string &species)
+        {
+            if (brains_.find(species) != brains_.end())
+                return;
+            NEAT::NEATGenome genome(WorldSimulationParameters::brainInputCount,
+                                     WorldSimulationParameters::brainOutputCount,
+                                     static_cast<uint32_t>(rng_()));
+            brains_.emplace(species, LineageBrain(std::move(genome)));
+        }
+
+        /// @brief Réévalue chaque cerveau de lignée tous les
+        /// params_.brainEvolutionInterval générations : une évolution
+        /// (1+1) sur le génome NEAT, avec la fitness réellement mesurée de
+        /// la lignée comme seul juge. Le candidat à l'essai (`brain`) est
+        /// gardé s'il n'a pas fait baisser la fitness depuis le dernier
+        /// point de contrôle, sinon on revient à la dernière version
+        /// stable — puis un nouveau candidat est proposé pour la fenêtre
+        /// suivante.
+        void evolveBrains()
+        {
+            auto snapshots = buildSnapshots();
+            std::unordered_map<std::string, double> fitnessBySpecies;
+            for (const auto &snap : snapshots)
+                fitnessBySpecies[snap.speciesName] = snap.averageFitness;
+
+            std::uniform_real_distribution<double> chance(0.0, 1.0);
+
+            for (auto &[species, lineageBrain] : brains_)
+            {
+                auto fitnessIt = fitnessBySpecies.find(species);
+                if (fitnessIt == fitnessBySpecies.end())
+                    continue; // espèce sans individus ce tour-ci (rare, entre reproduce() et le prochain step)
+                double currentFitness = fitnessIt->second;
+
+                if (lineageBrain.hasCheckpoint && currentFitness < lineageBrain.fitnessAtCheckpoint)
+                {
+                    // Le candidat a fait moins bien : on revient à la version stable.
+                    lineageBrain.brain = lineageBrain.stableBrain;
+                }
+                else
+                {
+                    // Le candidat a tenu (ou amélioré) la fitness : il devient la nouvelle référence.
+                    lineageBrain.stableBrain = lineageBrain.brain;
+                }
+
+                lineageBrain.fitnessAtCheckpoint = currentFitness;
+                lineageBrain.hasCheckpoint = true;
+
+                // Nouveau candidat pour la prochaine fenêtre : toujours une
+                // perturbation de poids, rarement un changement structurel.
+                lineageBrain.brain.mutateWeights(params_.neat);
+                if (chance(rng_) < 0.05)
+                    lineageBrain.brain.addConnection(params_.neat);
+                if (chance(rng_) < 0.03)
+                    lineageBrain.brain.addNode(params_.neat);
             }
         }
 
