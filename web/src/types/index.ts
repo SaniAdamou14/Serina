@@ -58,6 +58,8 @@ export interface RegionsResult {
   status: 'success' | 'error'
   gridWidth: number
   gridHeight: number
+  /** Continuous world units per grid cell -- multiply by gridWidth/gridHeight for the world's real size in the same units individuals' x/y use. */
+  cellSize: number
   regions: RegionInfo[]
   error?: string
 }

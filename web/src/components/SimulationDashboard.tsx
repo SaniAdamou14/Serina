@@ -6,13 +6,15 @@ import { EnvironmentView } from './EnvironmentView'
 import { SpeciesPanel } from './SpeciesPanel'
 import { EngineStatus } from './PerformanceMetrics'
 import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
+import { WorldMap } from './WorldMap'
 import { useSimulation } from '@services/SimulationContext'
 
 export function SimulationDashboard() {
   const { simulationData, isConnected, isRunning } = useSimulation()
-  const [activeTab, setActiveTab] = useState<'overview' | 'genetics' | 'evolution' | 'species'>('overview')
+  const [activeTab, setActiveTab] = useState<'map' | 'overview' | 'genetics' | 'evolution' | 'species'>('map')
 
   const tabs = [
+    { id: 'map', label: 'Carte', icon: '🗺️' },
     { id: 'overview', label: 'Vue d\'ensemble', icon: '📊' },
     { id: 'evolution', label: 'Arbre Évolutif', icon: '🌳' },
     { id: 'genetics', label: 'Génétique', icon: '🧬' },
@@ -83,6 +85,12 @@ export function SimulationDashboard() {
 
           {/* Dynamic Content Based on Active Tab */}
           <div className="lg:col-span-3">
+            {activeTab === 'map' && (
+              <div className="space-y-6">
+                <WorldMap />
+              </div>
+            )}
+
             {activeTab === 'overview' && (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

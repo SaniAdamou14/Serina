@@ -150,17 +150,23 @@ class SimulationEngine extends EventEmitter {
     }
 
     const founderCount = options.initialSpecies || 40;
-    const createResult = await this.client.send('create', simulationId, { founderCount });
+    const createArgs = { founderCount };
+    if (options.seed !== undefined && options.seed !== null && options.seed !== '') {
+      createArgs.seed = Number(options.seed);
+    }
+    const createResult = await this.client.send('create', simulationId, createArgs);
     if (createResult.status !== 'success') {
       throw new Error(createResult.error || 'serina_daemon create failed');
     }
 
-    await this.client.send('play', simulationId, { ticksPerSecond: DEFAULT_TICKS_PER_SECOND });
+    const ticksPerSecond = options.ticksPerSecond || DEFAULT_TICKS_PER_SECOND;
+    await this.client.send('play', simulationId, { ticksPerSecond });
 
     const instance = {
       id: simulationId,
       startTime: new Date(),
       isRunning: true,
+      ticksPerSecond,
       pollInterval: null,
       lastData: null
     };
@@ -278,7 +284,7 @@ class SimulationEngine extends EventEmitter {
     if (instance.isRunning) return { success: true };
 
     instance.isRunning = true;
-    this.client.send('play', simulationId, { ticksPerSecond: DEFAULT_TICKS_PER_SECOND }).catch((err) => {
+    this.client.send('play', simulationId, { ticksPerSecond: instance.ticksPerSecond || DEFAULT_TICKS_PER_SECOND }).catch((err) => {
       console.error(`Failed to resume simulation ${simulationId}:`, err.message);
     });
 
@@ -288,6 +294,27 @@ class SimulationEngine extends EventEmitter {
 
     this.emit('resumed', { simulationId });
     return { success: true };
+  }
+
+  /**
+   * Change le rythme réel d'avancement (ticksPerSecond) de la simulation en
+   * cours. S'applique immédiatement si elle tourne ; sinon, mémorisé pour le
+   * prochain `resume`.
+   */
+  setSpeed(simulationId, ticksPerSecond) {
+    const instance = this.simulations.get(simulationId);
+    if (!instance) return { success: false, error: `Simulation ${simulationId} not found` };
+
+    const rate = Math.max(1, Number(ticksPerSecond) || DEFAULT_TICKS_PER_SECOND);
+    instance.ticksPerSecond = rate;
+
+    if (instance.isRunning) {
+      this.client.send('play', simulationId, { ticksPerSecond: rate }).catch((err) => {
+        console.error(`Failed to change speed for simulation ${simulationId}:`, err.message);
+      });
+    }
+
+    return { success: true, ticksPerSecond: rate };
   }
 
   async stopSimulation(simulationId) {

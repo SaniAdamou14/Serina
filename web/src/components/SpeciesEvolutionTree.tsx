@@ -1,6 +1,6 @@
 import { useSimulation } from '@services/SimulationContext';
 import { useState, useEffect, useRef } from 'react';
-import { LineageStatus } from '../types';
+import { LineageStatus, SpeciationEventInfo } from '../types';
 
 /** Population en dessous de laquelle une lignée est affichée comme
  * critique -- un fait directement observé (le compte réel d'individus
@@ -9,39 +9,73 @@ import { LineageStatus } from '../types';
 const CRITICAL_POPULATION_THRESHOLD = 5;
 
 interface TreeNode {
-  id: string;
   name: string;
   population: number;
   fitness: number;
   extinct: boolean;
   isRoot: boolean;
+  /** Distance génétique réelle mesurée au moment de la scission (absente pour une racine fondatrice). */
+  splitGeneration?: number;
+  splitDistance?: number;
   children: TreeNode[];
 }
 
-const FOUNDER_LINEAGES = [
-  { id: 'canary_root', name: 'Canari ancestral' },
-  { id: 'fish_root', name: 'Poissons tropicaux' },
-  { id: 'cricket_root', name: 'Grillons' },
-  { id: 'ant_root', name: 'Fourmis de feu' },
-  { id: 'snail_root', name: 'Escargots géants' }
-];
-
-const LINEAGE_STORIES: Record<string, string> = {
-  canary_root: 'Les canaris, seuls oiseaux de Serina, ont évolué pour occuper toutes les niches écologiques aviaires.',
-  fish_root: 'Poissons tropicaux diversifiés dans les eaux douces et salées de Serina.',
-  cricket_root: 'Grillons adaptés aux environnements terrestres, base de nombreuses chaînes alimentaires.',
-  ant_root: 'Fourmis de feu développant des sociétés complexes et colonisant tous les habitats.',
-  snail_root: 'Escargots géants évoluant vers des formes terrestres et aquatiques variées.'
+const FOUNDER_STORIES: Record<string, string> = {
+  'Serinus canaria': 'Les canaris, seuls oiseaux de Serina, ont évolué pour occuper toutes les niches écologiques aviaires.',
+  'Xiphophorus hellerii': 'Porte-épées et guppys, diversifiés dans les eaux douces et salées de Serina.',
+  'Gryllus seriensis': 'Grillons adaptés aux environnements terrestres, base de nombreuses chaînes alimentaires.',
+  'Solenopsis invicta': 'Fourmis de feu développant des sociétés complexes et colonisant tous les habitats.',
+  'Achatina fulica': 'Escargots géants évoluant vers des formes terrestres et aquatiques variées.'
 };
 
-function getParentLineage(speciesName: string): string {
-  const name = speciesName.toLowerCase();
-  if (name.includes('canaria') || name.includes('bird') || name.includes('oiseau')) return 'canary_root';
-  if (name.includes('xiphophorus') || name.includes('poecilia') || name.includes('fish') || name.includes('poisson')) return 'fish_root';
-  if (name.includes('gryllus') || name.includes('cricket') || name.includes('grillon')) return 'cricket_root';
-  if (name.includes('solenopsis') || name.includes('ant') || name.includes('fourmi')) return 'ant_root';
-  if (name.includes('achatina') || name.includes('snail') || name.includes('escargot')) return 'snail_root';
-  return 'canary_root';
+/**
+ * Construit le vrai arbre phylogénétique depuis l'historique réel des
+ * spéciations (`speciationEvents` : parentSpecies -> newSpecies, avec la
+ * génération et la distance génétique mesurée à la scission) au lieu de
+ * deviner la filiation par correspondance de préfixe de nom. Les racines
+ * sont les espèces qui n'apparaissent jamais comme `newSpecies` -- les
+ * cinq fondatrices, sans les coder en dur.
+ */
+function buildRealTree(lineages: LineageStatus[], events: SpeciationEventInfo[]): TreeNode[] {
+  const byName = new Map<string, LineageStatus>(lineages.map((l) => [l.speciesName, l]));
+  const childrenOf = new Map<string, SpeciationEventInfo[]>();
+  const hasParent = new Set<string>();
+
+  events.forEach((event) => {
+    if (!childrenOf.has(event.parentSpecies)) childrenOf.set(event.parentSpecies, []);
+    childrenOf.get(event.parentSpecies)!.push(event);
+    hasParent.add(event.newSpecies);
+  });
+
+  const toNode = (name: string, splitEvent?: SpeciationEventInfo): TreeNode => {
+    const lineage = byName.get(name);
+    const children = (childrenOf.get(name) ?? []).map((event) => toNode(event.newSpecies, event));
+    return {
+      name,
+      population: lineage?.population ?? 0,
+      fitness: lineage?.averageFitness ?? 0,
+      extinct: lineage ? lineage.population <= CRITICAL_POPULATION_THRESHOLD : true,
+      isRoot: !splitEvent,
+      splitGeneration: splitEvent?.generation,
+      splitDistance: splitEvent?.geneticDistanceAtSplit,
+      children
+    };
+  };
+
+  // Racines : toute espèce vivante ou ayant existé (apparaît côté parent ou
+  // encore vivante) qui n'a jamais été le résultat d'une scission.
+  const allKnownNames = new Set<string>([...byName.keys(), ...events.map((e) => e.parentSpecies)]);
+  const roots = Array.from(allKnownNames).filter((name) => !hasParent.has(name));
+  return roots.map((name) => toNode(name));
+}
+
+function countDescendants(node: TreeNode): number {
+  return node.children.reduce((sum, child) => sum + 1 + countDescendants(child), 0);
+}
+
+function countCritical(node: TreeNode): number {
+  const self = node.isRoot ? 0 : node.extinct ? 1 : 0;
+  return node.children.reduce((sum, child) => sum + countCritical(child), self);
 }
 
 export function SpeciesEvolutionTree() {
@@ -51,42 +85,13 @@ export function SpeciesEvolutionTree() {
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
 
   useEffect(() => {
-    if (simulationData?.status.lineages) {
-      generateEvolutionTree(simulationData.status.lineages);
+    if (simulationData?.status.lineages && simulationData.lineages.speciationEvents) {
+      const tree = buildRealTree(simulationData.status.lineages, simulationData.lineages.speciationEvents);
+      setTreeData(tree);
+      drawTree(tree);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationData]);
-
-  const generateEvolutionTree = (lineages: LineageStatus[]) => {
-    const tree: TreeNode[] = FOUNDER_LINEAGES.map((root) => ({
-      id: root.id,
-      name: root.name,
-      population: 0,
-      fitness: 0,
-      extinct: false,
-      isRoot: true,
-      children: []
-    }));
-
-    lineages.forEach((lineage) => {
-      const parentId = getParentLineage(lineage.speciesName);
-      const parent = tree.find((p) => p.id === parentId);
-      if (parent) {
-        parent.children.push({
-          id: lineage.speciesName,
-          name: lineage.speciesName,
-          population: lineage.population,
-          fitness: lineage.averageFitness,
-          extinct: lineage.population <= CRITICAL_POPULATION_THRESHOLD,
-          isRoot: false,
-          children: []
-        });
-      }
-    });
-
-    setTreeData(tree);
-    drawTree(tree);
-  };
 
   const drawTree = (tree: TreeNode[]) => {
     const svg = svgRef.current;
@@ -94,46 +99,60 @@ export function SpeciesEvolutionTree() {
 
     svg.innerHTML = '';
 
-    const width = 800;
-    const height = 600;
-    const levelHeight = 120;
-    const nodeRadius = 25;
+    // Largeur proportionnelle au nombre de feuilles de chaque racine, pour
+    // que des arbres réellement plus ramifiés prennent plus de place.
+    const leafCounts = tree.map((root) => Math.max(1, countDescendants(root)));
+    const totalLeaves = leafCounts.reduce((a, b) => a + b, 0) || 1;
+    const width = Math.max(800, totalLeaves * 90);
+    const levelHeight = 100;
+    const nodeRadius = 22;
+
+    // Profondeur maximale réelle, pour dimensionner la hauteur du SVG plutôt
+    // que de couper un arbre à plusieurs niveaux de spéciations imbriquées.
+    const depthOf = (node: TreeNode): number =>
+      node.children.length ? 1 + Math.max(...node.children.map(depthOf)) : 0;
+    const maxDepth = Math.max(0, ...tree.map(depthOf));
+    const height = 100 + (maxDepth + 1) * levelHeight;
 
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.removeAttribute('width');
     svg.removeAttribute('height');
 
-    tree.forEach((root, index) => {
-      const rootX = (width / tree.length) * (index + 0.5);
-      const rootY = 80;
+    let cursor = 0;
+    const layout = (node: TreeNode, depth: number): number => {
+      const leaves = Math.max(1, countDescendants(node) || 1);
+      const slotWidth = (leaves / totalLeaves) * width;
+      const x = cursor + slotWidth / 2;
+      cursor += slotWidth;
+      const y = 60 + depth * levelHeight;
 
-      drawNode(svg, root, rootX, rootY);
-
-      root.children.forEach((child, childIndex) => {
-        const childX = rootX + (childIndex - (root.children.length - 1) / 2) * 100;
-        const childY = rootY + levelHeight;
-
-        drawConnection(svg, rootX, rootY + nodeRadius, childX, childY - nodeRadius);
-        drawNode(svg, child, childX, childY);
+      node.children.forEach((child) => {
+        const childX = layout(child, depth + 1);
+        drawConnection(svg, x, y + nodeRadius, childX, y + levelHeight - nodeRadius);
       });
-    });
+
+      drawNode(svg, node, x, y, nodeRadius);
+      return x;
+    };
+
+    tree.forEach((root) => layout(root, 0));
   };
 
-  const drawNode = (svg: SVGSVGElement, node: TreeNode, x: number, y: number) => {
+  const drawNode = (svg: SVGSVGElement, node: TreeNode, x: number, y: number, nodeRadius: number) => {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.style.cursor = 'pointer';
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', x.toString());
     circle.setAttribute('cy', y.toString());
-    circle.setAttribute('r', node.isRoot ? '30' : '25');
+    circle.setAttribute('r', (node.isRoot ? nodeRadius * 1.2 : nodeRadius).toString());
     circle.setAttribute('fill', node.extinct ? '#ef4444' : node.isRoot ? '#3b82f6' : '#10b981');
     circle.setAttribute('stroke', '#1f2937');
     circle.setAttribute('stroke-width', '2');
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', x.toString());
-    text.setAttribute('y', (y + 40).toString());
+    text.setAttribute('y', (y + nodeRadius + 14).toString());
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('font-size', '10');
     text.setAttribute('font-family', 'Arial');
@@ -146,7 +165,7 @@ export function SpeciesEvolutionTree() {
     if (!node.isRoot) {
       const popText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       popText.setAttribute('x', x.toString());
-      popText.setAttribute('y', (y + 52).toString());
+      popText.setAttribute('y', (y + nodeRadius + 26).toString());
       popText.setAttribute('text-anchor', 'middle');
       popText.setAttribute('font-size', '8');
       popText.setAttribute('font-family', 'Arial');
@@ -171,10 +190,10 @@ export function SpeciesEvolutionTree() {
   };
 
   const getEvolutionaryStory = (node: TreeNode): string => {
-    if (node.isRoot) return LINEAGE_STORIES[node.id] ?? 'Lignée fondatrice de Serina.';
-    const parentId = getParentLineage(node.name);
-    const baseStory = LINEAGE_STORIES[parentId] ?? 'Espèce évoluée unique de Serina.';
-    return `${baseStory} Cette lignée a développé des adaptations spécialisées pour sa niche écologique.`;
+    if (node.isRoot) return FOUNDER_STORIES[node.name] ?? 'Lignée fondatrice de Serina.';
+    return `Scission réelle observée à la génération ${node.splitGeneration} ` +
+      `(distance génétique mesurée : ${node.splitDistance?.toFixed(3)}). ` +
+      `Cette lignée a développé des adaptations spécialisées pour sa niche écologique.`;
   };
 
   const status = simulationData?.status;
@@ -242,9 +261,9 @@ export function SpeciesEvolutionTree() {
           <div className="bg-green-50 p-3 rounded-lg">
             <h4 className="font-semibold text-green-800 mb-2">📈 Statistiques Évolutives</h4>
             <div className="space-y-1 text-sm text-green-700">
-              <div>Lignées actives : {treeData.filter((t) => t.children.length > 0).length}</div>
-              <div>Espèces totales : {treeData.reduce((sum, t) => sum + t.children.length, 0)}</div>
-              <div>Espèces en population critique : {treeData.reduce((sum, t) => sum + t.children.filter((c) => c.extinct).length, 0)}</div>
+              <div>Lignées fondatrices : {treeData.length}</div>
+              <div>Espèces issues de spéciation : {treeData.reduce((sum, t) => sum + countDescendants(t), 0)}</div>
+              <div>Espèces en population critique : {treeData.reduce((sum, t) => sum + countCritical(t), 0)}</div>
               <div>Diversité génétique moyenne : {status && status.lineages.length
                 ? (status.lineages.reduce((sum, l) => sum + l.geneticDiversity, 0) / status.lineages.length).toFixed(2)
                 : 'N/A'}</div>
@@ -268,8 +287,9 @@ export function SpeciesEvolutionTree() {
           Il y a des millions d'années, cinq espèces terrestres ont été introduites sur Serina :
           des canaris, des poissons tropicaux (guppys et porte-épées), des grillons, des fourmis de feu,
           et des escargots géants d'Afrique. Ces lignées fondatrices ont évolué pour remplir
-          tous les rôles écologiques d'un écosystème complet, créant un monde unique où les oiseaux
-          règnent en maîtres et où chaque niche a été colonisée par leurs descendants spécialisés.
+          tous les rôles écologiques d'un écosystème complet. Chaque branche de l'arbre ci-dessus
+          correspond à un événement de spéciation réellement survenu pendant cette simulation, pas
+          à une histoire écrite à l'avance.
         </p>
       </div>
     </div>

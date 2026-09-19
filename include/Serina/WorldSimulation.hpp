@@ -217,6 +217,12 @@ namespace Serina::Simulation
         uint32_t getGeneration() const { return generation_; }
         size_t getPopulationCount() const { return population_.size(); }
         const Spatial::RegionGrid &getGrid() const { return grid_; }
+
+        /// @brief Unités continues par case de grille : le facteur dont un
+        /// consommateur externe (le daemon, un frontend) a besoin pour
+        /// replacer une position d'individu (continue) sur la grille de
+        /// régions (discrète) sans dupliquer cette constante.
+        double getCellSize() const { return params_.cellSize; }
         const std::vector<SpeciationEvent> &getSpeciationEvents() const { return speciationEvents_; }
 
         /// @brief Un instantané par espèce vivante, calculé depuis les

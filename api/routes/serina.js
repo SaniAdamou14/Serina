@@ -40,7 +40,9 @@ router.post('/start', async (req, res) => {
       simulationId: req.body.simulationId,
       name: req.body.name,
       worldSize: req.body.worldSize,
-      initialSpecies: req.body.initialSpecies
+      initialSpecies: req.body.initialSpecies,
+      seed: req.body.seed,
+      ticksPerSecond: req.body.ticksPerSecond
     });
 
     if (result.success) {
@@ -92,6 +94,21 @@ router.post('/resume/:simulationId', async (req, res) => {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
   const result = simulationEngine.resumeSimulation(req.params.simulationId);
+  res.status(result.success ? 200 : 404).json(result);
+});
+
+/**
+ * @swagger
+ * /api/serina/speed/{simulationId}:
+ *   post:
+ *     summary: Change le rythme réel d'avancement (ticks/seconde) d'une simulation
+ *     tags: [Serina]
+ */
+router.post('/speed/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = simulationEngine.setSpeed(req.params.simulationId, req.body.ticksPerSecond);
   res.status(result.success ? 200 : 404).json(result);
 });
 

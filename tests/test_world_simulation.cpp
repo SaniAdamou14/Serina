@@ -30,6 +30,27 @@ TEST_CASE("RegionGrid generates a coherent, non-uniform biome map", "[worldsim][
         REQUIRE(type != Ecosystem::EnvironmentType::URBAN);
 }
 
+TEST_CASE("every biome RegionGrid can generate has a real, non-null environment definition", "[worldsim][region]") {
+    // Region.hpp's Voronoi generator can assign any of these types to a
+    // cell; EnvironmentalAdaptation.hpp used to only define six of the
+    // nine, so a region landing on DESERT/ARCTIC/TROPICAL would silently
+    // get a null environment (zero-valued climate/resources/pressures on
+    // any real map). Guards against that regression.
+    static constexpr Ecosystem::EnvironmentType generatableBiomes[] = {
+        Ecosystem::EnvironmentType::GRASSLAND, Ecosystem::EnvironmentType::FOREST,
+        Ecosystem::EnvironmentType::FRESHWATER, Ecosystem::EnvironmentType::OCEAN,
+        Ecosystem::EnvironmentType::WETLAND, Ecosystem::EnvironmentType::MOUNTAIN,
+        Ecosystem::EnvironmentType::DESERT, Ecosystem::EnvironmentType::ARCTIC,
+        Ecosystem::EnvironmentType::TROPICAL};
+
+    Environment::SerinaEnvironmentManager environments(1);
+    for (const auto &biome : generatableBiomes) {
+        const auto *env = environments.getEnvironment(biome);
+        REQUIRE(env != nullptr);
+        REQUIRE_FALSE(env->name.empty());
+    }
+}
+
 TEST_CASE("positionToGrid maps continuous coordinates into grid bounds", "[worldsim][region]") {
     Spatial::RegionGrid grid(10, 10, 1);
     auto [gx, gy] = grid.positionToGrid(55.0, 55.0, 100.0, 100.0);

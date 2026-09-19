@@ -83,6 +83,7 @@ TEST_CASE("regions reports the real region grid, not a single global environment
     int width = response["gridWidth"];
     int height = response["gridHeight"];
     REQUIRE(response["regions"].size() == static_cast<size_t>(width * height));
+    REQUIRE(response["cellSize"] > 0.0);
 
     // A real Voronoi-generated grid must show more than one biome, exactly
     // like RegionGrid's own test -- this is the daemon's wire-format proof

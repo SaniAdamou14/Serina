@@ -2,6 +2,11 @@ import { useState } from 'react'
 import { useSimulation } from '@services/SimulationContext'
 import { SimulationCommand } from '../types'
 
+const MIN_FOUNDER_COUNT = 5
+const MAX_FOUNDER_COUNT = 400
+const MIN_TICKS_PER_SECOND = 1
+const MAX_TICKS_PER_SECOND = 20
+
 export function SimulationControl() {
   const {
     isConnected,
@@ -12,19 +17,31 @@ export function SimulationControl() {
     sendCommand,
     startNewSimulation,
     stopCurrentSimulation,
+    setSpeed,
     connect,
     disconnect
   } = useSimulation()
   const [isStarting, setIsStarting] = useState(false)
+  const [founderCount, setFounderCount] = useState(40)
+  const [seedInput, setSeedInput] = useState('')
+  const [ticksPerSecond, setTicksPerSecond] = useState(4)
 
   const handleStartNew = async () => {
     try {
       setIsStarting(true)
-      await startNewSimulation()
+      const seed = seedInput.trim() === '' ? undefined : Number(seedInput.trim())
+      await startNewSimulation({ founderCount, seed, ticksPerSecond })
     } catch (error) {
       console.error('Failed to start simulation:', error)
     } finally {
       setIsStarting(false)
+    }
+  }
+
+  const handleSpeedChange = async (value: number) => {
+    setTicksPerSecond(value)
+    if (currentSimulationId) {
+      await setSpeed(value)
     }
   }
 
@@ -92,6 +109,69 @@ export function SimulationControl() {
         {currentSimulationId && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <p className="text-sm text-blue-600">ID : {currentSimulationId}</p>
+          </div>
+        )}
+
+        {!currentSimulationId && (
+          <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-md p-3">
+            <div>
+              <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+                <span>Individus par lignée fondatrice</span>
+                <span>{founderCount}</span>
+              </label>
+              <input
+                type="range"
+                min={MIN_FOUNDER_COUNT}
+                max={MAX_FOUNDER_COUNT}
+                value={founderCount}
+                onChange={(e) => setFounderCount(Number(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">5 lignées × {founderCount} = {founderCount * 5} individus au départ</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Graine (optionnel — pour rejouer une génération de carte identique)</label>
+              <input
+                type="number"
+                value={seedInput}
+                onChange={(e) => setSeedInput(e.target.value)}
+                placeholder="Aléatoire si vide"
+                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+              />
+            </div>
+
+            <div>
+              <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+                <span>Vitesse initiale</span>
+                <span>{ticksPerSecond} génération(s)/s</span>
+              </label>
+              <input
+                type="range"
+                min={MIN_TICKS_PER_SECOND}
+                max={MAX_TICKS_PER_SECOND}
+                value={ticksPerSecond}
+                onChange={(e) => setTicksPerSecond(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+          </div>
+        )}
+
+        {currentSimulationId && isRunning && (
+          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <span>Vitesse de la simulation</span>
+              <span>{ticksPerSecond} génération(s)/s</span>
+            </label>
+            <input
+              type="range"
+              min={MIN_TICKS_PER_SECOND}
+              max={MAX_TICKS_PER_SECOND}
+              value={ticksPerSecond}
+              onChange={(e) => handleSpeedChange(Number(e.target.value))}
+              className="w-full"
+            />
           </div>
         )}
 

@@ -11,8 +11,9 @@ interface SimulationContextType {
   currentSimulationId: SimulationId | null
   availableSimulations: SimulationSummary[]
   sendCommand: (command: SimulationCommand) => void
-  startNewSimulation: () => Promise<void>
+  startNewSimulation: (options?: { founderCount?: number; seed?: number; ticksPerSecond?: number }) => Promise<void>
   stopCurrentSimulation: () => Promise<void>
+  setSpeed: (ticksPerSecond: number) => Promise<void>
   connect: () => void
   disconnect: () => void
 }
@@ -102,10 +103,14 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     setSimulationData(null)
   }, [])
 
-  const startNewSimulation = useCallback(async () => {
+  const startNewSimulation = useCallback(async (options?: { founderCount?: number; seed?: number; ticksPerSecond?: number }) => {
     try {
       setConnectionError(null)
-      const response = await apiService.startSimulation()
+      const response = await apiService.startSimulation({
+        initialSpecies: options?.founderCount,
+        seed: options?.seed,
+        ticksPerSecond: options?.ticksPerSecond
+      })
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to start simulation')
@@ -142,6 +147,17 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       throw error
     }
   }, [currentSimulationId, refreshSimulationList])
+
+  const setSpeed = useCallback(async (ticksPerSecond: number) => {
+    if (!currentSimulationId) return
+    try {
+      await apiService.setSpeed(currentSimulationId, ticksPerSecond)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to change simulation speed:', message)
+      setConnectionError(`Erreur de changement de vitesse : ${message}`)
+    }
+  }, [currentSimulationId])
 
   const sendCommand = useCallback((command: SimulationCommand) => {
     const socket = socketRef.current
@@ -182,6 +198,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     sendCommand,
     startNewSimulation,
     stopCurrentSimulation,
+    setSpeed,
     connect,
     disconnect
   }

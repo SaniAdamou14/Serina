@@ -43,7 +43,14 @@ class ApiService {
 
   // === Simulation lifecycle (moteur C++ réel, voir api/routes/serina.js) ===
 
-  startSimulation(options: { simulationId?: SimulationId; name?: string; worldSize?: number; initialSpecies?: number } = {}) {
+  startSimulation(options: {
+    simulationId?: SimulationId
+    name?: string
+    worldSize?: number
+    initialSpecies?: number
+    seed?: number
+    ticksPerSecond?: number
+  } = {}) {
     return request<{ success: boolean; simulationId: SimulationId; message: string; error: string | null }>(
       '/api/serina/start',
       { method: 'POST', body: JSON.stringify(options) }
@@ -56,6 +63,13 @@ class ApiService {
 
   resumeSimulation(simulationId: SimulationId) {
     return request<{ success: boolean; error?: string }>(`/api/serina/resume/${simulationId}`, { method: 'POST' })
+  }
+
+  setSpeed(simulationId: SimulationId, ticksPerSecond: number) {
+    return request<{ success: boolean; ticksPerSecond?: number; error?: string }>(
+      `/api/serina/speed/${simulationId}`,
+      { method: 'POST', body: JSON.stringify({ ticksPerSecond }) }
+    )
   }
 
   stopSimulation(simulationId: SimulationId) {

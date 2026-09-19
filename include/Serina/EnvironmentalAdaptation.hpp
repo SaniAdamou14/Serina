@@ -253,6 +253,68 @@ namespace Serina::Environment
             mountain.annualVariation = 0.9;
             mountain.stochasticEvents = 0.4;
             environments_[Ecosystem::EnvironmentType::MOUNTAIN] = mountain;
+
+            // === DÉSERT ===
+            // Region.hpp's Voronoi biome generator can assign DESERT/ARCTIC/
+            // TROPICAL to a cell (they're in its kBiomes[] list), but until
+            // now none of the three had a real EnvironmentDefinition here --
+            // getEnvironment() silently returned nullptr for them, which
+            // would show as a blank, zero-valued region on any real map of
+            // the world. Filled in with the same rigor as the other six
+            // rather than left as a gap.
+            EnvironmentDefinition desert;
+            desert.type = Ecosystem::EnvironmentType::DESERT;
+            desert.name = "Déserts de Serina";
+            desert.description = "Étendues arides à forte amplitude thermique et rares points d'eau";
+            desert.climate = ClimateParameters(32.0, 0.15, 100.0, 0.5, 12.0, 0.95, 1.0, 0.0);
+            desert.resources = ResourceAvailability(0.2, 0.1, 0.15, 0.1, 0.5, 0.15, 0.3, 0.2);
+            desert.pressures = SelectivePressures(0.2, 0.5, 0.9, 0.8, 0.15, 0.3, 0.0);
+            desert.carryingCapacity = 1500.0;
+            desert.dietSpecificCapacity = {{Ecosystem::DietType::HERBIVORE, 0.3},
+                                          {Ecosystem::DietType::OMNIVORE, 0.4},
+                                          {Ecosystem::DietType::CARNIVORE, 0.3}};
+            desert.connectedEnvironments = {Ecosystem::EnvironmentType::GRASSLAND,
+                                           Ecosystem::EnvironmentType::MOUNTAIN};
+            desert.annualVariation = 0.6;
+            desert.stochasticEvents = 0.35;
+            environments_[Ecosystem::EnvironmentType::DESERT] = desert;
+
+            // === ARCTIQUE ===
+            EnvironmentDefinition arctic;
+            arctic.type = Ecosystem::EnvironmentType::ARCTIC;
+            arctic.name = "Régions arctiques de Serina";
+            arctic.description = "Étendues gelées aux ressources rares et au climat extrême";
+            arctic.climate = ClimateParameters(-15.0, 0.5, 250.0, 0.7, 18.0, 0.4, 0.9, 0.0);
+            arctic.resources = ResourceAvailability(0.15, 0.1, 0.3, 0.2, 0.4, 0.5, 0.2, 0.15);
+            arctic.pressures = SelectivePressures(0.3, 0.3, 0.7, 0.95, 0.1, 0.4, 0.0);
+            arctic.carryingCapacity = 1200.0;
+            arctic.dietSpecificCapacity = {{Ecosystem::DietType::CARNIVORE, 0.5},
+                                          {Ecosystem::DietType::OMNIVORE, 0.3},
+                                          {Ecosystem::DietType::FILTER_FEEDER, 0.2}};
+            arctic.connectedEnvironments = {Ecosystem::EnvironmentType::MOUNTAIN,
+                                           Ecosystem::EnvironmentType::OCEAN};
+            arctic.annualVariation = 0.5;
+            arctic.stochasticEvents = 0.3;
+            environments_[Ecosystem::EnvironmentType::ARCTIC] = arctic;
+
+            // === TROPICAL ===
+            EnvironmentDefinition tropical;
+            tropical.type = Ecosystem::EnvironmentType::TROPICAL;
+            tropical.name = "Forêts tropicales de Serina";
+            tropical.description = "Écosystèmes chauds et humides à très forte productivité biologique";
+            tropical.climate = ClimateParameters(27.0, 0.9, 2500.0, 0.2, 3.0, 0.75, 1.0, 0.0);
+            tropical.resources = ResourceAvailability(1.0, 0.9, 0.8, 0.5, 0.5, 0.9, 0.9, 0.9);
+            tropical.pressures = SelectivePressures(0.6, 0.8, 0.2, 0.15, 0.5, 0.2, 0.0);
+            tropical.carryingCapacity = 12000.0;
+            tropical.dietSpecificCapacity = {{Ecosystem::DietType::HERBIVORE, 0.4},
+                                            {Ecosystem::DietType::OMNIVORE, 0.4},
+                                            {Ecosystem::DietType::CARNIVORE, 0.2}};
+            tropical.connectedEnvironments = {Ecosystem::EnvironmentType::FOREST,
+                                             Ecosystem::EnvironmentType::WETLAND,
+                                             Ecosystem::EnvironmentType::OCEAN};
+            tropical.annualVariation = 0.2;
+            tropical.stochasticEvents = 0.25;
+            environments_[Ecosystem::EnvironmentType::TROPICAL] = tropical;
         }
 
         /// @brief Initialise le catalogue d'adaptations possibles

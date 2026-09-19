@@ -293,6 +293,7 @@ namespace Serina::Daemon
                 json r = successJson();
                 r["gridWidth"] = m.sim->getGrid().getWidth();
                 r["gridHeight"] = m.sim->getGrid().getHeight();
+                r["cellSize"] = m.sim->getCellSize();
                 r["regions"] = json::array();
                 for (const auto &region : m.sim->getRegionSnapshots())
                     r["regions"].push_back(regionToJson(region));
