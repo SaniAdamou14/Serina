@@ -1,13 +1,14 @@
-import { Map as MapIcon, BarChart3, GitBranch, Dna, PawPrint } from 'lucide-react'
+import { Map as MapIcon, BarChart3, GitBranch, Dna, PawPrint, LineChart } from 'lucide-react'
 
-export type DashboardTab = 'map' | 'overview' | 'genetics' | 'evolution' | 'species'
+export type DashboardTab = 'map' | 'overview' | 'genetics' | 'evolution' | 'species' | 'history'
 
 const TABS: { id: DashboardTab; label: string; icon: typeof MapIcon }[] = [
   { id: 'map', label: 'Carte', icon: MapIcon },
   { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
   { id: 'evolution', label: 'Évolution', icon: GitBranch },
   { id: 'genetics', label: 'Génétique', icon: Dna },
-  { id: 'species', label: 'Espèces', icon: PawPrint }
+  { id: 'species', label: 'Espèces', icon: PawPrint },
+  { id: 'history', label: 'Historique', icon: LineChart }
 ]
 
 /**

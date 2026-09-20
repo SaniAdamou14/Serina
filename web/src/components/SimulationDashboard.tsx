@@ -10,6 +10,7 @@ import { EnvironmentView } from './EnvironmentView'
 import { SpeciesPanel } from './SpeciesPanel'
 import { EngineStatus } from './PerformanceMetrics'
 import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
+import { HistoryView } from './HistoryView'
 import { WorldMap } from './WorldMap'
 import { SpeciesDetailPanel } from './SpeciesDetailPanel'
 import { useSimulation } from '@services/SimulationContext'
@@ -68,6 +69,7 @@ export function SimulationDashboard() {
                 {activeTab === 'evolution' && <SpeciesEvolutionTree />}
                 {activeTab === 'genetics' && <GeneticAnalysis />}
                 {activeTab === 'species' && <SpeciesPanel />}
+                {activeTab === 'history' && <HistoryView />}
               </div>
             </main>
           )}
