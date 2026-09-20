@@ -1,4 +1,5 @@
 import React, { Component, ReactNode } from 'react'
+import { Dna } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -51,8 +52,8 @@ export class ErrorBoundary extends Component<Props, State> {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                   </svg>
                 </div>
-                <h1 className="text-2xl font-bold text-slate-100 mb-2">
-                  🧬 Serina Dashboard Error
+                <h1 className="text-2xl font-bold text-slate-100 mb-2 flex items-center justify-center gap-2">
+                  <Dna className="w-6 h-6" /> Serina Dashboard Error
                 </h1>
                 <p className="text-slate-400">
                   Something went wrong with the evolutionary simulation interface

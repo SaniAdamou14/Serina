@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
+import { Map as MapIcon, Thermometer, Sprout, Crosshair, Swords, Snowflake, Users, Zap, Clock, MapPin, ClipboardList } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { RegionInfo, IndividualInfo } from '../types';
 import { computeLineageHues, creatureColor } from '../utils/lineageColor';
@@ -279,7 +280,7 @@ export function WorldMap() {
       {/* Barre d'info flottante en haut */}
       <div className="absolute top-3 left-3 right-3 flex justify-between items-start gap-3 pointer-events-none">
         <div className="bg-slate-900/85 backdrop-blur-sm text-slate-200 rounded-lg px-3 py-2 text-xs pointer-events-auto shadow-lg">
-          <div className="font-semibold text-sm">🗺️ Monde de Serina</div>
+          <div className="font-semibold text-sm flex items-center gap-1.5"><MapIcon className="w-4 h-4" /> Monde de Serina</div>
           <div className="text-slate-400">
             {gridWidth}×{gridHeight} régions — {individuals.length} individus en direct
           </div>
@@ -333,12 +334,12 @@ export function WorldMap() {
             {selectedRegion.environmentName || 'Biome inconnu'} — case ({selectedRegion.gridX}, {selectedRegion.gridY})
           </h4>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-blue-300 text-xs">
-            <div>🌡️ Température : {selectedRegion.temperature.toFixed(1)}°C</div>
-            <div>🌱 Producteurs primaires : {(selectedRegion.primaryProducers * 100).toFixed(0)}%</div>
-            <div>🦁 Prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
-            <div>⚔️ Compétition : {(selectedRegion.competitionIntensity * 100).toFixed(0)}%</div>
-            <div>❄️ Stress climatique : {(selectedRegion.climaticStress * 100).toFixed(0)}%</div>
-            <div>👥 Individus ici : {selectedRegion.population}</div>
+            <div className="flex items-center gap-1"><Thermometer className="w-3.5 h-3.5" /> Température : {selectedRegion.temperature.toFixed(1)}°C</div>
+            <div className="flex items-center gap-1"><Sprout className="w-3.5 h-3.5" /> Producteurs primaires : {(selectedRegion.primaryProducers * 100).toFixed(0)}%</div>
+            <div className="flex items-center gap-1"><Crosshair className="w-3.5 h-3.5" /> Prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
+            <div className="flex items-center gap-1"><Swords className="w-3.5 h-3.5" /> Compétition : {(selectedRegion.competitionIntensity * 100).toFixed(0)}%</div>
+            <div className="flex items-center gap-1"><Snowflake className="w-3.5 h-3.5" /> Stress climatique : {(selectedRegion.climaticStress * 100).toFixed(0)}%</div>
+            <div className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Individus ici : {selectedRegion.population}</div>
           </div>
         </div>
       )}
@@ -347,15 +348,15 @@ export function WorldMap() {
         <div className="absolute bottom-3 right-3 w-72 max-h-[60%] overflow-y-auto bg-amber-950/90 backdrop-blur-sm rounded-lg border border-amber-800 p-3 text-sm shadow-lg">
           <h4 className="font-semibold text-amber-200">{selectedIndividual.species} — individu #{selectedIndividual.id}</h4>
           <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-amber-300 text-xs">
-            <div>⚡ Énergie : {selectedIndividual.energy.toFixed(1)}</div>
-            <div>🕒 Âge : {selectedIndividual.age.toFixed(1)}</div>
-            <div className="col-span-2">📍 Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
+            <div className="flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> Énergie : {selectedIndividual.energy.toFixed(1)}</div>
+            <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Âge : {selectedIndividual.age.toFixed(1)}</div>
+            <div className="col-span-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
           </div>
           <button
-            className="mt-3 w-full text-xs bg-amber-800 hover:bg-amber-700 text-amber-100 rounded px-2 py-1.5"
+            className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-100 rounded px-2 py-1.5"
             onClick={() => setDetailSpecies(selectedIndividual.species)}
           >
-            📋 Voir la fiche complète de l'espèce
+            <ClipboardList className="w-3.5 h-3.5" /> Voir la fiche complète de l'espèce
           </button>
         </div>
       )}

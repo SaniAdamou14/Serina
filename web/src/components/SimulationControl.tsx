@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Play, Pause, Square } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { SimulationCommand } from '../types'
 
@@ -189,16 +190,16 @@ export function SimulationControl() {
               <button
                 onClick={handlePlayPause}
                 disabled={!isConnected}
-                className="button-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="button-primary flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isRunning ? '⏸️ Pause' : '▶️ Reprendre'}
+                {isRunning ? <><Pause className="w-4 h-4" /> Pause</> : <><Play className="w-4 h-4" /> Reprendre</>}
               </button>
               <button
                 onClick={handleStop}
                 disabled={!isConnected}
-                className="button-danger flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="button-danger flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                🛑 Arrêter
+                <Square className="w-4 h-4" /> Arrêter
               </button>
             </>
           )}

@@ -1,5 +1,6 @@
 import { useSimulation } from '@services/SimulationContext';
 import { useState, useEffect, useRef } from 'react';
+import { GitBranch, Dna, BarChart3, TrendingUp, Zap, AlertTriangle, CheckCircle2, Globe2 } from 'lucide-react';
 import { LineageStatus, SpeciationEventInfo } from '../types';
 
 /** Population en dessous de laquelle une lignée est affichée comme
@@ -208,7 +209,7 @@ export function SpeciesEvolutionTree() {
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-slate-100">🌳 Arbre Évolutif de Serina</h3>
+        <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2"><GitBranch className="w-5 h-5" /> Arbre Évolutif de Serina</h3>
         <div className="text-sm text-slate-400">
           Génération actuelle : {status?.generation ?? 0}
         </div>
@@ -225,7 +226,7 @@ export function SpeciesEvolutionTree() {
 
         <div className="space-y-4">
           <div className="bg-blue-950 p-3 rounded-lg">
-            <h4 className="font-semibold text-blue-200 mb-2">🧬 Lignées Fondatrices</h4>
+            <h4 className="font-semibold text-blue-200 mb-2 flex items-center gap-1.5"><Dna className="w-4 h-4" /> Lignées Fondatrices</h4>
             <div className="space-y-2 text-sm text-slate-300">
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-sky-400 rounded-full"></div>
@@ -244,7 +245,7 @@ export function SpeciesEvolutionTree() {
 
           {selectedNode && (
             <div className="bg-amber-950 p-3 rounded-lg border border-amber-800">
-              <h4 className="font-semibold text-amber-200 mb-2">📊 {selectedNode.name}</h4>
+              <h4 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> {selectedNode.name}</h4>
               <div className="space-y-1 text-sm text-amber-300">
                 {!selectedNode.isRoot && (
                   <>
@@ -252,14 +253,19 @@ export function SpeciesEvolutionTree() {
                     <div><strong>Fitness :</strong> {(selectedNode.fitness * 100).toFixed(0)}%</div>
                   </>
                 )}
-                <div><strong>Statut :</strong> {selectedNode.extinct ? `⚠️ Population critique (≤ ${CRITICAL_POPULATION_THRESHOLD})` : '✅ Active'}</div>
+                <div className="flex items-center gap-1.5">
+                  <strong>Statut :</strong>
+                  {selectedNode.extinct
+                    ? <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Population critique (≤ {CRITICAL_POPULATION_THRESHOLD})</span>
+                    : <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Active</span>}
+                </div>
               </div>
               <p className="text-xs text-amber-400 mt-2">{getEvolutionaryStory(selectedNode)}</p>
             </div>
           )}
 
           <div className="ecosystem-stat">
-            <h4 className="font-semibold text-ecosystem-200 mb-2">📈 Statistiques Évolutives</h4>
+            <h4 className="font-semibold text-ecosystem-200 mb-2 flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> Statistiques Évolutives</h4>
             <div className="space-y-1 text-sm text-ecosystem-300">
               <div>Lignées fondatrices : {treeData.length}</div>
               <div>Espèces issues de spéciation : {treeData.reduce((sum, t) => sum + countDescendants(t), 0)}</div>
@@ -272,7 +278,7 @@ export function SpeciesEvolutionTree() {
           </div>
 
           <div className="bg-amber-950 p-3 rounded-lg">
-            <h4 className="font-semibold text-amber-200 mb-2">⚡ Pressions Sélectives (moyenne sur toutes les régions)</h4>
+            <h4 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><Zap className="w-4 h-4" /> Pressions Sélectives (moyenne sur toutes les régions)</h4>
             <div className="space-y-1 text-sm text-amber-300">
               <div>Prédation : {(avgPredationPressure * 100).toFixed(0)}%</div>
               <div>Température : {avgTemperature.toFixed(1)}°C</div>
@@ -282,7 +288,7 @@ export function SpeciesEvolutionTree() {
       </div>
 
       <div className="mt-6 p-4 bg-genetic-950 border border-genetic-800 rounded-lg">
-        <h5 className="font-semibold text-genetic-200 mb-2">🌍 L'Histoire Évolutive de Serina</h5>
+        <h5 className="font-semibold text-genetic-200 mb-2 flex items-center gap-1.5"><Globe2 className="w-4 h-4" /> L'Histoire Évolutive de Serina</h5>
         <p className="text-sm text-genetic-300">
           Il y a des millions d'années, cinq espèces terrestres ont été introduites sur Serina :
           des canaris, des poissons tropicaux (guppys et porte-épées), des grillons, des fourmis de feu,

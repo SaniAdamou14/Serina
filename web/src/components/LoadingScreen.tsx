@@ -1,3 +1,5 @@
+import { Dna } from 'lucide-react'
+
 interface LoadingScreenProps {
   message?: string
 }
@@ -24,8 +26,8 @@ export function LoadingScreen({ message = "Initialisation de Serina..." }: Loadi
 
         {/* Serina Logo */}
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold text-gradient">
-            🧬 Serina
+          <h1 className="text-4xl font-bold text-gradient flex items-center justify-center gap-3">
+            <Dna className="w-8 h-8" /> Serina
           </h1>
           <p className="text-lg text-slate-400 font-medium">
             Simulateur d'écosystème évolutif

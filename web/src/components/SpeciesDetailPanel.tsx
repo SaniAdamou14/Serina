@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { X, Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { AverageTraits, BIOLOGICAL_TYPE_NAMES, IndividualInfo, TRAIT_BOUNDS } from '../types'
 import { computeLineageHues, creatureColor } from '../utils/lineageColor'
@@ -108,7 +109,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: SpeciesDetailPanelP
               {BIOLOGICAL_TYPE_NAMES[lineage.biologicalType] ?? 'Type inconnu'} — {lineage.population} individu(s) vivant(s)
             </p>
           </div>
-          <button className="text-slate-400 hover:text-slate-200 text-lg leading-none" onClick={onClose}>✕</button>
+          <button className="text-slate-400 hover:text-slate-200" onClick={onClose}><X className="w-5 h-5" /></button>
         </div>
 
         <div className="p-4 grid grid-cols-3 gap-4">
@@ -178,7 +179,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: SpeciesDetailPanelP
         {/* Adaptations et innovations */}
         <div className="p-4 border-t border-slate-700 grid grid-cols-2 gap-4">
           <div>
-            <h4 className="text-sm font-semibold mb-2">🌱 Adaptations acquises</h4>
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Sprout className="w-4 h-4" /> Adaptations acquises</h4>
             {lineage.adaptations.length > 0 ? (
               <ul className="space-y-1">
                 {lineage.adaptations.map((a) => (
@@ -190,7 +191,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: SpeciesDetailPanelP
             )}
           </div>
           <div>
-            <h4 className="text-sm font-semibold mb-2">🚀 Innovations évolutives</h4>
+            <h4 className="text-sm font-semibold mb-2 flex items-center gap-1.5"><Rocket className="w-4 h-4" /> Innovations évolutives</h4>
             {lineage.innovations.length > 0 ? (
               <ul className="space-y-1">
                 {lineage.innovations.map((i) => (

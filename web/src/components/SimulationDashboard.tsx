@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Map as MapIcon, BarChart3, GitBranch, Dna, PawPrint, Globe2, PanelLeftClose, PanelLeftOpen, Play, Pause, Clock, Users, Sprout } from 'lucide-react'
 import { SimulationControl } from './SimulationControl'
 import { PopulationChart } from './PopulationChart'
 import { GeneticAnalysis } from './GeneticAnalysis'
@@ -15,11 +16,11 @@ export function SimulationDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
   const tabs = [
-    { id: 'map', label: 'Carte', icon: '🗺️' },
-    { id: 'overview', label: 'Vue d\'ensemble', icon: '📊' },
-    { id: 'evolution', label: 'Arbre Évolutif', icon: '🌳' },
-    { id: 'genetics', label: 'Génétique', icon: '🧬' },
-    { id: 'species', label: 'Espèces', icon: '🐾' }
+    { id: 'map', label: 'Carte', icon: MapIcon },
+    { id: 'overview', label: 'Vue d\'ensemble', icon: BarChart3 },
+    { id: 'evolution', label: 'Arbre Évolutif', icon: GitBranch },
+    { id: 'genetics', label: 'Génétique', icon: Dna },
+    { id: 'species', label: 'Espèces', icon: PawPrint }
   ] as const
 
   const status = simulationData?.status
@@ -35,24 +36,27 @@ export function SimulationDashboard() {
           <div className="flex items-center justify-between h-12 gap-4">
             <div className="flex items-center gap-4 min-w-0">
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-lg">🌍</span>
+                <Globe2 className="w-5 h-5 text-primary-400" />
                 <h1 className="text-sm font-bold text-gradient hidden sm:block whitespace-nowrap">Serina</h1>
               </div>
               <nav className="flex items-center gap-1 overflow-x-auto">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
-                      activeTab === tab.id
-                        ? 'bg-primary-950 text-primary-300'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                    }`}
-                  >
-                    <span>{tab.icon}</span>
-                    <span className="hidden md:inline">{tab.label}</span>
-                  </button>
-                ))}
+                {tabs.map((tab) => {
+                  const Icon = tab.icon
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
+                        activeTab === tab.id
+                          ? 'bg-primary-950 text-primary-300'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span className="hidden md:inline">{tab.label}</span>
+                    </button>
+                  )
+                })}
               </nav>
             </div>
 
@@ -60,10 +64,11 @@ export function SimulationDashboard() {
               {isMapTab && (
                 <button
                   onClick={() => setSidebarCollapsed((v) => !v)}
-                  className="px-2.5 py-1.5 rounded-md text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                   title={sidebarCollapsed ? 'Afficher le panneau de contrôle' : 'Masquer le panneau de contrôle'}
                 >
-                  {sidebarCollapsed ? '☰' : '✕'} <span className="hidden lg:inline">Contrôles</span>
+                  {sidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+                  <span className="hidden lg:inline">Contrôles</span>
                 </button>
               )}
               <div className={`status-indicator ${isConnected ? 'status-running' : 'status-stopped'}`}>
@@ -71,7 +76,7 @@ export function SimulationDashboard() {
                 <span className="hidden lg:inline">{isConnected ? 'Connecté' : 'Déconnecté'}</span>
               </div>
               <div className={`status-indicator ${isRunning ? 'status-running' : 'status-paused'}`}>
-                {isRunning ? '▶️' : '⏸️'}
+                {isRunning ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
               </div>
             </div>
           </div>
@@ -142,12 +147,12 @@ export function SimulationDashboard() {
       <footer className="bg-slate-900 border-t border-slate-700 px-4 py-1.5 shrink-0">
         <div className="flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-4">
-            <span>🕒 Génération : {status?.generation ?? 0}</span>
-            <span>👥 Population : {status?.population ?? 0}</span>
-            <span>🐾 Espèces : {status?.speciesCount ?? 0}</span>
+            <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Génération : {status?.generation ?? 0}</span>
+            <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Population : {status?.population ?? 0}</span>
+            <span className="flex items-center gap-1"><PawPrint className="w-3.5 h-3.5" /> Espèces : {status?.speciesCount ?? 0}</span>
           </div>
           <div className="flex items-center space-x-4">
-            <span>🌱 Spéciations : {status?.speciationEventCount ?? 0}</span>
+            <span className="flex items-center gap-1"><Sprout className="w-3.5 h-3.5" /> Spéciations : {status?.speciationEventCount ?? 0}</span>
           </div>
         </div>
       </footer>

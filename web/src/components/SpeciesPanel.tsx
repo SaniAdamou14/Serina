@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { SpeciesDetailPanel } from './SpeciesDetailPanel'
 
@@ -115,13 +116,13 @@ export function SpeciesPanel() {
               {(lineage.adaptations.length > 0 || lineage.innovations.length > 0) && (
                 <div className="mt-4 pt-4 border-t border-slate-700 flex flex-wrap gap-2">
                   {lineage.adaptations.map((a) => (
-                    <span key={a} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-emerald-950 text-emerald-300">
-                      🌱 {a}
+                    <span key={a} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-emerald-950 text-emerald-300">
+                      <Sprout className="w-3 h-3" /> {a}
                     </span>
                   ))}
                   {lineage.innovations.map((i) => (
-                    <span key={i} className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-genetic-950 text-genetic-300">
-                      🚀 {i}
+                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-genetic-950 text-genetic-300">
+                      <Rocket className="w-3 h-3" /> {i}
                     </span>
                   ))}
                 </div>

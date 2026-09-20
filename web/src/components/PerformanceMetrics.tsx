@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Check, X } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { apiService } from '@services/ApiService'
 import { HealthCheckResponse } from '../types'
@@ -44,8 +45,8 @@ export function EngineStatus() {
   const StatusRow = ({ label, ok, okLabel, koLabel }: { label: string; ok: boolean; okLabel: string; koLabel: string }) => (
     <div className="flex items-center justify-between text-sm">
       <span className="text-slate-400">{label}</span>
-      <span className={ok ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
-        {ok ? `✓ ${okLabel}` : `✗ ${koLabel}`}
+      <span className={`flex items-center gap-1 font-medium ${ok ? 'text-emerald-400' : 'text-red-400'}`}>
+        {ok ? <Check className="w-3.5 h-3.5" /> : <X className="w-3.5 h-3.5" />} {ok ? okLabel : koLabel}
       </span>
     </div>
   )

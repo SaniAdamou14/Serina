@@ -1,4 +1,5 @@
 import { useSimulation } from '@services/SimulationContext'
+import { Globe2, Calendar, PawPrint, Users } from 'lucide-react'
 
 interface EnvironmentViewProps {
   showDetails?: boolean
@@ -90,16 +91,16 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
             <div className="text-sm font-medium text-ecosystem-200 mb-2">Biomes présents</div>
             <div className="space-y-1 text-xs">
               {Array.from(new Set(regions.map((r) => r.environmentName))).map((name) => (
-                <div key={name}>🌍 {name}</div>
+                <div key={name} className="flex items-center gap-1.5"><Globe2 className="w-3.5 h-3.5" /> {name}</div>
               ))}
             </div>
           </div>
           <div className="ecosystem-stat">
             <div className="text-sm font-medium text-ecosystem-200 mb-2">État de la simulation</div>
             <div className="space-y-1 text-xs">
-              <div>📅 Génération : {status.generation}</div>
-              <div>🐾 Espèces présentes : {status.speciesCount}</div>
-              <div>👥 Population totale : {status.population}</div>
+              <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Génération : {status.generation}</div>
+              <div className="flex items-center gap-1.5"><PawPrint className="w-3.5 h-3.5" /> Espèces présentes : {status.speciesCount}</div>
+              <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5" /> Population totale : {status.population}</div>
             </div>
           </div>
         </div>
