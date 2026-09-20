@@ -146,8 +146,8 @@ export function SpeciesEvolutionTree() {
     circle.setAttribute('cx', x.toString());
     circle.setAttribute('cy', y.toString());
     circle.setAttribute('r', (node.isRoot ? nodeRadius * 1.2 : nodeRadius).toString());
-    circle.setAttribute('fill', node.extinct ? '#ef4444' : node.isRoot ? '#3b82f6' : '#10b981');
-    circle.setAttribute('stroke', '#1f2937');
+    circle.setAttribute('fill', node.extinct ? '#f87171' : node.isRoot ? '#38bdf8' : '#34d399');
+    circle.setAttribute('stroke', '#0f172a');
     circle.setAttribute('stroke-width', '2');
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -156,7 +156,7 @@ export function SpeciesEvolutionTree() {
     text.setAttribute('text-anchor', 'middle');
     text.setAttribute('font-size', '10');
     text.setAttribute('font-family', 'Arial');
-    text.setAttribute('fill', '#1f2937');
+    text.setAttribute('fill', '#e2e8f0');
     text.textContent = node.name.split(' ')[0];
 
     group.appendChild(circle);
@@ -169,7 +169,7 @@ export function SpeciesEvolutionTree() {
       popText.setAttribute('text-anchor', 'middle');
       popText.setAttribute('font-size', '8');
       popText.setAttribute('font-family', 'Arial');
-      popText.setAttribute('fill', '#6b7280');
+      popText.setAttribute('fill', '#94a3b8');
       popText.textContent = `Pop: ${node.population.toLocaleString()}`;
       group.appendChild(popText);
     }
@@ -184,7 +184,7 @@ export function SpeciesEvolutionTree() {
     line.setAttribute('y1', y1.toString());
     line.setAttribute('x2', x2.toString());
     line.setAttribute('y2', y2.toString());
-    line.setAttribute('stroke', '#6b7280');
+    line.setAttribute('stroke', '#475569');
     line.setAttribute('stroke-width', '2');
     svg.appendChild(line);
   };
@@ -208,8 +208,8 @@ export function SpeciesEvolutionTree() {
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">🌳 Arbre Évolutif de Serina</h3>
-        <div className="text-sm text-gray-600">
+        <h3 className="text-lg font-semibold text-slate-100">🌳 Arbre Évolutif de Serina</h3>
+        <div className="text-sm text-slate-400">
           Génération actuelle : {status?.generation ?? 0}
         </div>
       </div>
@@ -218,34 +218,34 @@ export function SpeciesEvolutionTree() {
         <div className="col-span-2">
           <svg
             ref={svgRef}
-            className="border border-gray-300 rounded-lg w-full"
+            className="border border-slate-700 rounded-lg w-full bg-slate-950"
             style={{ maxHeight: '500px' }}
           ></svg>
         </div>
 
         <div className="space-y-4">
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-2">🧬 Lignées Fondatrices</h4>
-            <div className="space-y-2 text-sm">
+          <div className="bg-blue-950 p-3 rounded-lg">
+            <h4 className="font-semibold text-blue-200 mb-2">🧬 Lignées Fondatrices</h4>
+            <div className="space-y-2 text-sm text-slate-300">
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
+                <div className="w-4 h-4 bg-sky-400 rounded-full"></div>
                 <span>Espèces ancestrales</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-green-500 rounded-full"></div>
+                <div className="w-4 h-4 bg-emerald-400 rounded-full"></div>
                 <span>Descendants actuels</span>
               </div>
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-red-500 rounded-full"></div>
+                <div className="w-4 h-4 bg-red-400 rounded-full"></div>
                 <span>Espèces en danger critique</span>
               </div>
             </div>
           </div>
 
           {selectedNode && (
-            <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
-              <h4 className="font-semibold text-amber-800 mb-2">📊 {selectedNode.name}</h4>
-              <div className="space-y-1 text-sm text-amber-700">
+            <div className="bg-amber-950 p-3 rounded-lg border border-amber-800">
+              <h4 className="font-semibold text-amber-200 mb-2">📊 {selectedNode.name}</h4>
+              <div className="space-y-1 text-sm text-amber-300">
                 {!selectedNode.isRoot && (
                   <>
                     <div><strong>Population :</strong> {selectedNode.population.toLocaleString()}</div>
@@ -254,13 +254,13 @@ export function SpeciesEvolutionTree() {
                 )}
                 <div><strong>Statut :</strong> {selectedNode.extinct ? `⚠️ Population critique (≤ ${CRITICAL_POPULATION_THRESHOLD})` : '✅ Active'}</div>
               </div>
-              <p className="text-xs text-amber-600 mt-2">{getEvolutionaryStory(selectedNode)}</p>
+              <p className="text-xs text-amber-400 mt-2">{getEvolutionaryStory(selectedNode)}</p>
             </div>
           )}
 
-          <div className="bg-green-50 p-3 rounded-lg">
-            <h4 className="font-semibold text-green-800 mb-2">📈 Statistiques Évolutives</h4>
-            <div className="space-y-1 text-sm text-green-700">
+          <div className="ecosystem-stat">
+            <h4 className="font-semibold text-ecosystem-200 mb-2">📈 Statistiques Évolutives</h4>
+            <div className="space-y-1 text-sm text-ecosystem-300">
               <div>Lignées fondatrices : {treeData.length}</div>
               <div>Espèces issues de spéciation : {treeData.reduce((sum, t) => sum + countDescendants(t), 0)}</div>
               <div>Espèces en population critique : {treeData.reduce((sum, t) => sum + countCritical(t), 0)}</div>
@@ -271,9 +271,9 @@ export function SpeciesEvolutionTree() {
             </div>
           </div>
 
-          <div className="bg-amber-50 p-3 rounded-lg">
-            <h4 className="font-semibold text-amber-800 mb-2">⚡ Pressions Sélectives (moyenne sur toutes les régions)</h4>
-            <div className="space-y-1 text-sm text-amber-700">
+          <div className="bg-amber-950 p-3 rounded-lg">
+            <h4 className="font-semibold text-amber-200 mb-2">⚡ Pressions Sélectives (moyenne sur toutes les régions)</h4>
+            <div className="space-y-1 text-sm text-amber-300">
               <div>Prédation : {(avgPredationPressure * 100).toFixed(0)}%</div>
               <div>Température : {avgTemperature.toFixed(1)}°C</div>
             </div>
@@ -281,9 +281,9 @@ export function SpeciesEvolutionTree() {
         </div>
       </div>
 
-      <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
-        <h5 className="font-semibold text-purple-800 mb-2">🌍 L'Histoire Évolutive de Serina</h5>
-        <p className="text-sm text-purple-700">
+      <div className="mt-6 p-4 bg-genetic-950 border border-genetic-800 rounded-lg">
+        <h5 className="font-semibold text-genetic-200 mb-2">🌍 L'Histoire Évolutive de Serina</h5>
+        <p className="text-sm text-genetic-300">
           Il y a des millions d'années, cinq espèces terrestres ont été introduites sur Serina :
           des canaris, des poissons tropicaux (guppys et porte-épées), des grillons, des fourmis de feu,
           et des escargots géants d'Afrique. Ces lignées fondatrices ont évolué pour remplir

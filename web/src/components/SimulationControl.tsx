@@ -59,23 +59,23 @@ export function SimulationControl() {
 
   return (
     <div className="card space-y-6">
-      <div className="border-b border-gray-200 pb-4">
-        <h2 className="text-lg font-semibold text-gray-900">Contrôle de Simulation</h2>
-        <p className="text-sm text-gray-600">Gestion de l'évolution écologique</p>
+      <div className="border-b border-slate-700 pb-4">
+        <h2 className="text-lg font-semibold text-slate-100">Contrôle de Simulation</h2>
+        <p className="text-sm text-slate-400">Gestion de l'évolution écologique</p>
       </div>
 
       {/* Statut de connexion */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Connexion</span>
+          <span className="text-sm font-medium text-slate-300">Connexion</span>
           <div className={`status-indicator ${isConnected ? 'status-running' : 'status-stopped'}`}>
             {isConnected ? 'Connecté' : 'Déconnecté'}
           </div>
         </div>
 
         {connectionError && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3">
-            <p className="text-sm text-red-600">{connectionError}</p>
+          <div className="bg-red-950 border border-red-800 rounded-md p-3">
+            <p className="text-sm text-red-300">{connectionError}</p>
           </div>
         )}
 
@@ -100,22 +100,22 @@ export function SimulationControl() {
       {/* Statut de la simulation */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Simulation Actuelle</span>
+          <span className="text-sm font-medium text-slate-300">Simulation Actuelle</span>
           <div className={`status-indicator ${isRunning ? 'status-running' : 'status-stopped'}`}>
             {currentSimulationId ? (isRunning ? 'En cours' : 'En pause') : 'Aucune simulation'}
           </div>
         </div>
 
         {currentSimulationId && (
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-            <p className="text-sm text-blue-600">ID : {currentSimulationId}</p>
+          <div className="bg-blue-950 border border-blue-800 rounded-md p-3">
+            <p className="text-sm text-blue-300">ID : {currentSimulationId}</p>
           </div>
         )}
 
         {!currentSimulationId && (
-          <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-md p-3">
+          <div className="space-y-3 bg-slate-800/60 border border-slate-700 rounded-md p-3">
             <div>
-              <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <label className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
                 <span>Individus par lignée fondatrice</span>
                 <span>{founderCount}</span>
               </label>
@@ -127,22 +127,22 @@ export function SimulationControl() {
                 onChange={(e) => setFounderCount(Number(e.target.value))}
                 className="w-full"
               />
-              <p className="text-xs text-gray-500 mt-1">5 lignées × {founderCount} = {founderCount * 5} individus au départ</p>
+              <p className="text-xs text-slate-500 mt-1">5 lignées × {founderCount} = {founderCount * 5} individus au départ</p>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Graine (optionnel — pour rejouer une génération de carte identique)</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Graine (optionnel — pour rejouer une génération de carte identique)</label>
               <input
                 type="number"
                 value={seedInput}
                 onChange={(e) => setSeedInput(e.target.value)}
                 placeholder="Aléatoire si vide"
-                className="w-full text-sm border border-gray-300 rounded-md px-2 py-1"
+                className="input-field w-full text-sm px-2 py-1"
               />
             </div>
 
             <div>
-              <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+              <label className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
                 <span>Vitesse initiale</span>
                 <span>{ticksPerSecond} génération(s)/s</span>
               </label>
@@ -159,8 +159,8 @@ export function SimulationControl() {
         )}
 
         {currentSimulationId && isRunning && (
-          <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
-            <label className="flex items-center justify-between text-xs font-medium text-gray-700 mb-1">
+          <div className="bg-slate-800/60 border border-slate-700 rounded-md p-3">
+            <label className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
               <span>Vitesse de la simulation</span>
               <span>{ticksPerSecond} génération(s)/s</span>
             </label>
@@ -208,12 +208,12 @@ export function SimulationControl() {
       {/* Simulations disponibles */}
       {availableSimulations.length > 0 && (
         <div className="space-y-3">
-          <span className="text-sm font-medium text-gray-700">Simulations Disponibles</span>
+          <span className="text-sm font-medium text-slate-300">Simulations Disponibles</span>
           <div className="max-h-32 overflow-y-auto space-y-1">
             {availableSimulations.map((sim) => (
-              <div key={sim.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
-                <span className="text-xs text-gray-600">{sim.id}</span>
-                <span className={`text-xs px-2 py-1 rounded ${sim.isRunning ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+              <div key={sim.id} className="flex items-center justify-between p-2 bg-slate-800/60 rounded">
+                <span className="text-xs text-slate-400">{sim.id}</span>
+                <span className={`text-xs px-2 py-1 rounded ${sim.isRunning ? 'bg-emerald-950 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}>
                   {sim.isRunning ? 'Active' : 'Arrêtée'}
                 </span>
               </div>
@@ -223,18 +223,18 @@ export function SimulationControl() {
       )}
 
       {/* Informations système */}
-      <div className="border-t border-gray-200 pt-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Système</h3>
-        <div className="space-y-2 text-xs text-gray-600">
+      <div className="border-t border-slate-700 pt-4">
+        <h3 className="text-sm font-medium text-slate-300 mb-3">Système</h3>
+        <div className="space-y-2 text-xs text-slate-400">
           <div className="flex justify-between">
             <span>Backend :</span>
-            <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
+            <span className={isConnected ? 'text-emerald-400' : 'text-red-400'}>
               {isConnected ? 'En ligne' : 'Hors ligne'}
             </span>
           </div>
           <div className="flex justify-between">
             <span>WebSocket :</span>
-            <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
+            <span className={isConnected ? 'text-emerald-400' : 'text-red-400'}>
               {isConnected ? 'Actif' : 'Inactif'}
             </span>
           </div>

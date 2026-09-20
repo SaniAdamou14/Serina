@@ -16,11 +16,11 @@ function getSpeciesOrigin(name: string): string {
 }
 
 function gaugeColor(value: number): string {
-  if (value >= 0.8) return 'text-green-600 bg-green-100'
-  if (value >= 0.6) return 'text-blue-600 bg-blue-100'
-  if (value >= 0.4) return 'text-yellow-600 bg-yellow-100'
-  if (value >= 0.2) return 'text-orange-600 bg-orange-100'
-  return 'text-red-600 bg-red-100'
+  if (value >= 0.8) return 'text-emerald-300 bg-emerald-950'
+  if (value >= 0.6) return 'text-blue-300 bg-blue-950'
+  if (value >= 0.4) return 'text-amber-300 bg-amber-950'
+  if (value >= 0.2) return 'text-orange-300 bg-orange-950'
+  return 'text-red-300 bg-red-950'
 }
 
 export function GeneticAnalysis() {
@@ -32,14 +32,14 @@ export function GeneticAnalysis() {
       <div className="card">
         <h3 className="text-lg font-semibold mb-4">🧬 Analyse Génétique — Serina</h3>
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-4 bg-slate-700 rounded w-1/3 mb-4"></div>
           <div className="space-y-3">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-4 bg-gray-200 rounded"></div>
+              <div key={i} className="h-4 bg-slate-700 rounded"></div>
             ))}
           </div>
         </div>
-        <p className="text-gray-500 mt-4">En attente des données d'évolution...</p>
+        <p className="text-slate-500 mt-4">En attente des données d'évolution...</p>
       </div>
     )
   }
@@ -50,12 +50,12 @@ export function GeneticAnalysis() {
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold">🧬 Analyse Génétique — Monde de Serina</h3>
+        <h3 className="text-lg font-semibold text-slate-100">🧬 Analyse Génétique — Monde de Serina</h3>
         {lineages.length > 1 && (
           <select
             value={current.speciesName}
             onChange={(e) => setSelectedSpecies(e.target.value)}
-            className="px-3 py-1 border rounded-md text-sm"
+            className="input-field px-3 py-1 text-sm"
           >
             {lineages.map((l) => (
               <option key={l.speciesName} value={l.speciesName}>{l.speciesName}</option>
@@ -64,10 +64,10 @@ export function GeneticAnalysis() {
         )}
       </div>
 
-      <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-        <h4 className="font-semibold text-blue-800">{current.speciesName}</h4>
-        <p className="text-sm text-blue-600 mt-1">{getSpeciesOrigin(current.speciesName)}</p>
-        <div className="grid grid-cols-2 gap-4 mt-3 text-sm">
+      <div className="mb-6 p-4 bg-blue-950 rounded-lg">
+        <h4 className="font-semibold text-blue-200">{current.speciesName}</h4>
+        <p className="text-sm text-blue-300 mt-1">{getSpeciesOrigin(current.speciesName)}</p>
+        <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-blue-200">
           <div>
             <span className="font-medium">Population :</span> {current.population.toLocaleString()}
           </div>
@@ -86,21 +86,21 @@ export function GeneticAnalysis() {
 
       {/* Diversité génétique et fitness — les deux seules métriques agrégées
           que le moteur calcule réellement par espèce. */}
-      <h4 className="font-semibold mb-4">📊 Profil génétique agrégé</h4>
+      <h4 className="font-semibold mb-4 text-slate-200">📊 Profil génétique agrégé</h4>
       <div className="space-y-3 mb-6">
         {[
           { label: 'Diversité génétique', value: current.geneticDiversity },
           { label: 'Fitness moyenne', value: current.averageFitness }
         ].map(({ label, value }) => (
-          <div key={label} className="p-3 bg-gray-50 rounded-lg">
+          <div key={label} className="p-3 bg-slate-800/60 rounded-lg">
             <div className="flex justify-between items-center mb-1">
-              <span className="font-medium text-sm">{label}</span>
+              <span className="font-medium text-sm text-slate-300">{label}</span>
               <span className={`px-2 py-1 rounded text-xs font-medium ${gaugeColor(value)}`}>
                 {(value * 100).toFixed(0)}%
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-500 h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(100, value * 100)}%` }} />
+            <div className="w-full bg-slate-700 rounded-full h-2">
+              <div className="bg-primary-500 h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(100, value * 100)}%` }} />
             </div>
           </div>
         ))}
@@ -109,34 +109,34 @@ export function GeneticAnalysis() {
       {/* Adaptations et innovations réellement acquises par cette espèce */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <h4 className="font-semibold mb-2 text-sm">🌱 Adaptations acquises</h4>
+          <h4 className="font-semibold mb-2 text-sm text-slate-200">🌱 Adaptations acquises</h4>
           {current.adaptations.length > 0 ? (
             <ul className="space-y-1">
               {current.adaptations.map((a) => (
-                <li key={a} className="text-xs bg-green-50 text-green-700 rounded px-2 py-1">{a}</li>
+                <li key={a} className="text-xs bg-emerald-950 text-emerald-300 rounded px-2 py-1">{a}</li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-gray-500">Aucune adaptation acquise pour l'instant</p>
+            <p className="text-xs text-slate-500">Aucune adaptation acquise pour l'instant</p>
           )}
         </div>
         <div>
-          <h4 className="font-semibold mb-2 text-sm">🚀 Innovations évolutives</h4>
+          <h4 className="font-semibold mb-2 text-sm text-slate-200">🚀 Innovations évolutives</h4>
           {current.innovations.length > 0 ? (
             <ul className="space-y-1">
               {current.innovations.map((i) => (
-                <li key={i} className="text-xs bg-purple-50 text-purple-700 rounded px-2 py-1">{i}</li>
+                <li key={i} className="text-xs bg-genetic-950 text-genetic-300 rounded px-2 py-1">{i}</li>
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-gray-500">Aucune innovation développée pour l'instant</p>
+            <p className="text-xs text-slate-500">Aucune innovation développée pour l'instant</p>
           )}
         </div>
       </div>
 
-      <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-        <h5 className="font-semibold text-amber-800 mb-2">🌍 Contexte évolutif — Serina</h5>
-        <p className="text-sm text-amber-700">
+      <div className="mt-6 p-4 bg-amber-950 border border-amber-800 rounded-lg">
+        <h5 className="font-semibold text-amber-200 mb-2">🌍 Contexte évolutif — Serina</h5>
+        <p className="text-sm text-amber-300">
           Cette espèce évolue dans le monde de Serina, un écosystème unique où seuls quelques oiseaux,
           insectes, poissons et invertébrés ont colonisé une planète vierge. La diversité génétique et
           la fitness reflètent la pression sélective réelle exercée par cet environnement.

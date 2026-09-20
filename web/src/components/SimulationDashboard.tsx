@@ -26,11 +26,11 @@ export function SimulationDashboard() {
   const isMapTab = activeTab === 'map'
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50 overflow-hidden">
+    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden">
       {/* Barre supérieure fine : logo, onglets et statut regroupés sur une
           seule ligne pour laisser le plus de place possible à la carte
           plutôt qu'un grand en-tête + une barre d'onglets séparée. */}
-      <header className="bg-white shadow-sm border-b border-gray-200 shrink-0">
+      <header className="bg-slate-900 shadow-lg border-b border-slate-700 shrink-0">
         <div className="px-3 sm:px-4">
           <div className="flex items-center justify-between h-12 gap-4">
             <div className="flex items-center gap-4 min-w-0">
@@ -45,8 +45,8 @@ export function SimulationDashboard() {
                     onClick={() => setActiveTab(tab.id)}
                     className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-150 ${
                       activeTab === tab.id
-                        ? 'bg-primary-100 text-primary-700'
-                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                        ? 'bg-primary-950 text-primary-300'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
                     }`}
                   >
                     <span>{tab.icon}</span>
@@ -60,14 +60,14 @@ export function SimulationDashboard() {
               {isMapTab && (
                 <button
                   onClick={() => setSidebarCollapsed((v) => !v)}
-                  className="px-2.5 py-1.5 rounded-md text-sm font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                  className="px-2.5 py-1.5 rounded-md text-sm font-medium text-slate-400 hover:text-slate-200 hover:bg-slate-800"
                   title={sidebarCollapsed ? 'Afficher le panneau de contrôle' : 'Masquer le panneau de contrôle'}
                 >
                   {sidebarCollapsed ? '☰' : '✕'} <span className="hidden lg:inline">Contrôles</span>
                 </button>
               )}
               <div className={`status-indicator ${isConnected ? 'status-running' : 'status-stopped'}`}>
-                <div className={`w-2 h-2 rounded-full mr-1.5 ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                <div className={`w-2 h-2 rounded-full mr-1.5 ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                 <span className="hidden lg:inline">{isConnected ? 'Connecté' : 'Déconnecté'}</span>
               </div>
               <div className={`status-indicator ${isRunning ? 'status-running' : 'status-paused'}`}>
@@ -88,7 +88,7 @@ export function SimulationDashboard() {
       {isMapTab ? (
         <div className="flex-1 flex min-h-0">
           {!sidebarCollapsed && (
-            <div className="w-72 shrink-0 overflow-y-auto border-r border-gray-200 bg-gray-50 p-3">
+            <div className="w-72 shrink-0 overflow-y-auto border-r border-slate-700 bg-slate-900 p-3">
               <SimulationControl />
             </div>
           )}
@@ -139,8 +139,8 @@ export function SimulationDashboard() {
       )}
 
       {/* Barre de statut, fine, toujours visible */}
-      <footer className="bg-white border-t border-gray-200 px-4 py-1.5 shrink-0">
-        <div className="flex items-center justify-between text-xs text-gray-500">
+      <footer className="bg-slate-900 border-t border-slate-700 px-4 py-1.5 shrink-0">
+        <div className="flex items-center justify-between text-xs text-slate-400">
           <div className="flex items-center space-x-4">
             <span>🕒 Génération : {status?.generation ?? 0}</span>
             <span>👥 Population : {status?.population ?? 0}</span>

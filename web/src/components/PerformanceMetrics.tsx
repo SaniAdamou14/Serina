@@ -43,8 +43,8 @@ export function EngineStatus() {
 
   const StatusRow = ({ label, ok, okLabel, koLabel }: { label: string; ok: boolean; okLabel: string; koLabel: string }) => (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-gray-600">{label}</span>
-      <span className={ok ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+      <span className="text-slate-400">{label}</span>
+      <span className={ok ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
         {ok ? `✓ ${okLabel}` : `✗ ${koLabel}`}
       </span>
     </div>
@@ -52,14 +52,14 @@ export function EngineStatus() {
 
   return (
     <div className="card">
-      <div className="border-b border-gray-200 pb-4 mb-6">
-        <h3 className="text-lg font-semibold text-gray-900">État du Moteur</h3>
-        <p className="text-sm text-gray-600">Santé réelle des services backend</p>
+      <div className="border-b border-slate-700 pb-4 mb-6">
+        <h3 className="text-lg font-semibold text-slate-100">État du Moteur</h3>
+        <p className="text-sm text-slate-400">Santé réelle des services backend</p>
       </div>
 
       <div className="space-y-3">
         {healthError && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-3 text-sm text-red-600">
+          <div className="bg-red-950 border border-red-800 rounded-md p-3 text-sm text-red-300">
             {healthError}
           </div>
         )}
@@ -85,29 +85,29 @@ export function EngineStatus() {
       </div>
 
       {/* Progression réelle de la simulation en cours */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
-        <h4 className="text-sm font-medium text-gray-700 mb-3">Simulation en cours</h4>
+      <div className="mt-6 pt-6 border-t border-slate-700">
+        <h4 className="text-sm font-medium text-slate-300 mb-3">Simulation en cours</h4>
         {currentSimulationId && simulationData ? (
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Génération</span>
-              <span className="font-medium">{simulationData.status.generation}</span>
+              <span className="text-slate-400">Génération</span>
+              <span className="font-medium text-slate-200">{simulationData.status.generation}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Population</span>
-              <span className="font-medium">{simulationData.status.population.toLocaleString()}</span>
+              <span className="text-slate-400">Population</span>
+              <span className="font-medium text-slate-200">{simulationData.status.population.toLocaleString()}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Espèces vivantes</span>
-              <span className="font-medium">{simulationData.status.speciesCount}</span>
+              <span className="text-slate-400">Espèces vivantes</span>
+              <span className="font-medium text-slate-200">{simulationData.status.speciesCount}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Spéciations</span>
-              <span className="font-medium">{simulationData.status.speciationEventCount}</span>
+              <span className="text-slate-400">Spéciations</span>
+              <span className="font-medium text-slate-200">{simulationData.status.speciationEventCount}</span>
             </div>
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Aucune simulation active</p>
+          <p className="text-sm text-slate-500">Aucune simulation active</p>
         )}
       </div>
     </div>

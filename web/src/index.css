@@ -2,102 +2,109 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Thème "poste de contrôle sombre" (voir CONTRIBUTING.md, refonte
+   post-Phase-10) : pas un mode sombre optionnel en plus d'un thème clair --
+   c'est le seul thème de l'app, cohérent avec l'esthétique déjà utilisée sur
+   la carte (WorldMap.tsx) depuis le début de cette refonte. Densité
+   d'information et palette d'instrument scientifique plutôt que cartes
+   pastel et emoji décoratifs. */
+
 :root {
-  --color-primary: 0 115 230;
-  --color-genetic: 168 85 247;
-  --color-ecosystem: 34 197 94;
+  --color-primary: 56 189 248;
+  --color-genetic: 192 132 252;
+  --color-ecosystem: 74 222 128;
   --font-mono: 'JetBrains Mono', monospace;
 }
 
 @layer base {
   * {
-    @apply border-gray-300;
+    @apply border-slate-700;
   }
-  
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply bg-slate-950 text-slate-200 font-sans;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
-  
+
   h1, h2, h3, h4, h5, h6 {
-    @apply font-semibold;
+    @apply font-semibold text-slate-100;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
+    @apply bg-slate-900 rounded-xl shadow-lg border border-slate-700 p-6;
   }
-  
+
   .button-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-primary-600 hover:bg-primary-500 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
   }
-  
+
   .button-secondary {
-    @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-2 rounded-lg transition-colors duration-200;
   }
 
   .button-danger {
-    @apply bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-red-700 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
   }
-  
+
   .input-field {
-    @apply border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all duration-200;
+    @apply bg-slate-800 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all duration-200;
   }
-  
+
   .status-indicator {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
   }
-  
+
   .status-running {
-    @apply bg-green-100 text-green-800;
+    @apply bg-emerald-950 text-emerald-300;
   }
-  
+
   .status-paused {
-    @apply bg-yellow-100 text-yellow-800;
+    @apply bg-amber-950 text-amber-300;
   }
-  
+
   .status-stopped {
-    @apply bg-red-100 text-red-800;
+    @apply bg-red-950 text-red-300;
   }
-  
+
   .metric-card {
-    @apply bg-gradient-to-br from-white to-gray-50 rounded-xl p-6 shadow-sm border border-gray-200;
+    @apply bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 shadow-lg border border-slate-700;
   }
-  
+
   .genetic-trait {
-    @apply bg-genetic-50 border border-genetic-200 rounded-lg p-3 text-genetic-800;
+    @apply bg-genetic-950 border border-genetic-800 rounded-lg p-3 text-genetic-200;
   }
-  
+
   .ecosystem-stat {
-    @apply bg-ecosystem-50 border border-ecosystem-200 rounded-lg p-3 text-ecosystem-800;
+    @apply bg-ecosystem-950 border border-ecosystem-800 rounded-lg p-3 text-ecosystem-200;
   }
 }
 
 @layer utilities {
   .text-gradient {
-    @apply bg-gradient-to-r from-primary-600 to-genetic-600 bg-clip-text text-transparent;
+    @apply bg-gradient-to-r from-primary-400 to-genetic-400 bg-clip-text text-transparent;
   }
-  
+
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: rgb(156 163 175) rgb(243 244 246);
+    scrollbar-color: rgb(71 85 105) rgb(30 41 59);
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar {
     width: 6px;
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-gray-100;
+    @apply bg-slate-800;
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-400 rounded-full;
+    @apply bg-slate-600 rounded-full;
   }
-  
+
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-500;
+    @apply bg-slate-500;
   }
 }
 
@@ -117,5 +124,5 @@
 
 /* Loading spinner */
 .spinner {
-  @apply animate-spin rounded-full border-2 border-gray-300 border-t-primary-600;
+  @apply animate-spin rounded-full border-2 border-slate-700 border-t-primary-500;
 }
