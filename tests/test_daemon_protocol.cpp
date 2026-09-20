@@ -2,8 +2,10 @@
 #include "Serina/DaemonProtocol.hpp"
 #include "Serina/NetSocket.hpp"
 #include <algorithm>
+#include <atomic>
 #include <thread>
 #include <chrono>
+#include <vector>
 
 using namespace Serina;
 using Daemon::json;
@@ -226,6 +228,71 @@ TEST_CASE("destroy removes a simulation so it is no longer listed", "[daemon]")
 
     auto listResponse = Daemon::handleCommand(registry, makeRequest("list", ""));
     REQUIRE(listResponse["simulations"].empty());
+}
+
+TEST_CASE("destroy racing against concurrent status/tick calls never crashes the registry", "[daemon][integration]")
+{
+    // Régression réelle : le daemon en production a planté (accès mémoire
+    // invalide, code de sortie 0xC0000005) quand deux `stop` arrivaient à
+    // quelques millisecondes d'écart pendant que le fil planificateur
+    // (tickAll) et des requêtes clients (withSimulation, via `status`)
+    // étaient en cours sur la même simulation. Cause réelle : registryMutex_
+    // n'était tenu que le temps de récupérer un pointeur brut vers l'entrée
+    // -- destroy() pouvait alors la libérer pendant qu'un autre fil s'en
+    // servait encore (use-after-free). Corrigé en partageant la propriété
+    // via shared_ptr plutôt que unique_ptr (voir DaemonProtocol.hpp).
+    // Ce test ne peut pas prouver l'absence de plantage à 100% (une
+    // interversion de fils reste non déterministe) mais martèle exactement
+    // le scénario réel assez fort et assez longtemps pour le déclencher de
+    // façon fiable sous l'ancien code.
+    Daemon::SimulationRegistry registry;
+    const std::string simId = "race-sim";
+    std::atomic<bool> stop{false};
+
+    // Fil "planificateur" : fait avancer toutes les simulations en lecture,
+    // exactement comme la vraie boucle du daemon.
+    std::thread tickThread([&]()
+                            {
+        while (!stop.load())
+        {
+            registry.tickAll();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        } });
+
+    // Plusieurs fils "requête client" : interrogent le statut en boucle,
+    // exactement comme le sondage périodique de l'API Node (toutes les
+    // 500ms en vrai, ici en continu pour maximiser les interversions).
+    std::vector<std::thread> statusThreads;
+    for (int i = 0; i < 4; ++i)
+    {
+        statusThreads.emplace_back([&]()
+                                    {
+            while (!stop.load())
+            {
+                // "not found" est une réponse valide (la simulation vient
+                // peut-être d'être détruite) -- seul un plantage est un échec.
+                Daemon::handleCommand(registry, makeRequest("status", simId));
+            } });
+    }
+
+    // Fil "cycle de vie" : crée puis détruit la même simulation en boucle
+    // serrée, pour maximiser les chances de retirer l'entrée pendant qu'un
+    // autre fil la tient déjà (la fenêtre de la race réelle observée).
+    for (int cycle = 0; cycle < 200; ++cycle)
+    {
+        Daemon::handleCommand(registry, makeRequest("create", simId, {{"founderCount", 5}}));
+        registry.tickAll(); // laisse une chance au tick de s'en emparer avant le destroy
+        Daemon::handleCommand(registry, makeRequest("destroy", simId));
+    }
+
+    stop = true;
+    tickThread.join();
+    for (auto &t : statusThreads)
+        t.join();
+
+    // Si on arrive ici sans plantage, la race est corrigée. Le registre doit
+    // rester dans un état cohérent (aucune entrée fantôme).
+    REQUIRE(registry.count() == 0);
 }
 
 TEST_CASE("the real JSON-lines protocol round-trips over an actual TCP socket", "[daemon][integration]")

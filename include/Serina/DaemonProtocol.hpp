@@ -141,7 +141,7 @@ namespace Serina::Daemon
             if (sims_.count(id))
                 return errorJson("simulation '" + id + "' already exists");
 
-            auto managed = std::make_unique<ManagedSimulation>();
+            auto managed = std::make_shared<ManagedSimulation>();
             Simulation::WorldSimulationParameters params{};
             managed->sim = hasSeed
                                ? std::make_unique<Simulation::UnifiedWorldSimulator>(params, seed)
@@ -187,13 +187,13 @@ namespace Serina::Daemon
         template <typename Fn>
         json withSimulation(const std::string &id, Fn &&fn)
         {
-            ManagedSimulation *managed = nullptr;
+            std::shared_ptr<ManagedSimulation> managed;
             {
                 std::lock_guard<std::mutex> lock(registryMutex_);
                 auto it = sims_.find(id);
                 if (it == sims_.end())
                     return errorJson("simulation '" + id + "' not found");
-                managed = it->second.get();
+                managed = it->second; // copie : garde l'objet vivant même si destroy() retire l'entrée entre-temps
             }
             std::lock_guard<std::mutex> simLock(managed->mutex);
             return fn(*managed);
@@ -205,16 +205,16 @@ namespace Serina::Daemon
         /// requête client.
         void tickAll()
         {
-            std::vector<ManagedSimulation *> candidates;
+            std::vector<std::shared_ptr<ManagedSimulation>> candidates;
             {
                 std::lock_guard<std::mutex> lock(registryMutex_);
                 for (auto &[id, managed] : sims_)
                     if (managed->running.load())
-                        candidates.push_back(managed.get());
+                        candidates.push_back(managed); // copie : voir le commentaire sur sims_
             }
 
             auto now = std::chrono::steady_clock::now();
-            for (auto *managed : candidates)
+            for (auto &managed : candidates)
             {
                 std::lock_guard<std::mutex> simLock(managed->mutex);
                 if (!managed->running.load())
@@ -236,7 +236,17 @@ namespace Serina::Daemon
 
     private:
         mutable std::mutex registryMutex_;
-        std::unordered_map<std::string, std::unique_ptr<ManagedSimulation>> sims_;
+        // shared_ptr, pas unique_ptr : withSimulation() et tickAll() relâchent
+        // registryMutex_ avant d'utiliser l'entrée (pour ne jamais bloquer tout
+        // le registre pendant qu'une simulation avance), donc destroy() peut
+        // retirer une entrée de la table pendant qu'un autre fil la tient déjà
+        // en main. Avec un unique_ptr, ce retrait détruisait l'objet (mutex
+        // compris) sous les pieds de l'autre fil -- use-after-free réel observé
+        // en production (crash du daemon, code de sortie 0xC0000005) quand deux
+        // `stop` arrivaient à quelques millisecondes d'écart. Une copie du
+        // shared_ptr, prise sous registryMutex_ avant de le relâcher, garde
+        // l'objet vivant tant que ce fil s'en sert, quoi que fasse destroy().
+        std::unordered_map<std::string, std::shared_ptr<ManagedSimulation>> sims_;
     };
 
     /// @brief Traite une requête JSON-lines déjà parsée et renvoie la
