@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { Map as MapIcon } from 'lucide-react';
+import { Map as MapIcon, ChevronUp, ChevronDown } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { useSelection } from '@services/SelectionContext';
 import { IndividualInfo, RegionInfo } from '../types';
@@ -84,6 +84,7 @@ export function WorldMap() {
   const { simulationData } = useSimulation();
   const { selectRegion, selectIndividual, showSpeciesDetail } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
@@ -352,32 +353,46 @@ export function WorldMap() {
         </div>
       )}
 
-      {/* Légendes flottantes en bas à gauche */}
-      <div className="absolute bottom-3 left-3 max-w-sm bg-slate-900/85 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg space-y-2">
-        <div className="flex flex-wrap gap-2">
-          {distinctBiomes.map((name) => (
-            <div key={name} className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: BIOME_COLORS[name] ?? FALLBACK_BIOME_COLOR }} />
-              <span className="text-slate-300">{name}</span>
+      {/* Légendes flottantes en bas à gauche -- hauteur bornée et repliable :
+          la liste d'espèces grandit avec les spéciations réelles et finissait
+          par couvrir une bonne partie de la carte (bug signalé), donc jamais
+          plus qu'une bande défilante, quelle que soit la génération. */}
+      <div className="absolute bottom-3 left-3 max-w-sm bg-slate-900/85 backdrop-blur-sm rounded-lg text-xs shadow-lg">
+        <button
+          className="w-full flex items-center justify-between px-3 py-2 text-slate-300 hover:text-slate-100"
+          onClick={() => setLegendCollapsed((v) => !v)}
+        >
+          <span className="font-medium">Légende ({distinctBiomes.length} biomes, {(lineages ?? []).length} espèces)</span>
+          {legendCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
+        {!legendCollapsed && (
+          <div className="px-3 pb-2 space-y-2 max-h-52 overflow-y-auto">
+            <div className="flex flex-wrap gap-2">
+              {distinctBiomes.map((name) => (
+                <div key={name} className="flex items-center gap-1">
+                  <span className="w-2.5 h-2.5 rounded-sm inline-block shrink-0" style={{ background: BIOME_COLORS[name] ?? FALLBACK_BIOME_COLOR }} />
+                  <span className="text-slate-300">{name}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-2 border-t border-slate-700 pt-2">
-          {(lineages ?? []).map((lineage) => (
-            <button
-              key={lineage.speciesName}
-              className="flex items-center gap-1 hover:bg-slate-700/60 rounded px-1 -mx-1"
-              onClick={() => showSpeciesDetail(lineage.speciesName)}
-              title="Voir la fiche complète de l'espèce"
-            >
-              <span
-                className="w-2.5 h-2.5 rounded-full inline-block"
-                style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
-              />
-              <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
-            </button>
-          ))}
-        </div>
+            <div className="flex flex-wrap gap-2 border-t border-slate-700 pt-2">
+              {(lineages ?? []).map((lineage) => (
+                <button
+                  key={lineage.speciesName}
+                  className="flex items-center gap-1 hover:bg-slate-700/60 rounded px-1 -mx-1"
+                  onClick={() => showSpeciesDetail(lineage.speciesName)}
+                  title="Voir la fiche complète de l'espèce"
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                    style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
+                  />
+                  <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

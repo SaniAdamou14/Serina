@@ -1,6 +1,11 @@
 import { useSimulation } from '@services/SimulationContext'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Dna, BarChart3, Sprout, Rocket, Globe2 } from 'lucide-react'
+import { AverageTraits, TRAIT_BOUNDS } from '../types'
+import { computeLineageHues, creatureColor } from '../utils/lineageColor'
+import { averageVisual } from '../utils/speciesVisual'
+import { CreatureIcon } from './CreatureIcon'
+import { TraitBar } from './TraitBar'
 
 const SPECIES_ORIGIN_STORIES: Record<string, string> = {
   canaria: 'Descendant direct des canaris originaux introduits sur Serina.',
@@ -28,6 +33,13 @@ export function GeneticAnalysis() {
   const { simulationData } = useSimulation()
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null)
 
+  const speciationEvents = simulationData?.lineages.speciationEvents
+  const allLineages = simulationData?.status.lineages
+  const lineageHues = useMemo(
+    () => computeLineageHues(speciationEvents ?? [], (allLineages ?? []).map((l) => l.speciesName)),
+    [speciationEvents, allLineages]
+  )
+
   if (!simulationData || simulationData.status.lineages.length === 0) {
     return (
       <div className="card">
@@ -48,6 +60,11 @@ export function GeneticAnalysis() {
   const lineages = simulationData.status.lineages
   const current = (selectedSpecies ? lineages.find((l) => l.speciesName === selectedSpecies) : lineages[0]) ?? lineages[0]
 
+  const members = simulationData.individuals.individuals.filter((i) => i.species === current.speciesName)
+  const visual = averageVisual(members)
+  const portraitColor = creatureColor(lineageHues.get(current.speciesName) ?? 0, visual?.camouflage ?? 0, '#334155')
+  const traitKeys = Object.keys(TRAIT_BOUNDS) as (keyof AverageTraits)[]
+
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-6">
@@ -65,22 +82,37 @@ export function GeneticAnalysis() {
         )}
       </div>
 
-      <div className="mb-6 p-4 bg-blue-950 rounded-lg">
-        <h4 className="font-semibold text-blue-200">{current.speciesName}</h4>
-        <p className="text-sm text-blue-300 mt-1">{getSpeciesOrigin(current.speciesName)}</p>
-        <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-blue-200">
-          <div>
-            <span className="font-medium">Population :</span> {current.population.toLocaleString()}
-          </div>
-          <div>
-            <span className="font-medium">Fitness moyenne :</span> {(current.averageFitness * 100).toFixed(0)}%
-          </div>
-          <div>
-            <span className="font-medium">Régions occupées :</span> {current.regionsOccupied}
-          </div>
-          <div>
-            <span className="font-medium">Complexité du cerveau (NEAT) :</span>{' '}
-            {current.hasBrain ? `${current.brainComplexity} nœuds/connexions` : '—'}
+      <div className="mb-6 p-4 bg-blue-950 rounded-lg grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="sm:col-span-1 flex items-center justify-center bg-slate-900/40 rounded-lg p-2">
+          {visual ? (
+            <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-20 h-20">
+              <CreatureIcon
+                individual={{ id: 0, species: current.speciesName, x: 0, y: 0, energy: 0, age: 0, ...visual }}
+                color={portraitColor}
+                detailed
+              />
+            </svg>
+          ) : (
+            <span className="text-xs text-blue-300/70 text-center">Aucun individu vivant</span>
+          )}
+        </div>
+        <div className="sm:col-span-3">
+          <h4 className="font-semibold text-blue-200">{current.speciesName}</h4>
+          <p className="text-sm text-blue-300 mt-1">{getSpeciesOrigin(current.speciesName)}</p>
+          <div className="grid grid-cols-2 gap-4 mt-3 text-sm text-blue-200">
+            <div>
+              <span className="font-medium">Population :</span> {current.population.toLocaleString()}
+            </div>
+            <div>
+              <span className="font-medium">Fitness moyenne :</span> {(current.averageFitness * 100).toFixed(0)}%
+            </div>
+            <div>
+              <span className="font-medium">Régions occupées :</span> {current.regionsOccupied}
+            </div>
+            <div>
+              <span className="font-medium">Complexité du cerveau (NEAT) :</span>{' '}
+              {current.hasBrain ? `${current.brainComplexity} nœuds/connexions` : '—'}
+            </div>
           </div>
         </div>
       </div>
@@ -104,6 +136,17 @@ export function GeneticAnalysis() {
               <div className="bg-primary-500 h-2 rounded-full transition-all duration-300" style={{ width: `${Math.min(100, value * 100)}%` }} />
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Les 12 traits réels du génome diploïde, moyennés sur la population
+          vivante -- le même détail que la fiche espèce (SpeciesDetailPanel),
+          pour que cet onglet ne donne jamais moins d'information que le
+          clic sur une carte d'espèce. */}
+      <h4 className="font-semibold mb-4 text-slate-200 flex items-center gap-2"><Dna className="w-4 h-4" /> Profil génétique complet (12 traits)</h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 mb-6">
+        {traitKeys.map((key) => (
+          <TraitBar key={key} traitKey={key} value={current.averageTraits[key]} />
         ))}
       </div>
 

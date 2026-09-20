@@ -37,7 +37,7 @@ interface Series {
 const CHART_W = 640
 const CHART_H = 160
 const PAD_L = 36
-const PAD_R = 8
+const PAD_R = 34 // laisse la place à l'étiquette de valeur en bout de courbe (sinon coupée par le bord du viewBox)
 const PAD_T = 10
 const PAD_B = 20
 

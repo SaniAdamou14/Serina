@@ -82,15 +82,24 @@ function countCritical(node: TreeNode): number {
 export function SpeciesEvolutionTree() {
   const { simulationData } = useSimulation();
   const svgRef = useRef<SVGSVGElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
 
   useEffect(() => {
-    if (simulationData?.status.lineages && simulationData.lineages.speciationEvents) {
-      const tree = buildRealTree(simulationData.status.lineages, simulationData.lineages.speciationEvents);
-      setTreeData(tree);
-      drawTree(tree);
-    }
+    if (!simulationData?.status.lineages || !simulationData.lineages.speciationEvents) return;
+    const tree = buildRealTree(simulationData.status.lineages, simulationData.lineages.speciationEvents);
+    setTreeData(tree);
+    drawTree(tree);
+
+    // Redessine si le conteneur change de taille (redimensionnement de
+    // fenêtre, repli du rail latéral...) -- évite un arbre figé à la largeur
+    // du tout premier rendu.
+    const container = containerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => drawTree(tree));
+    observer.observe(container);
+    return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [simulationData]);
 
@@ -101,12 +110,19 @@ export function SpeciesEvolutionTree() {
     svg.innerHTML = '';
 
     // Largeur proportionnelle au nombre de feuilles de chaque racine, pour
-    // que des arbres réellement plus ramifiés prennent plus de place.
+    // que des arbres réellement plus ramifiés prennent plus de place --
+    // mais jamais moins que la largeur réelle disponible à l'écran, pour
+    // qu'un petit arbre remplisse quand même tout l'espace plutôt que de
+    // laisser une bande vide. Rendu à l'échelle 1:1 (largeur/hauteur SVG en
+    // pixels, pas en pourcentage) dans un conteneur défilant horizontalement
+    // -- jamais de redimensionnement implicite qui écraserait ou couperait
+    // les nœuds (bug réel signalé : arbre trop étroit, dépasse par moments).
+    const availableWidth = containerRef.current?.clientWidth ?? 800;
     const leafCounts = tree.map((root) => Math.max(1, countDescendants(root)));
     const totalLeaves = leafCounts.reduce((a, b) => a + b, 0) || 1;
-    const width = Math.max(800, totalLeaves * 90);
+    const width = Math.max(availableWidth - 4, totalLeaves * 65);
     const levelHeight = 100;
-    const nodeRadius = 22;
+    const nodeRadius = 18;
 
     // Profondeur maximale réelle, pour dimensionner la hauteur du SVG plutôt
     // que de couper un arbre à plusieurs niveaux de spéciations imbriquées.
@@ -116,8 +132,8 @@ export function SpeciesEvolutionTree() {
     const height = 100 + (maxDepth + 1) * levelHeight;
 
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    svg.removeAttribute('width');
-    svg.removeAttribute('height');
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
 
     let cursor = 0;
     const layout = (node: TreeNode, depth: number): number => {
@@ -215,13 +231,9 @@ export function SpeciesEvolutionTree() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2">
-          <svg
-            ref={svgRef}
-            className="border border-slate-700 rounded-lg w-full bg-slate-950"
-            style={{ maxHeight: '500px' }}
-          ></svg>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 border border-slate-700 rounded-lg bg-slate-950 overflow-x-auto" ref={containerRef}>
+          <svg ref={svgRef} style={{ maxHeight: '500px', display: 'block' }}></svg>
         </div>
 
         <div className="space-y-4">

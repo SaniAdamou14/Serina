@@ -1,61 +1,15 @@
 import { useMemo } from 'react'
 import { X, Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
-import { AverageTraits, BIOLOGICAL_TYPE_NAMES, IndividualInfo, TRAIT_BOUNDS } from '../types'
+import { AverageTraits, BIOLOGICAL_TYPE_NAMES, TRAIT_BOUNDS } from '../types'
 import { computeLineageHues, creatureColor } from '../utils/lineageColor'
+import { averageVisual } from '../utils/speciesVisual'
 import { CreatureIcon } from './CreatureIcon'
+import { TraitBar } from './TraitBar'
 
 interface SpeciesDetailPanelProps {
   speciesName: string
   onClose: () => void
-}
-
-/** Moyenne réelle des canaux visuels (voir IndividualSnapshot côté C++) sur
- * tous les individus actuellement vivants de cette espèce -- le portrait
- * de la fiche montre donc ce que l'espèce est VRAIMENT en ce moment, pas
- * un idéal figé. Les paliers entiers (ornementation, motifs) sont
- * arrondis plutôt que moyennés en flottant, pour rester des paliers
- * discrets cohérents avec ce que CreatureIcon sait dessiner. */
-function averageVisual(individuals: IndividualInfo[]): Omit<IndividualInfo, 'id' | 'species' | 'x' | 'y' | 'energy' | 'age'> | null {
-  if (individuals.length === 0) return null
-  const n = individuals.length
-  const sum = individuals.reduce(
-    (acc, ind) => ({
-      biologicalType: ind.biologicalType,
-      sizeScale: acc.sizeScale + ind.sizeScale,
-      elongation: acc.elongation + ind.elongation,
-      camouflage: acc.camouflage + ind.camouflage,
-      ornamentTier: acc.ornamentTier + ind.ornamentTier,
-      sensoryProminence: acc.sensoryProminence + ind.sensoryProminence,
-      patternTier: acc.patternTier + ind.patternTier
-    }),
-    { biologicalType: individuals[0].biologicalType, sizeScale: 0, elongation: 0, camouflage: 0, ornamentTier: 0, sensoryProminence: 0, patternTier: 0 }
-  )
-  return {
-    biologicalType: sum.biologicalType,
-    sizeScale: sum.sizeScale / n,
-    elongation: sum.elongation / n,
-    camouflage: sum.camouflage / n,
-    ornamentTier: Math.round(sum.ornamentTier / n),
-    sensoryProminence: sum.sensoryProminence / n,
-    patternTier: Math.round(sum.patternTier / n)
-  }
-}
-
-function TraitBar({ traitKey, value }: { traitKey: keyof AverageTraits; value: number }) {
-  const bounds = TRAIT_BOUNDS[traitKey]
-  const fraction = Math.max(0, Math.min(1, (value - bounds.min) / (bounds.max - bounds.min)))
-  return (
-    <div>
-      <div className="flex justify-between text-xs text-slate-400 mb-0.5">
-        <span>{bounds.label}</span>
-        <span>{value.toFixed(2)}</span>
-      </div>
-      <div className="w-full bg-slate-800 rounded-full h-1.5">
-        <div className="bg-primary-500 h-1.5 rounded-full" style={{ width: `${fraction * 100}%` }} />
-      </div>
-    </div>
-  )
 }
 
 /**

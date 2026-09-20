@@ -1,6 +1,10 @@
+import { useMemo } from 'react'
 import { Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
+import { computeLineageHues, creatureColor } from '../utils/lineageColor'
+import { averageVisual } from '../utils/speciesVisual'
+import { CreatureIcon } from './CreatureIcon'
 
 /** UnifiedWorldSimulator ne modélise pas encore un score de risque
  * d'extinction (voir CONTRIBUTING.md) -- ce seuil de population est un fait
@@ -22,6 +26,13 @@ function getPopulationStatusLabel(population: number) {
 export function SpeciesPanel() {
   const { simulationData } = useSimulation()
   const { showSpeciesDetail } = useSelection()
+
+  const speciationEvents = simulationData?.lineages.speciationEvents
+  const allLineages = simulationData?.status.lineages
+  const lineageHues = useMemo(
+    () => computeLineageHues(speciationEvents ?? [], (allLineages ?? []).map((l) => l.speciesName)),
+    [speciationEvents, allLineages]
+  )
 
   if (!simulationData) {
     return (
@@ -71,6 +82,10 @@ export function SpeciesPanel() {
       <div className="space-y-4">
         {lineages.map((lineage) => {
           const share = status.population > 0 ? (lineage.population / status.population) * 100 : 0
+          const members = simulationData.individuals.individuals.filter((i) => i.species === lineage.speciesName)
+          const visual = averageVisual(members)
+          const hue = lineageHues.get(lineage.speciesName) ?? 0
+          const portraitColor = creatureColor(hue, visual?.camouflage ?? 0, '#334155')
 
           return (
             <button
@@ -80,8 +95,18 @@ export function SpeciesPanel() {
             >
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-genetic-500 flex items-center justify-center text-white font-bold">
-                    {lineage.speciesName.charAt(0)}
+                  <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden">
+                    {visual ? (
+                      <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-9 h-9">
+                        <CreatureIcon
+                          individual={{ id: 0, species: lineage.speciesName, x: 0, y: 0, energy: 0, age: 0, ...visual }}
+                          color={portraitColor}
+                          detailed
+                        />
+                      </svg>
+                    ) : (
+                      <span className="text-white font-bold">{lineage.speciesName.charAt(0)}</span>
+                    )}
                   </div>
                   <div>
                     <h4 className="font-semibold text-slate-100">{lineage.speciesName}</h4>

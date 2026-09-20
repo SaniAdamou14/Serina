@@ -35,8 +35,13 @@ export function SimulationDashboard() {
       <TopBar />
 
       {!currentSimulationId ? (
-        <main className="flex-1 overflow-y-auto flex items-center justify-center p-6">
-          <div className="w-full max-w-md">
+        <main className="flex-1 overflow-y-auto flex justify-center p-6">
+          {/* items-center retiré volontairement : un flex centré verticalement
+              rend le haut du contenu inatteignable dès qu'il dépasse la
+              hauteur de la fenêtre (le défilement part du milieu, jamais du
+              haut) -- bug réel signalé sur les petites fenêtres. Un simple
+              padding vertical centre visuellement sans jamais rien couper. */}
+          <div className="w-full max-w-md py-6">
             <SimulationControl />
           </div>
         </main>
