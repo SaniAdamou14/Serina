@@ -4,6 +4,7 @@ import { useSimulation } from '@services/SimulationContext';
 import { RegionInfo, IndividualInfo } from '../types';
 import { computeLineageHues, creatureColor } from '../utils/lineageColor';
 import { CreatureIcon } from './CreatureIcon';
+import { SpeciesDetailPanel } from './SpeciesDetailPanel';
 
 /** Couleurs réelles par biome (nom exact renvoyé par le backend, voir
  * EnvironmentalAdaptation.hpp) -- pas une palette générique par index, pour
@@ -69,6 +70,7 @@ export function WorldMap() {
   const { simulationData } = useSimulation();
   const [selectedRegion, setSelectedRegion] = useState<RegionInfo | null>(null);
   const [selectedIndividual, setSelectedIndividual] = useState<IndividualInfo | null>(null);
+  const [detailSpecies, setDetailSpecies] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
@@ -265,13 +267,18 @@ export function WorldMap() {
         </div>
         <div className="flex flex-wrap gap-2 border-t border-slate-700 pt-2">
           {(lineages ?? []).map((lineage) => (
-            <div key={lineage.speciesName} className="flex items-center gap-1">
+            <button
+              key={lineage.speciesName}
+              className="flex items-center gap-1 hover:bg-slate-700/60 rounded px-1 -mx-1"
+              onClick={() => setDetailSpecies(lineage.speciesName)}
+              title="Voir la fiche complète de l'espèce"
+            >
               <span
                 className="w-2.5 h-2.5 rounded-full inline-block"
                 style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
               />
               <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -301,6 +308,12 @@ export function WorldMap() {
             <div>🕒 Âge : {selectedIndividual.age.toFixed(1)}</div>
             <div className="col-span-2">📍 Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
           </div>
+          <button
+            className="mt-3 w-full text-xs bg-amber-800 hover:bg-amber-700 text-amber-100 rounded px-2 py-1.5"
+            onClick={() => setDetailSpecies(selectedIndividual.species)}
+          >
+            📋 Voir la fiche complète de l'espèce
+          </button>
         </div>
       )}
 
@@ -309,6 +322,8 @@ export function WorldMap() {
           Cliquez une région ou un individu pour l'inspecter. Molette : zoom. Glisser : déplacer.
         </div>
       )}
+
+      {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => setDetailSpecies(null)} />}
     </div>
   );
 }

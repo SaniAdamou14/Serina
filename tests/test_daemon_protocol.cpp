@@ -69,6 +69,22 @@ TEST_CASE("status reports real per-species lineages, not an aggregate placeholde
         REQUIRE(lineage["population"] > 0);
         REQUIRE(lineage.contains("brainComplexity"));
         REQUIRE(lineage["hasBrain"] == true);
+
+        // Moyenne réelle des 12 traits, dans leurs vraies bornes
+        // biologiques (Genetics::TRAIT_BOUNDS), pas [0,1] -- une fiche
+        // d'espèce complète a besoin de bien plus que les quelques traits
+        // utilisés pour le rendu visuel des individus.
+        REQUIRE(lineage.contains("averageTraits"));
+        const auto &traits = lineage["averageTraits"];
+        double size = traits["size"];
+        double aggression = traits["aggression"];
+        double visionRange = traits["visionRange"];
+        REQUIRE(size >= 0.1);
+        REQUIRE(size <= 2.0);
+        REQUIRE(aggression >= 0.0);
+        REQUIRE(aggression <= 1.0);
+        REQUIRE(visionRange >= 0.5);
+        REQUIRE(visionRange <= 5.0);
     }
 }
 

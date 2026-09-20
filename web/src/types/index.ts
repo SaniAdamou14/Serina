@@ -24,6 +24,43 @@ export const BIOLOGICAL_TYPE_NAMES = [
 
 // === status command -> latestData.status ===
 
+/** Real average of the 12 diploid trait values (Genetics::TraitType) across
+ * every living individual of a lineage -- real bounded values (see
+ * TRAIT_BOUNDS below), not normalized [0,1] and not invented. */
+export interface AverageTraits {
+  size: number
+  speed: number
+  energyEfficiency: number
+  reproductionRate: number
+  aggression: number
+  intelligence: number
+  longevity: number
+  resistance: number
+  visionRange: number
+  hearingAcuity: number
+  camouflage: number
+  socialBehavior: number
+}
+
+/** Mirrors Genetics::TRAIT_BOUNDS (include/Serina/AdvancedGenetics.hpp) --
+ * must stay in sync with that table. Used only to normalize a real trait
+ * value into a bar width; the values themselves always come from the
+ * backend. */
+export const TRAIT_BOUNDS: Record<keyof AverageTraits, { min: number; max: number; label: string }> = {
+  size: { min: 0.1, max: 2.0, label: 'Taille' },
+  speed: { min: 0.1, max: 3.0, label: 'Vitesse' },
+  energyEfficiency: { min: 0.3, max: 1.0, label: 'Efficacité énergétique' },
+  reproductionRate: { min: 0.1, max: 1.0, label: 'Taux de reproduction' },
+  aggression: { min: 0.0, max: 1.0, label: 'Agressivité' },
+  intelligence: { min: 0.2, max: 1.0, label: 'Intelligence' },
+  longevity: { min: 0.5, max: 2.0, label: 'Longévité' },
+  resistance: { min: 0.1, max: 1.0, label: 'Résistance' },
+  visionRange: { min: 0.5, max: 5.0, label: 'Portée visuelle' },
+  hearingAcuity: { min: 0.1, max: 3.0, label: 'Acuité auditive' },
+  camouflage: { min: 0.0, max: 1.0, label: 'Camouflage' },
+  socialBehavior: { min: 0.0, max: 1.0, label: 'Comportement social' }
+}
+
 export interface LineageStatus {
   speciesName: string
   /** Serina::Taxonomy::BiologicalType enum ordinal, see BIOLOGICAL_TYPE_NAMES */
@@ -38,6 +75,7 @@ export interface LineageStatus {
   hasBrain: boolean
   /** Node + connection count of this lineage's real NEAT brain. */
   brainComplexity: number
+  averageTraits: AverageTraits
 }
 
 export interface StatusResult {

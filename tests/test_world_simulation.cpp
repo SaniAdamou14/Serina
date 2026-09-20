@@ -76,6 +76,39 @@ TEST_CASE("seedFounderSpecies places real individuals with real diploid genomes"
     }
 }
 
+TEST_CASE("lineage snapshots include real average trait values, in their real biological bounds", "[worldsim][genetics]") {
+    UnifiedWorldSimulator sim({}, 42);
+    sim.seedFounderSpecies(10);
+
+    for (const auto &snap : sim.getLineageSnapshots()) {
+        const auto &t = snap.averageTraits;
+        // Genetics::TRAIT_BOUNDS (AdvancedGenetics.hpp) -- valeurs réelles,
+        // pas normalisées [0,1]. Une moyenne sur 10 individus indépendants
+        // ne peut jamais tomber exactement sur une borne, donc une valeur
+        // à zéro ou hors-borne indiquerait que le champ n'est pas
+        // réellement calculé.
+        REQUIRE(t.size >= 0.1);
+        REQUIRE(t.size <= 2.0);
+        REQUIRE(t.speed >= 0.1);
+        REQUIRE(t.speed <= 3.0);
+        REQUIRE(t.aggression >= 0.0);
+        REQUIRE(t.aggression <= 1.0);
+        REQUIRE(t.visionRange >= 0.5);
+        REQUIRE(t.visionRange <= 5.0);
+        // Une vraie moyenne sur des génomes indépendamment randomisés varie
+        // d'une lignée à l'autre -- ce n'est pas juste la valeur par défaut
+        // (0.8) répétée partout.
+    }
+
+    auto snapshots = sim.getLineageSnapshots();
+    bool anySizeDiffersFromDefault = false;
+    for (const auto &snap : snapshots) {
+        if (std::abs(snap.averageTraits.size - 0.8) > 0.01) // 0.8 = TRAIT_BOUNDS[SIZE].defaultValue
+            anySizeDiffersFromDefault = true;
+    }
+    REQUIRE(anySizeDiffersFromDefault);
+}
+
 TEST_CASE("genetic diversity is computed from real genome distance, not drawn at random", "[worldsim][genetics]") {
     // AdvancedGenome's own RNG (AdvancedGenome::getRandomEngine()) is a
     // thread_local engine seeded from std::random_device — genome content

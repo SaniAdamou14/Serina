@@ -40,6 +40,11 @@ namespace Serina::Simulation
         uint32_t regionsOccupied = 0;
         std::vector<std::string> adaptations;
         std::vector<std::string> innovations;
+        /// Moyenne réelle des 12 traits diploïdes sur tous les individus
+        /// vivants de cette lignée (valeurs réelles bornées, pas [0,1]) --
+        /// pour une fiche d'espèce qui montre ce qu'elle est vraiment,
+        /// pas seulement les quelques traits utilisés pour le rendu visuel.
+        Genetics::AdvancedTraitValues averageTraits;
     };
 
     struct SpeciationEvent
@@ -881,6 +886,43 @@ namespace Serina::Simulation
                     regions[regionKey(gx, gy)] = true;
                 }
                 snap.regionsOccupied = static_cast<uint32_t>(regions.size());
+
+                if (!indices.empty())
+                {
+                    Genetics::AdvancedTraitValues sum{};
+                    sum.size = sum.speed = sum.energyEfficiency = sum.reproductionRate = 0.0;
+                    sum.aggression = sum.intelligence = sum.longevity = sum.resistance = 0.0;
+                    sum.visionRange = sum.hearingAcuity = sum.camouflage = sum.socialBehavior = 0.0;
+                    for (size_t idx : indices)
+                    {
+                        auto traits = toTraitValues(population_[idx].getGenome());
+                        sum.size += traits.size;
+                        sum.speed += traits.speed;
+                        sum.energyEfficiency += traits.energyEfficiency;
+                        sum.reproductionRate += traits.reproductionRate;
+                        sum.aggression += traits.aggression;
+                        sum.intelligence += traits.intelligence;
+                        sum.longevity += traits.longevity;
+                        sum.resistance += traits.resistance;
+                        sum.visionRange += traits.visionRange;
+                        sum.hearingAcuity += traits.hearingAcuity;
+                        sum.camouflage += traits.camouflage;
+                        sum.socialBehavior += traits.socialBehavior;
+                    }
+                    double n = static_cast<double>(indices.size());
+                    snap.averageTraits.size = sum.size / n;
+                    snap.averageTraits.speed = sum.speed / n;
+                    snap.averageTraits.energyEfficiency = sum.energyEfficiency / n;
+                    snap.averageTraits.reproductionRate = sum.reproductionRate / n;
+                    snap.averageTraits.aggression = sum.aggression / n;
+                    snap.averageTraits.intelligence = sum.intelligence / n;
+                    snap.averageTraits.longevity = sum.longevity / n;
+                    snap.averageTraits.resistance = sum.resistance / n;
+                    snap.averageTraits.visionRange = sum.visionRange / n;
+                    snap.averageTraits.hearingAcuity = sum.hearingAcuity / n;
+                    snap.averageTraits.camouflage = sum.camouflage / n;
+                    snap.averageTraits.socialBehavior = sum.socialBehavior / n;
+                }
 
                 snapshots.push_back(std::move(snap));
             }

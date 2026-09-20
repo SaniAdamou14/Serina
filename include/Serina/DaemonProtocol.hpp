@@ -75,6 +75,7 @@ namespace Serina::Daemon
 
     inline json lineageToJson(const Simulation::LineageSnapshot &l, const Simulation::UnifiedWorldSimulator &sim)
     {
+        const auto &t = l.averageTraits;
         return {
             {"speciesName", l.speciesName},
             {"biologicalType", static_cast<int>(l.biologicalType)},
@@ -85,7 +86,24 @@ namespace Serina::Daemon
             {"adaptations", l.adaptations},
             {"innovations", l.innovations},
             {"hasBrain", sim.hasBrain(l.speciesName)},
-            {"brainComplexity", sim.getBrainComplexity(l.speciesName)}};
+            {"brainComplexity", sim.getBrainComplexity(l.speciesName)},
+            // Moyenne réelle des 12 traits diploïdes sur tous les individus
+            // vivants de cette lignée (valeurs réelles bornées, voir
+            // Genetics::TRAIT_BOUNDS -- pas [0,1]) -- pour une fiche
+            // d'espèce complète, pas seulement les quelques traits déjà
+            // utilisés pour le rendu visuel des individus sur la carte.
+            {"averageTraits", {{"size", t.size},
+                                {"speed", t.speed},
+                                {"energyEfficiency", t.energyEfficiency},
+                                {"reproductionRate", t.reproductionRate},
+                                {"aggression", t.aggression},
+                                {"intelligence", t.intelligence},
+                                {"longevity", t.longevity},
+                                {"resistance", t.resistance},
+                                {"visionRange", t.visionRange},
+                                {"hearingAcuity", t.hearingAcuity},
+                                {"camouflage", t.camouflage},
+                                {"socialBehavior", t.socialBehavior}}}};
     }
 
     inline json speciationEventToJson(const Simulation::SpeciationEvent &e)
