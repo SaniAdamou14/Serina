@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Skull } from 'lucide-react'
 import { TopBar } from './TopBar'
 import { BottomBar } from './BottomBar'
 import { LeftRail, DashboardTab } from './LeftRail'
@@ -26,13 +27,29 @@ import { useSelection } from '@services/SelectionContext'
  * est affiché -- l'équivalent de l'écran de création de colonie.
  */
 export function SimulationDashboard() {
-  const { currentSimulationId } = useSimulation()
+  const { currentSimulationId, simulationData } = useSimulation()
   const { detailSpecies, showSpeciesDetail } = useSelection()
   const [activeTab, setActiveTab] = useState<DashboardTab>('map')
+
+  // Fait réel observé en production : une simulation peut perdre toute sa
+  // population (effondrement génétique d'une petite population isolée) et
+  // continuer à tourner sur un monde vide pendant des milliers de
+  // générations sans que rien ne le signale. Le daemon se met maintenant en
+  // pause automatiquement dès que ça arrive (voir DaemonProtocol.hpp) ;
+  // cet avis rend ce fait honnêtement visible plutôt que de laisser
+  // deviner pourquoi plus rien n'avance.
+  const isExtinct = !!currentSimulationId && simulationData?.status.population === 0
 
   return (
     <div className="h-screen flex flex-col bg-slate-950 overflow-hidden">
       <TopBar />
+
+      {isExtinct && (
+        <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-2 text-sm text-red-300 shrink-0">
+          <Skull className="w-4 h-4 shrink-0" />
+          Écosystème éteint — plus aucun individu vivant (génération {simulationData?.status.generation}). Simulation automatiquement mise en pause.
+        </div>
+      )}
 
       {!currentSimulationId ? (
         <main className="flex-1 overflow-y-auto flex justify-center p-6">

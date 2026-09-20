@@ -247,6 +247,16 @@ namespace Serina::Daemon
                 {
                     managed->sim->step();
                     managed->lastTick = now;
+                    // Extinction totale : rien à faire avancer. Sans ça,
+                    // `step()` continue d'incrémenter la génération sur un
+                    // monde vide indéfiniment (observé en production :
+                    // ~4200 générations "avancées" pour rien après une
+                    // vraie extinction, jusqu'à un arrêt manuel). La mise
+                    // en pause automatique est visible côté client dès le
+                    // prochain sondage (`status.running`, voir
+                    // SimulationContext.tsx).
+                    if (managed->sim->getPopulationCount() == 0)
+                        managed->running = false;
                 }
             }
         }
@@ -335,7 +345,17 @@ namespace Serina::Daemon
             result = registry.withSimulation(simulationId, [&](ManagedSimulation &m)
                                               {
                 for (uint32_t i = 0; i < count; ++i)
+                {
                     m.sim->step();
+                    // Extinction totale : inutile de continuer à avancer un
+                    // monde vide sur le reste du compte demandé (voir le
+                    // même garde-fou dans tickAll()).
+                    if (m.sim->getPopulationCount() == 0)
+                    {
+                        m.running = false;
+                        break;
+                    }
+                }
                 json r = successJson();
                 r["generation"] = m.sim->getGeneration();
                 return r; });

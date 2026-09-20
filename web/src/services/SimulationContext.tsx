@@ -84,6 +84,13 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
 
     socket.on('simulation-data', (tick: SimulationTick) => {
       setSimulationData(tick)
+      // Resynchronise isRunning sur la vraie valeur renvoyée à CHAQUE
+      // sondage (toutes les ~500ms), pas seulement sur les événements
+      // ponctuels ci-dessous -- ceux-ci pouvaient se désynchroniser de
+      // l'état réel du daemon (ex. bouton Pause qui semblait ne rien
+      // faire), et ne reflétaient jamais une mise en pause automatique
+      // décidée côté serveur (ex. extinction totale, voir DaemonProtocol.hpp).
+      if (typeof tick.status.running === 'boolean') setIsRunning(tick.status.running)
     })
 
     socket.on('simulation-state', (state: { isRunning?: boolean; latestData?: SimulationTick | null }) => {

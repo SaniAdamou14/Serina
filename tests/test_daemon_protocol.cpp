@@ -263,6 +263,120 @@ TEST_CASE("load refuses to overwrite an existing simulation id", "[daemon]")
     REQUIRE(loadResponse["status"] == "error");
 }
 
+TEST_CASE("step auto-pauses a simulation once its population goes fully extinct", "[daemon]")
+{
+    // Régression réelle observée en production : une simulation qui perdait
+    // toute sa population continuait d'avancer sur un monde vide pendant
+    // des milliers de générations (~4200 dans le cas observé) jusqu'à un
+    // arrêt manuel -- rien ne signalait que l'écosystème était mort.
+    // foragingRate=0.0 annule le seul revenu énergétique positif du moteur
+    // (voir WorldSimulationParameters::foragingRate) -- un outil de test
+    // déterministe pour déclencher une extinction, pas un scénario réaliste.
+    // Le test de non-régression de la famine (test_world_simulation.cpp)
+    // a mesuré qu'une extinction totale prend environ 2000 générations
+    // même sans aucun revenu énergétique -- ce nombre d'itérations est
+    // choisi en conséquence, pas au hasard.
+    Simulation::WorldSimulationParameters params{};
+    params.foragingRate = 0.0;
+    Simulation::UnifiedWorldSimulator seed(params, 777);
+    seed.seedFounderSpecies(5);
+
+    Daemon::SimulationRegistry registry;
+    REQUIRE(registry.load("dying-sim", seed.toJson())["status"] == "success");
+
+    // Interroge directement la population réelle plutôt que la commande
+    // `status` complète (qui reconstruit tout le tableau de lignées avec
+    // complexité de cerveau par lignée à chaque appel) -- répété 5000 fois,
+    // `status` faisait à lui seul passer ce test de <1s à plus de 40s.
+    auto populationOf = [&]()
+    {
+        size_t pop = 0;
+        registry.withSimulation("dying-sim", [&](Daemon::ManagedSimulation &m)
+                                 {
+            pop = m.sim->getPopulationCount();
+            return Daemon::successJson(); });
+        return pop;
+    };
+
+    bool becameExtinct = false;
+    for (int i = 0; i < 5000 && !becameExtinct; ++i)
+    {
+        Daemon::handleCommand(registry, makeRequest("step", "dying-sim"));
+        if (populationOf() == 0)
+            becameExtinct = true;
+    }
+
+    REQUIRE(becameExtinct);
+    REQUIRE(populationOf() == 0);
+    bool stillRunning = true;
+    registry.withSimulation("dying-sim", [&](Daemon::ManagedSimulation &m)
+                             {
+        stillRunning = m.running.load();
+        return Daemon::successJson(); });
+    REQUIRE_FALSE(stillRunning);
+}
+
+TEST_CASE("tickAll also auto-pauses on extinction, not just manual step", "[daemon]")
+{
+    // Même garde-fou, mais par le vrai chemin de production (le fil
+    // planificateur, gouverné par une vraie horloge). Avancer jusqu'à
+    // extinction complète *via tickAll()* prendrait un temps réel bien trop
+    // long pour un test (des milliers de vrais ticks, même au plancher de
+    // 10ms) -- on avance donc directement (sans horloge) jusqu'à ce qu'il
+    // ne reste presque plus personne, puis on ne bascule sur tickAll() que
+    // pour les toutes dernières générations, là où l'extinction survient
+    // réellement. La logique de garde-fou elle-même est un `if` identique
+    // à celui déjà prouvé par le test `step` ci-dessus ; ceci vérifie
+    // seulement qu'il est bien câblé sur CE chemin-là aussi.
+    Simulation::WorldSimulationParameters params{};
+    params.foragingRate = 0.0;
+    Simulation::UnifiedWorldSimulator seed(params, 778);
+    seed.seedFounderSpecies(5);
+    // Le nombre de générations avant extinction totale varie sensiblement
+    // selon la graine (~1500 à ~2500 observé) -- pas de seuil fixe fiable.
+    // On avance donc pas à pas (sans horloge, rapide) en gardant le DERNIER
+    // instantané encore vivant, jusqu'au pas qui vient de tout éteindre --
+    // ce dernier instantané vivant est alors, par construction, à une
+    // génération de l'extinction, quelle que soit la graine.
+    // Un instantané complet (toJson()) sérialise tout -- génomes diploïdes
+    // et cerveaux NEAT compris -- et coûte sensiblement plus qu'un simple
+    // step() ; le prendre à CHAQUE pas sur ~2000 pas est ce qui rendait ce
+    // test lent. Un instantané tous les 20 pas laisse une marge large mais
+    // largement suffisante pour que tickAll() observe la mort finale
+    // ci-dessous, pour une fraction du coût.
+    const int SNAPSHOT_INTERVAL = 20;
+    Simulation::json lastAliveSnapshot = seed.toJson();
+    for (int i = 0; i < 5000 && seed.getPopulationCount() > 0; ++i)
+    {
+        seed.step();
+        if (seed.getPopulationCount() > 0 && i % SNAPSHOT_INTERVAL == 0)
+            lastAliveSnapshot = seed.toJson();
+    }
+    REQUIRE(seed.getPopulationCount() == 0); // confirme qu'on a bien atteint l'extinction dans la limite d'itérations
+
+    Daemon::SimulationRegistry registry;
+    REQUIRE(registry.load("dying-sim-2", lastAliveSnapshot)["status"] == "success");
+    // ticksPerSecond élevé -> tickIntervalMs au plancher (10ms, voir la
+    // commande `play`), pour ne pas attendre inutilement longtemps ici.
+    // Borne plus large que l'écart entre deux instantanés (SNAPSHOT_INTERVAL)
+    // pour laisser le temps à tickAll() de rattraper l'extinction réelle.
+    Daemon::handleCommand(registry, makeRequest("play", "dying-sim-2", {{"ticksPerSecond", 1000}}));
+
+    bool becameExtinct = false;
+    for (int i = 0; i < 4 * SNAPSHOT_INTERVAL && !becameExtinct; ++i)
+    {
+        registry.tickAll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(12));
+        auto statusResult = Daemon::handleCommand(registry, makeRequest("status", "dying-sim-2"));
+        if (statusResult["population"] == 0)
+        {
+            becameExtinct = true;
+            REQUIRE_FALSE(statusResult["running"].get<bool>());
+        }
+    }
+    REQUIRE(becameExtinct);
+}
+
 TEST_CASE("destroy removes a simulation so it is no longer listed", "[daemon]")
 {
     Daemon::SimulationRegistry registry;
