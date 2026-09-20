@@ -90,6 +90,30 @@ namespace Serina::Evolution
             vy_ = vy;
         }
         void setAlive(bool alive) { alive_ = alive; }
+        /// @brief Restaure un âge précis (reprise de simulation sauvegardée)
+        /// -- sans ceci un organisme rechargé repartirait de l'âge 0 et
+        /// gagnerait une longévité qu'il n'a pas réellement.
+        void setAge(double age) { age_ = age; }
+        /// @brief Restaure l'identité exacte d'un organisme rechargé --
+        /// le constructeur assigne normalement un nouvel id via
+        /// `nextId_++`, ce qui romprait toute référence externe à son
+        /// ancien id (ex. `parent1_id`/`parent2_id` ailleurs si jamais
+        /// utilisés). Ne fait jamais reculer `nextId_` lui-même : voir
+        /// `advanceNextIdTo()`.
+        void setId(uint64_t id) { id_ = id; }
+
+        /// @brief Le compteur global (partagé par toutes les simulations du
+        /// process) -- exposé en lecture pour la sauvegarde.
+        static uint64_t getNextId() { return nextId_; }
+        /// @brief Avance le compteur global si besoin, jamais en arrière --
+        /// après une reprise, garantit qu'aucun nouvel organisme (dans
+        /// cette simulation ou une autre déjà active) ne réutilisera un id
+        /// restauré.
+        static void advanceNextIdTo(uint64_t minId)
+        {
+            if (minId > nextId_)
+                nextId_ = minId;
+        }
 
         /// @brief Met à jour l'organisme (vieillissement, métabolisme)
         void update(double deltaTime)

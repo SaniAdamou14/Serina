@@ -31,9 +31,13 @@ catch_discover_tests(test_runner_integration)
 # WorldSimulation.hpp and everything it composes (Region, PopulationManager,
 # EcosystemTaxonomy, EcologicalInteractions, EvolutionaryConstraints,
 # EnvironmentalAdaptation) are header-only, so this target needs no library
-# beyond Catch2 itself.
+# beyond Catch2 itself -- except nlohmann_json (header-only too, only the
+# lightweight <nlohmann/json_fwd.hpp> forward declaration is actually
+# needed here) since WorldSimulation.hpp declares
+# UnifiedWorldSimulator::toJson()/fromJson() (defined in
+# SimulationSerialization.hpp, see test_simulation_serialization below).
 add_executable(test_world_simulation test_world_simulation.cpp)
-target_link_libraries(test_world_simulation PRIVATE Catch2::Catch2WithMain)
+target_link_libraries(test_world_simulation PRIVATE Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
 target_include_directories(test_world_simulation PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_features(test_world_simulation PRIVATE cxx_std_20)
 catch_discover_tests(test_world_simulation)
@@ -53,3 +57,17 @@ if(WIN32)
     target_link_libraries(test_daemon_protocol PRIVATE ws2_32)
 endif()
 catch_discover_tests(test_daemon_protocol)
+
+# Serina/SimulationSerialization.hpp (sauvegarde/reprise, Chantier H) : a
+# besoin de la vraie bibliothèque nlohmann/json (pas seulement la
+# déclaration avancée que WorldSimulation.hpp utilise), donc une cible
+# séparée de test_world_simulation plutôt que d'imposer cette dépendance à
+# tout le fichier existant.
+add_executable(test_simulation_serialization test_simulation_serialization.cpp)
+target_link_libraries(test_simulation_serialization PRIVATE
+    Catch2::Catch2WithMain
+    nlohmann_json::nlohmann_json
+)
+target_include_directories(test_simulation_serialization PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_simulation_serialization PRIVATE cxx_std_20)
+catch_discover_tests(test_simulation_serialization)

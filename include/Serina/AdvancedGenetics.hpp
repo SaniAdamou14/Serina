@@ -215,11 +215,22 @@ namespace Serina::Genetics
         }
 
         /// @brief Constructeur avec traits spécifiques
-        AdvancedGenome(const std::vector<GeneticTrait> &traits, uint32_t generation = 0)
+        /// @param generateNewLineageId Si false, ne tire PAS un nouvel
+        /// identifiant de lignage aléatoire -- réservé à la restauration
+        /// d'une simulation sauvegardée (SimulationSerialization.hpp), où
+        /// l'appelant restaure l'identifiant exact via setLineageId()
+        /// juste après. Sans ça, chaque organisme rechargé perturberait
+        /// inutilement le générateur aléatoire partagé au niveau du fil
+        /// d'exécution (getRandomEngine(), ci-dessous) -- un effet de bord
+        /// qui affecterait même les AUTRES simulations en cours dans le
+        /// même process, sans aucun bénéfice puisque la valeur tirée est
+        /// immédiatement écrasée.
+        AdvancedGenome(const std::vector<GeneticTrait> &traits, uint32_t generation = 0, bool generateNewLineageId = true)
             : traits_(traits), generation_(generation), fitness_(0.0)
         {
             ensureAllTraits();
-            generateLineageId();
+            if (generateNewLineageId)
+                generateLineageId();
         }
 
         /// @brief Initialise tous les traits avec des valeurs aléatoires
@@ -418,6 +429,10 @@ namespace Serina::Genetics
         double getFitness() const { return fitness_; }
         void setFitness(double fitness) { fitness_ = fitness; }
         const std::vector<GeneticTrait> &getTraits() const { return traits_; }
+        /// @brief Restaure un identifiant de lignage précis (reprise de
+        /// simulation sauvegardée) -- le constructeur en génère normalement
+        /// un nouveau aléatoire, ce qui romprait la continuité voulue ici.
+        void setLineageId(const std::string &lineageId) { lineageId_ = lineageId; }
 
         /// @brief Calcule la distance génétique avec un autre génome
         double geneticDistance(const AdvancedGenome &other) const

@@ -23,6 +23,16 @@
 #include <cmath>
 #include <optional>
 #include <array>
+#include <memory>
+
+// Déclaration avancée seulement (fichier léger, pas l'implémentation
+// complète) : ce header et les autres headers de simulation ne dépendent
+// délibérément pas de nlohmann/json -- seuls le daemon (DaemonProtocol.hpp)
+// et le module de sérialisation (SimulationSerialization.hpp) le font. Ça
+// suffit pour déclarer toJson()/fromJson() ci-dessous ; leur définition
+// complète (qui, elle, a besoin du vrai type) vit dans
+// SimulationSerialization.hpp.
+#include <nlohmann/json_fwd.hpp>
 
 namespace Serina::Simulation
 {
@@ -176,7 +186,7 @@ namespace Serina::Simulation
         explicit UnifiedWorldSimulator(WorldSimulationParameters params = {},
                                         uint32_t seed = std::random_device{}())
             : params_(params), grid_(params.gridWidth, params.gridHeight, seed),
-              environments_(seed), rng_(seed)
+              environments_(seed), seed_(seed), rng_(seed)
         {
         }
 
@@ -245,6 +255,24 @@ namespace Serina::Simulation
         uint32_t getGeneration() const { return generation_; }
         size_t getPopulationCount() const { return population_.size(); }
         const Spatial::RegionGrid &getGrid() const { return grid_; }
+        uint32_t getSeed() const { return seed_; }
+        const WorldSimulationParameters &getParams() const { return params_; }
+
+        /// @brief Sérialisation complète pour sauvegarde/reprise (voir
+        /// SimulationSerialization.hpp, qui inclut nlohmann/json.hpp --
+        /// délibérément pas inclus ici : ce fichier et les autres headers
+        /// de simulation ne dépendent pas de nlohmann/json, seul le daemon
+        /// et ce module de sérialisation le font). Le type de retour/
+        /// paramètre n'a besoin que d'une déclaration avancée ici
+        /// (<nlohmann/json_fwd.hpp>, incluse plus bas) ; la définition
+        /// complète vit dans SimulationSerialization.hpp qui, lui, inclut
+        /// la vraie bibliothèque.
+        nlohmann::json toJson() const;
+        /// @brief Retourne un pointeur (pas un objet par valeur) : évite de
+        /// dépendre de la mutabilité/déplaçabilité de la classe entière, et
+        /// correspond exactement à comment le daemon la stocke déjà
+        /// (`ManagedSimulation::sim`, un `unique_ptr`).
+        static std::unique_ptr<UnifiedWorldSimulator> fromJson(const nlohmann::json &j);
 
         /// @brief Unités continues par case de grille : le facteur dont un
         /// consommateur externe (le daemon, un frontend) a besoin pour
@@ -360,6 +388,12 @@ namespace Serina::Simulation
         WorldSimulationParameters params_;
         Spatial::RegionGrid grid_;
         Environment::SerinaEnvironmentManager environments_;
+        /// Graine d'origine, retenue pour permettre à toJson() de la
+        /// sauvegarder -- grid_/environments_ n'ont pas besoin d'être
+        /// sérialisés eux-mêmes : ils sont reconstruits à l'identique par
+        /// le constructeur à partir de (params_, seed_) (voir
+        /// SimulationSerialization.hpp).
+        uint32_t seed_;
         Taxonomy::EcosystemTaxonomy taxonomy_;
         Ecology::EcologicalInteractionManager interactions_;
         Evolution::SerinaEvolutionaryConstraints constraints_;

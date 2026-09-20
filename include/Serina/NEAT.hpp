@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <functional>
 #include <stdexcept>
+#include <sstream>
+#include <string>
 
 namespace Serina::NEAT
 {
@@ -146,6 +148,23 @@ namespace Serina::NEAT
         {
             nextInnovation_ = 1;
             connectionInnovations_.clear();
+        }
+
+        /// @brief Compteur global (partagé par tous les cerveaux du
+        /// process) -- exposé en lecture pour la sauvegarde.
+        static uint32_t getNext() { return nextInnovation_; }
+        /// @brief Avance le compteur si besoin, jamais en arrière -- après
+        /// une reprise, garantit qu'aucune nouvelle mutation structurelle
+        /// (dans cette simulation ou une autre déjà active) ne réutilise un
+        /// numéro d'innovation déjà présent dans l'historique restauré.
+        /// Note : la table `connectionInnovations_` (paire de nœuds ->
+        /// numéro déjà attribué) n'est PAS restaurée -- limite honnête
+        /// documentée dans le plan de sauvegarde/reprise, cosmétique pour
+        /// le calcul de distance NEAT, sans impact sur la biologie simulée.
+        static void advanceTo(uint32_t minNext)
+        {
+            if (minNext > nextInnovation_)
+                nextInnovation_ = minNext;
         }
     };
 
@@ -564,6 +583,30 @@ namespace Serina::NEAT
         uint32_t getInputCount() const { return inputCount_; }
         uint32_t getOutputCount() const { return outputCount_; }
         size_t getComplexity() const { return nodeGenes_.size() + connectionGenes_.size(); }
+
+        /// @brief Remplace intégralement la topologie -- réservé à la
+        /// reprise d'une simulation sauvegardée (voir
+        /// SimulationSerialization.hpp) ; jamais utilisé par l'évolution
+        /// normale, qui mute la topologie existante en place.
+        void setNodeGenes(std::vector<NodeGene> genes) { nodeGenes_ = std::move(genes); }
+        void setConnectionGenes(std::vector<ConnectionGene> genes) { connectionGenes_ = std::move(genes); }
+
+        /// @brief État exact du générateur pseudo-aléatoire de ce cerveau,
+        /// sérialisé/restauré via les opérateurs de flux standards de
+        /// std::mt19937 (portable pour une même implémentation std) -- la
+        /// seule façon correcte d'obtenir une reprise vraiment
+        /// déterministe (pas juste "reseedé au hasard").
+        std::string getRngState() const
+        {
+            std::ostringstream oss;
+            oss << rng_;
+            return oss.str();
+        }
+        void setRngState(const std::string &state)
+        {
+            std::istringstream iss(state);
+            iss >> rng_;
+        }
 
     private:
         /// @brief Obtient le prochain ID de neurone disponible
