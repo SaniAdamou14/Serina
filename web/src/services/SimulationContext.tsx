@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react'
 import { io, Socket } from 'socket.io-client'
 import { apiService } from './ApiService'
-import { SimulationTick, SimulationCommand, SimulationId, SimulationSummary } from '../types'
+import { SimulationTick, SimulationCommand, SimulationId, SimulationSummary, ResumableSimulation } from '../types'
 
 interface SimulationContextType {
   simulationData: SimulationTick | null
@@ -10,11 +10,14 @@ interface SimulationContextType {
   connectionError: string | null
   currentSimulationId: SimulationId | null
   availableSimulations: SimulationSummary[]
+  resumableSimulations: ResumableSimulation[]
   sendCommand: (command: SimulationCommand) => void
   startNewSimulation: (options?: { founderCount?: number; seed?: number; ticksPerSecond?: number }) => Promise<void>
   stopCurrentSimulation: () => Promise<void>
   setSpeed: (ticksPerSecond: number) => Promise<void>
   stepSimulation: (count?: number) => Promise<void>
+  saveSnapshot: () => Promise<void>
+  restoreSimulation: (simulationId: SimulationId) => Promise<void>
   connect: () => void
   disconnect: () => void
 }
@@ -32,6 +35,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [currentSimulationId, setCurrentSimulationId] = useState<SimulationId | null>(null)
   const [availableSimulations, setAvailableSimulations] = useState<SimulationSummary[]>([])
+  const [resumableSimulations, setResumableSimulations] = useState<ResumableSimulation[]>([])
   const socketRef = useRef<Socket | null>(null)
 
   const refreshSimulationList = useCallback(async () => {
@@ -42,6 +46,19 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       }
     } catch (error) {
       console.error('Failed to refresh simulation list:', error)
+    }
+  }, [])
+
+  const refreshResumableSimulations = useCallback(async () => {
+    try {
+      const response = await apiService.listResumableSimulations()
+      if (response.success && response.data) {
+        setResumableSimulations(response.data)
+      }
+    } catch (error) {
+      // Échoue proprement si la base n'est pas connectée -- pas d'erreur
+      // bloquante affichée, la liste reste juste vide.
+      console.error('Failed to refresh resumable simulations:', error)
     }
   }, [])
 
@@ -58,6 +75,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       setIsConnected(true)
       setConnectionError(null)
       refreshSimulationList()
+      refreshResumableSimulations()
 
       if (currentSimulationId) {
         socket.emit('subscribe-simulation', currentSimulationId)
@@ -94,7 +112,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       console.log('🔌 Disconnected from Serina simulation server')
       setIsConnected(false)
     })
-  }, [currentSimulationId, refreshSimulationList])
+  }, [currentSimulationId, refreshSimulationList, refreshResumableSimulations])
 
   const disconnect = useCallback(() => {
     socketRef.current?.disconnect()
@@ -135,19 +153,24 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     if (!currentSimulationId) return
 
     try {
+      // stopSimulation sauvegarde automatiquement un instantané complet
+      // côté serveur avant de détruire la simulation (voir
+      // simulationEngine.js#stopSimulation) -- elle redevient donc
+      // reprenable, pas juste arrêtée pour de bon.
       await apiService.stopSimulation(currentSimulationId)
       socketRef.current?.emit('unsubscribe-simulation', currentSimulationId)
       setIsRunning(false)
       setCurrentSimulationId(null)
       setSimulationData(null)
       await refreshSimulationList()
+      await refreshResumableSimulations()
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       console.error('❌ Failed to stop simulation:', message)
       setConnectionError(`Erreur d'arrêt : ${message}`)
       throw error
     }
-  }, [currentSimulationId, refreshSimulationList])
+  }, [currentSimulationId, refreshSimulationList, refreshResumableSimulations])
 
   const setSpeed = useCallback(async (ticksPerSecond: number) => {
     if (!currentSimulationId) return
@@ -170,6 +193,42 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       setConnectionError(`Erreur d'avance manuelle : ${message}`)
     }
   }, [currentSimulationId])
+
+  const saveSnapshot = useCallback(async () => {
+    if (!currentSimulationId) return
+    try {
+      const response = await apiService.saveSnapshot(currentSimulationId)
+      if (!response.success) throw new Error(response.error || 'Failed to save snapshot')
+      await refreshResumableSimulations()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to save snapshot:', message)
+      setConnectionError(`Erreur de sauvegarde : ${message}`)
+      throw error
+    }
+  }, [currentSimulationId, refreshResumableSimulations])
+
+  const restoreSimulation = useCallback(async (simulationId: SimulationId) => {
+    try {
+      setConnectionError(null)
+      const response = await apiService.restoreSimulation(simulationId)
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to restore simulation')
+      }
+
+      setCurrentSimulationId(simulationId)
+      setIsRunning(true)
+      console.log('✅ Simulation restored:', simulationId)
+
+      socketRef.current?.emit('subscribe-simulation', simulationId)
+      await refreshSimulationList()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to restore simulation:', message)
+      setConnectionError(`Erreur de reprise : ${message}`)
+      throw error
+    }
+  }, [refreshSimulationList])
 
   const sendCommand = useCallback((command: SimulationCommand) => {
     const socket = socketRef.current
@@ -207,11 +266,14 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     connectionError,
     currentSimulationId,
     availableSimulations,
+    resumableSimulations,
     sendCommand,
     startNewSimulation,
     stopCurrentSimulation,
     setSpeed,
     stepSimulation,
+    saveSnapshot,
+    restoreSimulation,
     connect,
     disconnect
   }

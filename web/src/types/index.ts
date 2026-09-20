@@ -217,6 +217,19 @@ export interface EvolutionHistoryEntry {
   created_at: string
 }
 
+/** Une simulation réellement reprenable : a un instantané complet
+ * enregistré (voir simulation_saves, api/services/database.js) -- jamais
+ * le blob lui-même ici, seulement de quoi peupler une liste "Reprendre"
+ * honnête (voir GET /api/simulations/resumable). */
+export interface ResumableSimulation {
+  id: number
+  name: string
+  generation: number
+  population_count: number
+  species_count: number
+  saved_at: string
+}
+
 // === WebSocket commands (api/services/websocket.js) ===
 
 export enum SimulationCommand {

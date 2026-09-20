@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { History } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
+import { SimulationId } from '../types'
 
 const MIN_FOUNDER_COUNT = 5
 const MAX_FOUNDER_COUNT = 400
@@ -18,12 +20,15 @@ export function SimulationControl() {
     isConnected,
     currentSimulationId,
     availableSimulations,
+    resumableSimulations,
     connectionError,
     startNewSimulation,
+    restoreSimulation,
     connect,
     disconnect
   } = useSimulation()
   const [isStarting, setIsStarting] = useState(false)
+  const [restoringId, setRestoringId] = useState<SimulationId | null>(null)
   const [founderCount, setFounderCount] = useState(40)
   const [seedInput, setSeedInput] = useState('')
   const [ticksPerSecond, setTicksPerSecond] = useState(4)
@@ -37,6 +42,17 @@ export function SimulationControl() {
       console.error('Failed to start simulation:', error)
     } finally {
       setIsStarting(false)
+    }
+  }
+
+  const handleRestore = async (simulationId: SimulationId) => {
+    try {
+      setRestoringId(simulationId)
+      await restoreSimulation(simulationId)
+    } catch (error) {
+      console.error('Failed to restore simulation:', error)
+    } finally {
+      setRestoringId(null)
     }
   }
 
@@ -79,6 +95,37 @@ export function SimulationControl() {
           </button>
         </div>
       </div>
+
+      {/* Simulations sauvegardées : reprendre exactement où on s'est arrêté
+          (état réel restauré -- génomes, cerveaux NEAT, tout -- voir
+          SimulationSerialization.hpp), pas juste consulter leur historique. */}
+      {!currentSimulationId && resumableSimulations.length > 0 && (
+        <div className="space-y-3">
+          <span className="text-sm font-medium text-slate-300 flex items-center gap-1.5">
+            <History className="w-4 h-4" /> Simulations sauvegardées
+          </span>
+          <div className="max-h-48 overflow-y-auto space-y-2">
+            {resumableSimulations.map((sim) => (
+              <div key={sim.id} className="bg-slate-800/60 border border-slate-700 rounded-md p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-slate-200">{sim.name}</span>
+                  <span className="text-xs text-slate-500">{new Date(sim.saved_at).toLocaleString()}</span>
+                </div>
+                <div className="text-xs text-slate-400 mb-2">
+                  Génération {sim.generation} · {sim.population_count} individus · {sim.species_count} espèces
+                </div>
+                <button
+                  onClick={() => handleRestore(sim.id)}
+                  disabled={!isConnected || restoringId !== null}
+                  className="button-primary w-full text-sm py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {restoringId === sim.id ? 'Reprise en cours...' : 'Reprendre'}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Configuration de la nouvelle simulation */}
       {!currentSimulationId && (

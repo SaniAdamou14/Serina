@@ -56,6 +56,26 @@ router.post('/', async (req, res) => {
   }
 });
 
+// GET /api/simulations/resumable - Simulations with a saved snapshot they can
+// be restored from (see api/serina/restore/:id) -- registered before
+// /:id so Express doesn't match "resumable" as an id.
+router.get('/resumable', async (req, res) => {
+  try {
+    const simulations = await database.listResumableSimulations();
+    res.json({
+      success: true,
+      data: simulations
+    });
+  } catch (error) {
+    console.error('Error fetching resumable simulations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch resumable simulations',
+      details: error.message
+    });
+  }
+});
+
 // GET /api/simulations/:id - Get specific simulation
 router.get('/:id', async (req, res) => {
   try {

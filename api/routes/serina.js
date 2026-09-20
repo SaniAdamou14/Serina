@@ -129,6 +129,51 @@ router.post('/step/:simulationId', async (req, res) => {
 
 /**
  * @swagger
+ * /api/serina/save/{simulationId}:
+ *   post:
+ *     summary: Sauvegarde un instantané complet sans arrêter la simulation
+ *     tags: [Serina]
+ */
+router.post('/save/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = await simulationEngine.saveSnapshotNow(req.params.simulationId);
+  res.status(result.success ? 200 : 404).json(result);
+});
+
+/**
+ * @swagger
+ * /api/serina/restore/{simulationId}:
+ *   post:
+ *     summary: Reprend une simulation à partir de son dernier instantané sauvegardé (distinct de /resume, qui sort seulement d'une pause)
+ *     tags: [Serina]
+ */
+router.post('/restore/:simulationId', async (req, res) => {
+  try {
+    if (!simulationEngine) {
+      return res.status(500).json({ error: 'Simulation engine not initialized' });
+    }
+    if (!simulationEngine.isAvailable()) {
+      return res.status(503).json({
+        error: 'Serina C++ engine not built',
+        details: 'Run "cmake --build build" (see README) then restart the API server.'
+      });
+    }
+
+    const result = await simulationEngine.restoreSimulation(req.params.simulationId);
+    res.status(result.success ? 200 : 404).json(result);
+  } catch (error) {
+    console.error('❌ Error restoring Serina simulation:', error);
+    res.status(500).json({
+      error: 'Failed to restore Serina simulation',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/serina/stop/{simulationId}:
  *   post:
  *     summary: Arrête une simulation Serina

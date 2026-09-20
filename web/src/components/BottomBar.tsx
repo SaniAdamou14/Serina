@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Play, Pause, SkipForward, Square } from 'lucide-react'
+import { Play, Pause, SkipForward, Square, Save } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { SimulationCommand } from '../types'
 
@@ -9,13 +9,15 @@ const DEFAULT_TIER = 4
 /**
  * Barre du bas fixe façon RimWorld : paliers de vitesse discrets (réels,
  * reliés à setSpeed -> daemon `play(ticksPerSecond)`), play/pause, avance
- * pas-à-pas (nouveau -- voir Chantier E1, relié à `step`, jusque-là câblé
- * côté daemon mais jamais exposé), et arrêt de la simulation en cours.
+ * pas-à-pas (relié à `step`), point de sauvegarde manuel (checkpoint sans
+ * arrêter -- l'arrêt sauvegarde de toute façon automatiquement, voir
+ * Chantier H), et arrêt de la simulation en cours.
  */
 export function BottomBar() {
-  const { isConnected, isRunning, currentSimulationId, sendCommand, setSpeed, stepSimulation, stopCurrentSimulation } = useSimulation()
+  const { isConnected, isRunning, currentSimulationId, sendCommand, setSpeed, stepSimulation, saveSnapshot, stopCurrentSimulation } = useSimulation()
   const [activeTier, setActiveTier] = useState(DEFAULT_TIER)
   const [isStepping, setIsStepping] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
 
   const disabled = !isConnected || !currentSimulationId
 
@@ -30,6 +32,18 @@ export function BottomBar() {
       await stepSimulation(1)
     } finally {
       setIsStepping(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setIsSaving(true)
+    try {
+      await saveSnapshot()
+    } catch {
+      // connectionError est déjà mis à jour par saveSnapshot() ; rien de
+      // plus à faire ici que d'éviter une exception non gérée.
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -69,9 +83,18 @@ export function BottomBar() {
       </div>
 
       <button
+        onClick={handleSave}
+        disabled={disabled || isSaving}
+        title="Sauvegarder (sans arrêter)"
+        className="button-secondary px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        <Save className="w-4 h-4" />
+      </button>
+
+      <button
         onClick={() => stopCurrentSimulation()}
         disabled={disabled}
-        title="Arrêter la simulation"
+        title="Arrêter la simulation (sauvegarde automatiquement)"
         className="button-danger px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Square className="w-4 h-4" />

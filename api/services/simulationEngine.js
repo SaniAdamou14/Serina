@@ -347,6 +347,21 @@ class SimulationEngine extends EventEmitter {
     this.simulations.delete(simulationId);
 
     if (this.isAvailable()) {
+      // Sauvegarde automatique avant destruction : un `stop` doit rester
+      // reprenable par défaut (voir le plan de sauvegarde/reprise), pas un
+      // aller simple. Best-effort : si ça échoue (pas de base connectée,
+      // par exemple), on continue quand même l'arrêt plutôt que de bloquer
+      // l'utilisateur dessus -- mais on le journalise clairement.
+      try {
+        const saveResult = await this.client.send('save', simulationId);
+        if (saveResult.status === 'success' && database.isConnected()) {
+          await database.saveSnapshot(simulationId, saveResult.snapshot);
+        } else if (saveResult.status !== 'success') {
+          console.warn(`serina_daemon save failed for simulation ${simulationId} before stop:`, saveResult.error);
+        }
+      } catch (err) {
+        console.warn(`Failed to save snapshot for simulation ${simulationId} before stopping:`, err.message);
+      }
       await this.client.send('destroy', simulationId).catch(() => {});
     }
 
@@ -356,6 +371,82 @@ class SimulationEngine extends EventEmitter {
 
     this.emit('stopped', { simulationId });
     return { success: true };
+  }
+
+  /**
+   * Sauvegarde un instantané complet SANS arrêter la simulation --
+   * l'équivalent d'un point de sauvegarde manuel pendant que ça tourne
+   * encore (voir aussi la sauvegarde automatique dans stopSimulation()).
+   */
+  async saveSnapshotNow(simulationId) {
+    const instance = this.simulations.get(simulationId);
+    if (!instance) return { success: false, error: `Simulation ${simulationId} not found` };
+    if (!this.isAvailable()) return { success: false, error: 'serina_daemon not available' };
+    if (!database.isConnected()) return { success: false, error: 'Database not connected -- cannot persist a checkpoint' };
+
+    const saveResult = await this.client.send('save', simulationId);
+    if (saveResult.status !== 'success') {
+      return { success: false, error: saveResult.error || 'serina_daemon save failed' };
+    }
+
+    await database.saveSnapshot(simulationId, saveResult.snapshot);
+    return { success: true };
+  }
+
+  /**
+   * Reconstruit une simulation vivante à partir d'un instantané enregistré
+   * en base (voir stopSimulation()/saveSnapshotNow()) -- même chemin que
+   * startSimulation() une fois la simulation reconstruite côté daemon
+   * (`load` plutôt que `create`+`seedFounderSpecies`).
+   */
+  async restoreSimulation(simulationId) {
+    if (!this.isAvailable()) {
+      throw new Error('Serina daemon not available. Run "cmake --build build --target serina_daemon" (see README).');
+    }
+    simulationId = String(simulationId);
+
+    if (this.simulations.has(simulationId)) {
+      return { success: false, error: `Simulation ${simulationId} already running` };
+    }
+    if (!database.isConnected()) {
+      return { success: false, error: 'Database not connected -- no saved simulations available' };
+    }
+
+    const saved = await database.getSnapshot(simulationId);
+    if (!saved) {
+      return { success: false, error: `No saved snapshot found for simulation ${simulationId}` };
+    }
+
+    const loadResult = await this.client.send('load', simulationId, { snapshot: saved.snapshot });
+    if (loadResult.status !== 'success') {
+      throw new Error(loadResult.error || 'serina_daemon load failed');
+    }
+
+    const ticksPerSecond = DEFAULT_TICKS_PER_SECOND;
+    await this.client.send('play', simulationId, { ticksPerSecond });
+
+    const instance = {
+      id: simulationId,
+      startTime: new Date(),
+      isRunning: true,
+      ticksPerSecond,
+      pollInterval: null,
+      lastData: null
+    };
+    this.simulations.set(simulationId, instance);
+
+    await database.updateSimulation(simulationId, { status: 'running' }).catch(() => {});
+
+    instance.pollInterval = setInterval(() => {
+      this.pull(simulationId).catch((err) => {
+        console.error(`Simulation ${simulationId} poll failed:`, err.message);
+      });
+    }, POLL_INTERVAL_MS);
+
+    await this.pull(simulationId);
+
+    this.emit('started', { simulationId });
+    return { success: true, simulationId, data: loadResult };
   }
 
   getSimulationData(simulationId) {

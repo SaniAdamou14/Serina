@@ -251,7 +251,20 @@ class DatabaseService {
       );`,
       `CREATE INDEX IF NOT EXISTS idx_sth_species_gen ON species_traits_history(species_id, generation);`,
       `CREATE INDEX IF NOT EXISTS idx_sth_sim_gen ON species_traits_history(simulation_id, generation);`,
-      `CREATE INDEX IF NOT EXISTS idx_sth_gen ON species_traits_history(generation);`
+      `CREATE INDEX IF NOT EXISTS idx_sth_gen ON species_traits_history(generation);`,
+      // Instantané complet d'une simulation vivante (génomes diploïdes,
+      // cerveaux NEAT, état des générateurs aléatoires -- voir
+      // UnifiedWorldSimulator::toJson(), SimulationSerialization.hpp),
+      // pour pouvoir la reprendre après un arrêt. Table séparée de
+      // `simulations` : ce blob peut peser plusieurs Mo, et `simulations`
+      // reste interrogée en `SELECT *` par getAllSimulations()/le listing
+      // -- jamais alourdir cette requête pour toutes les simulations à
+      // cause d'une seule colonne rarement lue.
+      `CREATE TABLE IF NOT EXISTS simulation_saves (
+        simulation_id INT PRIMARY KEY REFERENCES simulations(id) ON DELETE CASCADE,
+        snapshot JSONB NOT NULL,
+        saved_at TIMESTAMP DEFAULT NOW()
+      );`
     ];
 
     for (const stmt of ddl) {
@@ -332,6 +345,47 @@ class DatabaseService {
 
   async getAllSimulations() {
     const sql = 'SELECT * FROM simulations ORDER BY created_at DESC';
+    return await this.query(sql);
+  }
+
+  // Simulation snapshots (sauvegarde/reprise -- voir SimulationSerialization.hpp côté C++)
+  async saveSnapshot(simulationId, snapshot) {
+    const sql = `
+      INSERT INTO simulation_saves (simulation_id, snapshot, saved_at)
+      VALUES (?, ?, NOW())
+      ON CONFLICT (simulation_id) DO UPDATE SET
+        snapshot = EXCLUDED.snapshot,
+        saved_at = NOW()
+    `;
+    return await this.query(sql, [simulationId, JSON.stringify(snapshot)]);
+  }
+
+  async getSnapshot(simulationId) {
+    const sql = 'SELECT snapshot, saved_at FROM simulation_saves WHERE simulation_id = ?';
+    const results = await this.query(sql, [simulationId]);
+    if (!results[0]) return null;
+    const row = results[0];
+    return {
+      snapshot: typeof row.snapshot === 'string' ? JSON.parse(row.snapshot) : row.snapshot,
+      savedAt: row.saved_at
+    };
+  }
+
+  async deleteSnapshot(simulationId) {
+    return await this.query('DELETE FROM simulation_saves WHERE simulation_id = ?', [simulationId]);
+  }
+
+  /** Simulations réellement reprenables : jointure simulations + simulation_saves,
+   * sans jamais renvoyer le blob complet (potentiellement volumineux) -- juste
+   * de quoi peupler une liste "Reprendre" honnête (nom, dernière génération
+   * connue, date de sauvegarde). */
+  async listResumableSimulations() {
+    const sql = `
+      SELECT s.id, s.name, s.generation, s.population_count, s.species_count, ss.saved_at
+      FROM simulation_saves ss
+      JOIN simulations s ON s.id = ss.simulation_id
+      ORDER BY ss.saved_at DESC
+    `;
     return await this.query(sql);
   }
 

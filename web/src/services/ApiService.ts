@@ -13,6 +13,7 @@ import {
   SimulationDataResponse,
   SimulationRecord,
   EvolutionHistoryEntry,
+  ResumableSimulation,
   HealthCheckResponse
 } from '../types'
 
@@ -83,6 +84,23 @@ class ApiService {
     return request<{ success: boolean; error?: string }>(`/api/serina/stop/${simulationId}`, { method: 'POST' })
   }
 
+  /** Point de sauvegarde manuel : sauvegarde un instantané complet sans
+   * arrêter la simulation (distinct de l'arrêt, qui sauvegarde aussi
+   * automatiquement avant de détruire). */
+  saveSnapshot(simulationId: SimulationId) {
+    return request<{ success: boolean; error?: string }>(`/api/serina/save/${simulationId}`, { method: 'POST' })
+  }
+
+  /** Reprend une simulation à partir de son dernier instantané sauvegardé
+   * -- distinct de resumeSimulation() ci-dessus, qui ne fait que sortir
+   * d'une pause sur une simulation déjà vivante. */
+  restoreSimulation(simulationId: SimulationId) {
+    return request<{ success: boolean; simulationId?: SimulationId; error?: string }>(
+      `/api/serina/restore/${simulationId}`,
+      { method: 'POST' }
+    )
+  }
+
   getSimulationData(simulationId: SimulationId): Promise<SimulationDataResponse> {
     return request<SimulationDataResponse>(`/api/serina/status/${simulationId}`)
   }
@@ -100,6 +118,10 @@ class ApiService {
 
   listSimulationRecords() {
     return request<ApiResponse<SimulationRecord[]>>('/api/simulations')
+  }
+
+  listResumableSimulations() {
+    return request<ApiResponse<ResumableSimulation[]>>('/api/simulations/resumable')
   }
 
   getEvolutionHistory(simulationId: SimulationId, limit = 100) {
