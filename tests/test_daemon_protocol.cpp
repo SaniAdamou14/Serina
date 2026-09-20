@@ -216,6 +216,53 @@ TEST_CASE("an unknown command returns a clear error", "[daemon]")
     REQUIRE(response["status"] == "error");
 }
 
+TEST_CASE("save then load reproduces a simulation under a fresh registry entry", "[daemon]")
+{
+    // Exerce le chemin complet tel qu'utilisé réellement : `save` sur une
+    // simulation vivante, `destroy` (comme un vrai arrêt), puis `load` sous
+    // un nouvel id à partir du seul JSON renvoyé par `save` -- sans jamais
+    // toucher au registre entre les deux, exactement comme le fera
+    // SimulationEngine.stopSimulation()/restoreSimulation() côté Node.
+    Daemon::SimulationRegistry registry;
+    Daemon::handleCommand(registry, makeRequest("create", "sim-a", {{"founderCount", 8}, {"seed", 42}}));
+    for (int i = 0; i < 10; ++i)
+        Daemon::handleCommand(registry, makeRequest("step", "sim-a"));
+
+    auto statusBefore = Daemon::handleCommand(registry, makeRequest("status", "sim-a"));
+    REQUIRE(statusBefore["status"] == "success");
+
+    auto saveResponse = Daemon::handleCommand(registry, makeRequest("save", "sim-a"));
+    REQUIRE(saveResponse["status"] == "success");
+    REQUIRE(saveResponse.contains("snapshot"));
+
+    REQUIRE(Daemon::handleCommand(registry, makeRequest("destroy", "sim-a"))["status"] == "success");
+    REQUIRE(registry.count() == 0);
+
+    json loadReq = makeRequest("load", "sim-b");
+    loadReq["snapshot"] = saveResponse["snapshot"];
+    auto loadResponse = Daemon::handleCommand(registry, loadReq);
+    REQUIRE(loadResponse["status"] == "success");
+    REQUIRE(registry.count() == 1);
+
+    auto statusAfter = Daemon::handleCommand(registry, makeRequest("status", "sim-b"));
+    REQUIRE(statusAfter["status"] == "success");
+    REQUIRE(statusAfter["generation"] == statusBefore["generation"]);
+    REQUIRE(statusAfter["population"] == statusBefore["population"]);
+    REQUIRE(statusAfter["speciesCount"] == statusBefore["speciesCount"]);
+}
+
+TEST_CASE("load refuses to overwrite an existing simulation id", "[daemon]")
+{
+    Daemon::SimulationRegistry registry;
+    Daemon::handleCommand(registry, makeRequest("create", "sim-a", {{"founderCount", 5}}));
+    auto saveResponse = Daemon::handleCommand(registry, makeRequest("save", "sim-a"));
+
+    json loadReq = makeRequest("load", "sim-a"); // même id, encore vivant
+    loadReq["snapshot"] = saveResponse["snapshot"];
+    auto loadResponse = Daemon::handleCommand(registry, loadReq);
+    REQUIRE(loadResponse["status"] == "error");
+}
+
 TEST_CASE("destroy removes a simulation so it is no longer listed", "[daemon]")
 {
     Daemon::SimulationRegistry registry;
@@ -336,6 +383,65 @@ TEST_CASE("the real JSON-lines protocol round-trips over an actual TCP socket", 
     json statusResp = json::parse(responseLine);
     REQUIRE(statusResp["status"] == "success");
     REQUIRE(statusResp["speciesCount"] == 5);
+
+    client.close();
+    serverThread.detach();
+}
+
+TEST_CASE("a realistically large save snapshot round-trips over the actual TCP socket in one line", "[daemon][integration]")
+{
+    // Le plan de sauvegarde/reprise (Chantier H) exige de vérifier
+    // concrètement que NetSocket.hpp encaisse une ligne JSON-lines de
+    // plusieurs centaines de Ko (un vrai instantané complet, génomes
+    // diploïdes et cerveaux NEAT compris) sans la tronquer ni bloquer --
+    // pas seulement supposé sain faute de limite codée en dur trouvée à la
+    // lecture.
+    Daemon::SimulationRegistry registry;
+    uint16_t port = 17332;
+
+    std::atomic<bool> ready{false};
+    std::thread serverThread([&]()
+                              {
+        Net::TcpServer server(port);
+        ready = true;
+        Net::TcpConnection conn = server.accept();
+        Daemon::handleConnection(registry, std::move(conn)); });
+
+    while (!ready.load())
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+    Net::TcpConnection client = Net::connectTo("127.0.0.1", port);
+
+    json createReq = makeRequest("create", "sim-big", {{"founderCount", 60}, {"seed", 7}});
+    REQUIRE(client.writeLine(createReq.dump()));
+    std::string responseLine;
+    REQUIRE(client.readLine(responseLine));
+    REQUIRE(json::parse(responseLine)["status"] == "success");
+
+    // Quelques pas pour que des cerveaux NEAT gagnent des connexions et que
+    // la population varie -- un instantané plus représentatif qu'une
+    // population fraîchement semée.
+    for (int i = 0; i < 10; ++i)
+    {
+        REQUIRE(client.writeLine(makeRequest("step", "sim-big").dump()));
+        REQUIRE(client.readLine(responseLine));
+    }
+
+    REQUIRE(client.writeLine(makeRequest("save", "sim-big").dump()));
+    REQUIRE(client.readLine(responseLine));
+    INFO("save response line size (bytes): " << responseLine.size());
+    REQUIRE(responseLine.size() > 10000); // confirme qu'on teste vraiment une grosse ligne, pas un cas trivial
+    json saveResp = json::parse(responseLine);
+    REQUIRE(saveResp["status"] == "success");
+    REQUIRE(saveResp.contains("snapshot"));
+
+    json loadReq = makeRequest("load", "sim-big-restored");
+    loadReq["snapshot"] = saveResp["snapshot"];
+    REQUIRE(client.writeLine(loadReq.dump()));
+    REQUIRE(client.readLine(responseLine));
+    json loadResp = json::parse(responseLine);
+    REQUIRE(loadResp["status"] == "success");
+    REQUIRE(loadResp["population"] == saveResp["snapshot"]["population"].size());
 
     client.close();
     serverThread.detach();

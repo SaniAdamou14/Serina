@@ -202,7 +202,12 @@ namespace Serina::Simulation
         return lb;
     }
 
-    inline json speciationEventToJson(const SpeciationEvent &e)
+    // Nommé différemment de DaemonProtocol.hpp::speciationEventToJson (même
+    // fonction en substance) pour éviter une ambiguïté de surcharge : les
+    // deux sont trouvables par ADL sur un Simulation::SpeciationEvent depuis
+    // n'importe quel appelant qui inclut les deux headers (DaemonProtocol.hpp
+    // inclut celui-ci pour save/load).
+    inline json serializeSpeciationEvent(const SpeciationEvent &e)
     {
         return json{{"parentSpecies", e.parentSpecies}, {"newSpecies", e.newSpecies}, {"generation", e.generation}, {"geneticDistanceAtSplit", e.geneticDistanceAtSplit}};
     }
@@ -264,7 +269,7 @@ namespace Serina::Simulation
 
         json events = json::array();
         for (const auto &e : speciationEvents_)
-            events.push_back(speciationEventToJson(e));
+            events.push_back(serializeSpeciationEvent(e));
         j["speciationEvents"] = events;
 
         std::ostringstream rngOss;

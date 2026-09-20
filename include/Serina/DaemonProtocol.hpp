@@ -10,6 +10,7 @@
 
 #include "NetSocket.hpp"
 #include "WorldSimulation.hpp"
+#include "SimulationSerialization.hpp"
 #include <nlohmann/json.hpp>
 
 #include <atomic>
@@ -156,6 +157,28 @@ namespace Serina::Daemon
             return result;
         }
 
+        /// @brief Reconstruit une simulation vivante à partir d'un instantané
+        /// JSON complet produit par `save` (voir
+        /// UnifiedWorldSimulator::toJson()/fromJson(),
+        /// SimulationSerialization.hpp) -- pour reprendre une simulation
+        /// sauvegardée après un arrêt ou un redémarrage du daemon.
+        json load(const std::string &id, const json &snapshot)
+        {
+            std::lock_guard<std::mutex> lock(registryMutex_);
+            if (sims_.count(id))
+                return errorJson("simulation '" + id + "' already exists");
+
+            auto managed = std::make_shared<ManagedSimulation>();
+            managed->sim = Simulation::UnifiedWorldSimulator::fromJson(snapshot);
+
+            json result = successJson();
+            result["simulationId"] = id;
+            result["generation"] = managed->sim->getGeneration();
+            result["population"] = managed->sim->getPopulationCount();
+            sims_.emplace(id, std::move(managed));
+            return result;
+        }
+
         json destroy(const std::string &id)
         {
             std::lock_guard<std::mutex> lock(registryMutex_);
@@ -270,6 +293,21 @@ namespace Serina::Daemon
         else if (command == "destroy")
         {
             result = registry.destroy(simulationId);
+        }
+        else if (command == "save")
+        {
+            result = registry.withSimulation(simulationId, [&](ManagedSimulation &m)
+                                              {
+                json r = successJson();
+                r["snapshot"] = m.sim->toJson();
+                return r; });
+        }
+        else if (command == "load")
+        {
+            if (!request.contains("snapshot"))
+                result = errorJson("load requires a 'snapshot' field");
+            else
+                result = registry.load(simulationId, request.at("snapshot"));
         }
         else if (command == "list")
         {
