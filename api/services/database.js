@@ -1,5 +1,4 @@
-const mysql = require('mysql2/promise');
-const fs = require('fs');
+const { Pool } = require('pg');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
@@ -11,72 +10,37 @@ class DatabaseService {
   }
 
   async connect() {
+    const DB_HOST = process.env.DB_HOST || '127.0.0.1';
+    const DB_PORT = Number(process.env.DB_PORT || 5432);
+    const DB_USER = process.env.DB_USER || 'postgres';
+    const DB_PASS = process.env.DB_PASS || '';
+    const DB_NAME = process.env.DB_NAME || 'serinadb';
+
     try {
-      // Allow .env to override defaults; match WAMP defaults
-      const DB_HOST = process.env.DB_HOST || '127.0.0.1';
-      const DB_PORT = Number(process.env.DB_PORT || 3306);
-      const DB_USER = process.env.DB_USER || 'root';
-      const DB_PASS = process.env.DB_PASS || '';
-      const DB_NAME = process.env.DB_NAME || 'serina_evolution';
-
-      // First attempt to connect to the target DB; if fails because DB missing, create it
-      this.pool = mysql.createPool({
-        host: DB_HOST,
-        port: DB_PORT,
-        user: DB_USER,
-        password: DB_PASS,
-        database: DB_NAME,
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        // mysql2 pool does not support some of the older options; keep minimal
-      });
-
-      // Test connection
-      const connection = await this.pool.getConnection();
-      console.log('✅ Connected to MySQL database');
-      connection.release();
+      this.pool = new Pool({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: DB_NAME });
+      // Un pool 'pg' ne se connecte réellement qu'à la première requête --
+      // on en force une tout de suite pour vérifier la connexion ici plutôt
+      // que de la découvrir plus tard sur la première vraie requête.
+      const client = await this.pool.connect();
+      console.log('✅ Connected to PostgreSQL database');
+      client.release();
       this._connected = true;
-      
       return true;
     } catch (error) {
       console.error('❌ Database connection failed:', error.message);
-      // Try to create database if missing
-      if (/unknown database|Base '.*' inconnue/i.test(error.message)) {
+      if (/does not exist/i.test(error.message)) {
         try {
-          const DB_HOST = process.env.DB_HOST || '127.0.0.1';
-          const DB_PORT = Number(process.env.DB_PORT || 3306);
-          const DB_USER = process.env.DB_USER || 'root';
-          const DB_PASS = process.env.DB_PASS || '';
-          const DB_NAME = process.env.DB_NAME || 'serina_evolution';
-
-          const admin = await mysql.createConnection({
-            host: DB_HOST,
-            port: DB_PORT,
-            user: DB_USER,
-            password: DB_PASS
-          });
-          await admin.query(`CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+          const admin = new Pool({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: 'postgres' });
+          await admin.query(`CREATE DATABASE "${DB_NAME}"`);
           await admin.end();
           console.log(`🆕 Created database ${DB_NAME}`);
 
-          // Try connecting again
-          this.pool = mysql.createPool({
-            host: DB_HOST,
-            port: DB_PORT,
-            user: DB_USER,
-            password: DB_PASS,
-            database: DB_NAME,
-            waitForConnections: true,
-            connectionLimit: 10,
-            queueLimit: 0
-          });
-          const connection = await this.pool.getConnection();
-          console.log('✅ Connected to MySQL database');
-          connection.release();
+          this.pool = new Pool({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASS, database: DB_NAME });
+          const client = await this.pool.connect();
+          console.log('✅ Connected to PostgreSQL database');
+          client.release();
           this._connected = true;
 
-          // Create schema if missing
           await this.ensureSchema();
           return true;
         } catch (e) {
@@ -84,10 +48,9 @@ class DatabaseService {
           this._connected = false;
           return false;
         }
-      } else {
-        this._connected = false;
-        return false;
       }
+      this._connected = false;
+      return false;
     }
   }
 
@@ -99,14 +62,36 @@ class DatabaseService {
     }
   }
 
+  /**
+   * Les appelants de ce fichier écrivent du SQL avec des `?` positionnels
+   * (convention héritée de mysql2) -- convertis ici en `$1, $2...` (la seule
+   * syntaxe que `pg` accepte) pour ne pas avoir à réécrire chaque appelant.
+   * Aucun `?` littéral n'apparaît dans le SQL de ce fichier.
+   *
+   * mysql2 renvoyait soit un tableau de lignes (SELECT), soit un objet
+   * `{insertId, affectedRows}` (INSERT/UPDATE/DELETE) ; `pg` renvoie
+   * toujours `{rows, rowCount}`. On reproduit la forme mysql2 ici pour que
+   * chaque méthode plus bas reste inchangée -- toute requête INSERT doit
+   * donc se terminer par `RETURNING id` pour que `insertId` existe.
+   */
   async query(sql, params = []) {
     if (!this._connected) {
       throw new Error('Database not connected');
     }
 
+    let i = 0;
+    const pgSql = sql.replace(/\?/g, () => `$${++i}`);
+
     try {
-      const [rows] = await this.pool.execute(sql, params);
-      return rows;
+      const result = await this.pool.query(pgSql, params);
+      const statement = sql.trim().slice(0, 6).toUpperCase();
+      if (statement === 'SELECT') {
+        return result.rows;
+      }
+      if (statement === 'INSERT') {
+        return { insertId: result.rows[0]?.id, affectedRows: result.rowCount, rows: result.rows };
+      }
+      return { affectedRows: result.rowCount, rows: result.rows };
     } catch (error) {
       console.error('Database query error:', error);
       throw error;
@@ -134,58 +119,56 @@ class DatabaseService {
     // Minimal schema to get the app running; expand as needed
     const ddl = [
       `CREATE TABLE IF NOT EXISTS simulations (
-        id INT AUTO_INCREMENT PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        config JSON NULL,
+        config JSONB NULL,
         generation INT DEFAULT 0,
         population_count INT DEFAULT 0,
         species_count INT DEFAULT 0,
         status VARCHAR(32) DEFAULT 'created',
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );`,
       `CREATE TABLE IF NOT EXISTS species (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        simulation_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
         name VARCHAR(255) NOT NULL,
         population_count INT DEFAULT 0,
         generation_span INT DEFAULT 0,
         extinction_risk FLOAT DEFAULT 0,
         ecological_niche VARCHAR(128) DEFAULT 'generalist',
-        traits JSON NULL,
+        traits JSONB NULL,
         fitness_average FLOAT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_species_sim_name (simulation_id, name),
-        CONSTRAINT fk_species_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (simulation_id, name)
+      );`,
       `CREATE TABLE IF NOT EXISTS individuals (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        species_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        species_id INT NOT NULL REFERENCES species(id) ON DELETE CASCADE,
         name VARCHAR(255) NULL,
         age INT DEFAULT 0,
         energy FLOAT DEFAULT 0,
         position_x FLOAT DEFAULT 0,
         position_y FLOAT DEFAULT 0,
         generation INT DEFAULT 0,
-        traits JSON NULL,
-        genome JSON NULL,
-        phenotype JSON NULL,
-        is_alive TINYINT(1) DEFAULT 1,
-        birth_time DATETIME NULL,
-        death_time DATETIME NULL,
+        traits JSONB NULL,
+        genome JSONB NULL,
+        phenotype JSONB NULL,
+        is_alive BOOLEAN DEFAULT true,
+        birth_time TIMESTAMP NULL,
+        death_time TIMESTAMP NULL,
         cause_of_death VARCHAR(255) NULL,
         parent1_id INT NULL,
         parent2_id INT NULL,
         fitness_score FLOAT DEFAULT 0,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        INDEX (species_id),
-        CONSTRAINT fk_individuals_species FOREIGN KEY (species_id) REFERENCES species(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_individuals_species ON individuals(species_id);`,
       `CREATE TABLE IF NOT EXISTS evolution_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        simulation_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
         generation INT NOT NULL,
         population_count INT DEFAULT 0,
         species_count INT DEFAULT 0,
@@ -193,25 +176,23 @@ class DatabaseService {
         genetic_diversity FLOAT DEFAULT 0,
         mutations_count INT DEFAULT 0,
         reproductions_count INT DEFAULT 0,
-        environment_data JSON NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX (simulation_id),
-        CONSTRAINT fk_eh_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        environment_data JSONB NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_evolution_history_sim ON evolution_history(simulation_id);`,
       `CREATE TABLE IF NOT EXISTS performance_logs (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        simulation_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
         cpu_usage FLOAT DEFAULT 0,
         memory_usage FLOAT DEFAULT 0,
         fps FLOAT DEFAULT 0,
         generations_per_second FLOAT DEFAULT 0,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX (simulation_id),
-        CONSTRAINT fk_pl_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        timestamp TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_performance_logs_sim ON performance_logs(simulation_id);`,
       `CREATE TABLE IF NOT EXISTS environment (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        simulation_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
         temperature FLOAT DEFAULT 20,
         humidity FLOAT DEFAULT 0.6,
         oxygen_level FLOAT DEFAULT 0.21,
@@ -224,33 +205,30 @@ class DatabaseService {
         disaster_probability FLOAT DEFAULT 0.01,
         width INT DEFAULT 1920,
         height INT DEFAULT 1080,
-        food_sources JSON NULL,
-        water_sources JSON NULL,
-        shelter_areas JSON NULL,
-        danger_zones JSON NULL,
-        change_history JSON NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_env_sim (simulation_id),
-        CONSTRAINT fk_env_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        food_sources JSONB NULL,
+        water_sources JSONB NULL,
+        shelter_areas JSONB NULL,
+        danger_zones JSONB NULL,
+        change_history JSONB NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (simulation_id)
+      );`,
       `CREATE TABLE IF NOT EXISTS evolution_events (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        simulation_id INT NOT NULL,
-        species_id INT NULL,
+        id SERIAL PRIMARY KEY,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
+        species_id INT NULL REFERENCES species(id) ON DELETE SET NULL,
         event_type VARCHAR(64) NOT NULL,
-        event_data JSON NULL,
+        event_data JSONB NULL,
         generation INT DEFAULT 0,
-        recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX (simulation_id),
-        INDEX (species_id),
-        CONSTRAINT fk_ev_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE,
-        CONSTRAINT fk_ev_species FOREIGN KEY (species_id) REFERENCES species(id) ON DELETE SET NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`,
+        recorded_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_evolution_events_sim ON evolution_events(simulation_id);`,
+      `CREATE INDEX IF NOT EXISTS idx_evolution_events_species ON evolution_events(species_id);`,
       `CREATE TABLE IF NOT EXISTS species_traits_history (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        species_id INT NOT NULL,
-        simulation_id INT NOT NULL,
+        id SERIAL PRIMARY KEY,
+        species_id INT NOT NULL REFERENCES species(id) ON DELETE CASCADE,
+        simulation_id INT NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
         generation INT NOT NULL,
         population_count INT DEFAULT 0,
         avg_size FLOAT DEFAULT 0,
@@ -267,15 +245,13 @@ class DatabaseService {
         genetic_diversity FLOAT DEFAULT 0,
         mutation_rate FLOAT DEFAULT 0,
         extinction_risk FLOAT DEFAULT 0,
-        traits_data JSON NULL,
-        environmental_pressures JSON NULL,
-        recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX (species_id, generation),
-        INDEX (simulation_id, generation),
-        INDEX (generation),
-        CONSTRAINT fk_sth_species FOREIGN KEY (species_id) REFERENCES species(id) ON DELETE CASCADE,
-        CONSTRAINT fk_sth_sim FOREIGN KEY (simulation_id) REFERENCES simulations(id) ON DELETE CASCADE
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`
+        traits_data JSONB NULL,
+        environmental_pressures JSONB NULL,
+        recorded_at TIMESTAMP DEFAULT NOW()
+      );`,
+      `CREATE INDEX IF NOT EXISTS idx_sth_species_gen ON species_traits_history(species_id, generation);`,
+      `CREATE INDEX IF NOT EXISTS idx_sth_sim_gen ON species_traits_history(simulation_id, generation);`,
+      `CREATE INDEX IF NOT EXISTS idx_sth_gen ON species_traits_history(generation);`
     ];
 
     for (const stmt of ddl) {
@@ -285,6 +261,10 @@ class DatabaseService {
     const sims = await this.query('SELECT id FROM simulations WHERE id = 1');
     if (sims.length === 0) {
       await this.query("INSERT INTO simulations (id, name, status) VALUES (1, 'Default Simulation', 'created')");
+      // Fait avancer la séquence auto-incrémentée au-delà de l'id 1 inséré à
+      // la main, sinon le prochain INSERT sans id explicite entrerait en
+      // conflit avec cette ligne.
+      await this.query("SELECT setval(pg_get_serial_sequence('simulations', 'id'), (SELECT MAX(id) FROM simulations))");
     }
     const env = await this.query('SELECT id FROM environment WHERE simulation_id = 1');
     if (env.length === 0) {
@@ -297,6 +277,7 @@ class DatabaseService {
     const sql = `
       INSERT INTO simulations (name, config, status, created_at, updated_at)
       VALUES (?, ?, 'created', NOW(), NOW())
+      RETURNING id
     `;
     const result = await this.query(sql, [
       config.name || 'Unnamed Simulation',
@@ -357,9 +338,10 @@ class DatabaseService {
   // Species Management
   async createSpecies(simulationId, name, traits = {}, options = {}) {
     const sql = `
-      INSERT INTO species (simulation_id, name, population_count, generation_span, 
+      INSERT INTO species (simulation_id, name, population_count, generation_span,
                            extinction_risk, ecological_niche, traits, fitness_average, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+      RETURNING id
     `;
     const res = await this.query(sql, [
       simulationId,
@@ -378,13 +360,14 @@ class DatabaseService {
       INSERT INTO species (simulation_id, name, population_count, generation_span,
                           extinction_risk, ecological_niche, traits, fitness_average, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
-      ON DUPLICATE KEY UPDATE
-        population_count = VALUES(population_count),
-        generation_span = VALUES(generation_span),
-        extinction_risk = VALUES(extinction_risk),
-        traits = VALUES(traits),
-        fitness_average = VALUES(fitness_average),
+      ON CONFLICT (simulation_id, name) DO UPDATE SET
+        population_count = EXCLUDED.population_count,
+        generation_span = EXCLUDED.generation_span,
+        extinction_risk = EXCLUDED.extinction_risk,
+        traits = EXCLUDED.traits,
+        fitness_average = EXCLUDED.fitness_average,
         updated_at = NOW()
+      RETURNING id
     `;
 
     return await this.query(sql, [
@@ -402,7 +385,7 @@ class DatabaseService {
   async getSpeciesBySimulation(simulationId) {
     const sql = 'SELECT * FROM species WHERE simulation_id = ? ORDER BY population_count DESC';
     const results = await this.query(sql, [simulationId]);
-    
+
     return results.map(row => ({
       ...row,
       traits: typeof row.traits === 'string' ? JSON.parse(row.traits || '{}') : (row.traits || {})
@@ -434,8 +417,9 @@ class DatabaseService {
         fitness_average, genetic_diversity, mutation_rate, extinction_risk,
         traits_data, environmental_pressures, recorded_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      RETURNING id
     `;
-    
+
     const traits = traitsData.avgTraits || {};
     return await this.query(sql, [
       speciesId,
@@ -464,14 +448,14 @@ class DatabaseService {
   async getSpeciesTraitsHistory(speciesId, generations = null) {
     let sql = 'SELECT * FROM species_traits_history WHERE species_id = ?';
     const params = [speciesId];
-    
+
     if (generations) {
       sql += ' AND generation >= ? ORDER BY generation ASC LIMIT ?';
       params.push(Math.max(0, generations.from || 0), generations.limit || 100);
     } else {
       sql += ' ORDER BY generation DESC LIMIT 50';
     }
-    
+
     const results = await this.query(sql, params);
     return results.map(row => ({
       ...row,
@@ -482,8 +466,8 @@ class DatabaseService {
 
   async getTraitsEvolutionTrends(speciesId, traitName, generations = 50) {
     const sql = `
-      SELECT generation, 
-             CASE 
+      SELECT generation,
+             CASE
                WHEN ? = 'size' THEN avg_size
                WHEN ? = 'speed' THEN avg_speed
                WHEN ? = 'intelligence' THEN avg_intelligence
@@ -498,12 +482,12 @@ class DatabaseService {
              END as trait_value,
              fitness_average,
              recorded_at
-      FROM species_traits_history 
-      WHERE species_id = ? 
-      ORDER BY generation DESC 
+      FROM species_traits_history
+      WHERE species_id = ?
+      ORDER BY generation DESC
       LIMIT ?
     `;
-    
+
     return await this.query(sql, [
       traitName, traitName, traitName, traitName, traitName,
       traitName, traitName, traitName, traitName, traitName,
@@ -513,15 +497,15 @@ class DatabaseService {
 
   async getSpeciesTraitsComparison(simulationId, generation) {
     const sql = `
-      SELECT species_id, 
+      SELECT species_id,
              avg_size, avg_speed, avg_intelligence, avg_endurance, avg_aggression,
              avg_sociability, avg_fertility, avg_longevity, avg_adaptation, avg_resistance,
              fitness_average, population_count
-      FROM species_traits_history 
+      FROM species_traits_history
       WHERE simulation_id = ? AND generation = ?
       ORDER BY fitness_average DESC
     `;
-    
+
     return await this.query(sql, [simulationId, generation]);
   }
 
@@ -531,8 +515,9 @@ class DatabaseService {
       INSERT INTO individuals (species_id, name, age, energy, position_x, position_y,
                               generation, genome, phenotype, is_alive, birth_time, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      RETURNING id
     `;
-    
+
     return await this.query(sql, [
       individual.speciesId,
       individual.name,
@@ -604,9 +589,10 @@ class DatabaseService {
   // Create individual (API expected by evolution engine)
   async createIndividual(individual) {
     const sql = `
-      INSERT INTO individuals (species_id, name, energy, position_x, position_y, generation, 
+      INSERT INTO individuals (species_id, name, energy, position_x, position_y, generation,
                                parent1_id, parent2_id, is_alive, traits, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      RETURNING id
     `;
     return await this.query(sql, [
       individual.species_id,
@@ -636,8 +622,9 @@ class DatabaseService {
                                    species_count, average_fitness, genetic_diversity,
                                    mutations_count, reproductions_count, environment_data, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+      RETURNING id
     `;
-    
+
     return await this.query(sql, [
       simulationId,
       generation,
@@ -653,12 +640,12 @@ class DatabaseService {
 
   async getEvolutionHistory(simulationId, limit = 100) {
     const sql = `
-      SELECT * FROM evolution_history 
-      WHERE simulation_id = ? 
-      ORDER BY generation DESC 
+      SELECT * FROM evolution_history
+      WHERE simulation_id = ?
+      ORDER BY generation DESC
       LIMIT ?
     `;
-    
+
     const results = await this.query(sql, [simulationId, limit]);
     return results.map(row => ({
       ...row,
@@ -669,7 +656,7 @@ class DatabaseService {
   // Analytics and Statistics
   async getSimulationStats(simulationId) {
     const sql = `
-      SELECT 
+      SELECT
         s.name, s.generation, s.population_count, s.status,
         COUNT(sp.id) as species_count,
         COUNT(i.id) as total_individuals,
@@ -677,12 +664,12 @@ class DatabaseService {
         MAX(eh.generation) as max_generation
       FROM simulations s
       LEFT JOIN species sp ON s.id = sp.simulation_id
-      LEFT JOIN individuals i ON sp.id = i.species_id AND i.is_alive = 1
+      LEFT JOIN individuals i ON sp.id = i.species_id AND i.is_alive = true
       LEFT JOIN evolution_history eh ON s.id = eh.simulation_id
       WHERE s.id = ?
       GROUP BY s.id
     `;
-    
+
     const results = await this.query(sql, [simulationId]);
     return results[0];
   }
@@ -695,18 +682,19 @@ class DatabaseService {
       ORDER BY generation DESC
       LIMIT ?
     `;
-    
+
     return await this.query(sql, [simulationId, generations]);
   }
 
   // Real-time Performance Monitoring
   async logPerformanceMetrics(simulationId, metrics) {
     const sql = `
-      INSERT INTO performance_logs (simulation_id, cpu_usage, memory_usage, 
+      INSERT INTO performance_logs (simulation_id, cpu_usage, memory_usage,
                                   fps, generations_per_second, timestamp)
       VALUES (?, ?, ?, ?, ?, NOW())
+      RETURNING id
     `;
-    
+
     return await this.query(sql, [
       simulationId,
       metrics.cpuUsage,
@@ -719,27 +707,27 @@ class DatabaseService {
   async getRecentPerformanceMetrics(simulationId, minutes = 5) {
     const sql = `
       SELECT * FROM performance_logs
-      WHERE simulation_id = ? AND timestamp >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
+      WHERE simulation_id = ? AND timestamp >= NOW() - (? * INTERVAL '1 minute')
       ORDER BY timestamp DESC
     `;
-    
+
     return await this.query(sql, [simulationId, minutes]);
   }
 
   // Cleanup and Maintenance
   async cleanupOldData(daysOld = 30) {
     const sqls = [
-      'DELETE FROM performance_logs WHERE timestamp < DATE_SUB(NOW(), INTERVAL ? DAY)',
-      'DELETE FROM evolution_history WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
-      'DELETE FROM individuals WHERE death_time IS NOT NULL AND death_time < DATE_SUB(NOW(), INTERVAL ? DAY)'
+      "DELETE FROM performance_logs WHERE timestamp < NOW() - (? * INTERVAL '1 day')",
+      "DELETE FROM evolution_history WHERE created_at < NOW() - (? * INTERVAL '1 day')",
+      "DELETE FROM individuals WHERE death_time IS NOT NULL AND death_time < NOW() - (? * INTERVAL '1 day')"
     ];
-    
+
     let deletedRows = 0;
     for (const sql of sqls) {
       const result = await this.query(sql, [daysOld]);
       deletedRows += result.affectedRows || 0;
     }
-    
+
     console.log(`🧹 Cleaned up ${deletedRows} old records`);
     return deletedRows;
   }
@@ -796,19 +784,19 @@ class DatabaseService {
       const sql = `
         SELECT i.* FROM individuals i
         JOIN species s ON i.species_id = s.id
-        WHERE i.is_alive = 1 AND s.simulation_id = ?
+        WHERE i.is_alive = true AND s.simulation_id = ?
       `;
       return await this.query(sql, [simulationId]);
     }
-    return await this.query('SELECT * FROM individuals WHERE is_alive = 1');
+    return await this.query('SELECT * FROM individuals WHERE is_alive = true');
   }
 
   async clearPopulation(simulationId = null) {
     if (simulationId) {
       const sql = `
-        DELETE i FROM individuals i
-        JOIN species s ON i.species_id = s.id
-        WHERE s.simulation_id = ?
+        DELETE FROM individuals
+        USING species
+        WHERE individuals.species_id = species.id AND species.simulation_id = ?
       `;
       return await this.query(sql, [simulationId]);
     }
@@ -838,11 +826,11 @@ class DatabaseService {
 
   async getTotalMutations(simulationId = null) {
     try {
-      let sql = 'SELECT COUNT(*) as cnt FROM evolution_events WHERE event_type = \'mutation\'';
+      let sql = "SELECT COUNT(*) as cnt FROM evolution_events WHERE event_type = 'mutation'";
       const params = [];
       if (simulationId) { sql += ' AND simulation_id = ?'; params.push(simulationId); }
       const rows = await this.query(sql, params);
-      return rows[0]?.cnt || 0;
+      return Number(rows[0]?.cnt) || 0;
     } catch (e) {
       return 0;
     }
@@ -850,11 +838,11 @@ class DatabaseService {
 
   async getTotalReproductions(simulationId = null) {
     try {
-      let sql = 'SELECT COUNT(*) as cnt FROM evolution_events WHERE event_type = \'reproduction\'';
+      let sql = "SELECT COUNT(*) as cnt FROM evolution_events WHERE event_type = 'reproduction'";
       const params = [];
       if (simulationId) { sql += ' AND simulation_id = ?'; params.push(simulationId); }
       const rows = await this.query(sql, params);
-      return rows[0]?.cnt || 0;
+      return Number(rows[0]?.cnt) || 0;
     } catch (e) {
       return 0;
     }

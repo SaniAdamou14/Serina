@@ -28,10 +28,10 @@
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.2.1",
     "helmet": "^7.1.0",
-    "mysql2": "^3.6.5",
+    "pg": "^8.23.0",
     "socket.io": "^4.7.4",
-    "swagger-ui-express": "^5.0.1",
-    "swagger-jsdoc": "^6.2.8"
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.10.4",
