@@ -3,11 +3,22 @@ import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } fro
 import { Map as MapIcon } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { useSelection } from '@services/SelectionContext';
-import { IndividualInfo } from '../types';
+import { IndividualInfo, RegionInfo } from '../types';
 import { computeLineageHues, creatureColor } from '../utils/lineageColor';
 import { BIOME_PATTERN_IDS, jitterColor } from '../utils/mapTexture';
+import { OverlayMode, OVERLAY_LABELS, sequentialColor, ramp } from '../utils/overlayColor';
 import { BiomeTextureDefs } from './BiomeTextureDefs';
 import { CreatureIcon } from './CreatureIcon';
+
+/** Une métrique réelle par région (RegionInfo) pour chaque overlay -- pas
+ * de biome ici, géré séparément (rendu de base toujours visible). */
+const OVERLAY_METRICS: Record<Exclude<OverlayMode, 'biome'>, (r: RegionInfo) => number> = {
+  temperature: (r) => r.temperature,
+  fertility: (r) => r.primaryProducers,
+  predation: (r) => r.predationPressure,
+  competition: (r) => r.competitionIntensity,
+  climaticStress: (r) => r.climaticStress
+};
 
 /** Couleurs réelles par biome (nom exact renvoyé par le backend, voir
  * EnvironmentalAdaptation.hpp) -- pas une palette générique par index, pour
@@ -72,6 +83,7 @@ function clampViewBox(vb: ViewBox, worldWidth: number, worldHeight: number): Vie
 export function WorldMap() {
   const { simulationData } = useSimulation();
   const { selectRegion, selectIndividual, showSpeciesDetail } = useSelection();
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
@@ -181,6 +193,17 @@ export function WorldMap() {
   const currentZoom = worldWidth / viewBox.w;
   const detailed = currentZoom >= DETAIL_ZOOM_THRESHOLD;
 
+  const overlayMetric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
+  const overlayRange = overlayMetric
+    ? regions.reduce(
+        (acc, r) => {
+          const v = overlayMetric(r);
+          return { min: Math.min(acc.min, v), max: Math.max(acc.max, v) };
+        },
+        { min: Infinity, max: -Infinity }
+      )
+    : null;
+
   const biomeColorAt = (x: number, y: number): string => {
     const gx = Math.max(0, Math.min(gridWidth - 1, Math.floor(x / cellSize)));
     const gy = Math.max(0, Math.min(gridHeight - 1, Math.floor(y / cellSize)));
@@ -247,6 +270,19 @@ export function WorldMap() {
                     fill={`url(#${patternId})`}
                   />
                 )}
+                {/* Calque de données au-dessus du terrain (semi-transparent,
+                    façon RimWorld) : le terrain reste lisible dessous, la
+                    teinte de la métrique réelle porte l'information. */}
+                {overlayMetric && overlayRange && (
+                  <rect
+                    x={region.gridX * cellSize}
+                    y={region.gridY * cellSize}
+                    width={cellSize}
+                    height={cellSize}
+                    fill={sequentialColor(overlayMetric(region), overlayRange.min, overlayRange.max, overlayMode as Exclude<OverlayMode, 'biome'>)}
+                    fillOpacity={0.68}
+                  />
+                )}
               </g>
             );
           })}
@@ -279,11 +315,34 @@ export function WorldMap() {
             {gridWidth}×{gridHeight} régions — {individuals.length} individus en direct
           </div>
         </div>
-        <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-2 py-1.5 flex items-center gap-1.5 pointer-events-auto shadow-lg">
-          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1 / 1.25)}>−</button>
-          <span className="text-slate-300 text-xs w-12 text-center">{Math.round(currentZoom * 100)}%</span>
-          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1.25)}>+</button>
-          <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-xs ml-1" onClick={resetView}>Recentrer</button>
+        <div className="flex flex-col items-end gap-2 pointer-events-auto">
+          <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg">
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1 / 1.25)}>−</button>
+            <span className="text-slate-300 text-xs w-12 text-center">{Math.round(currentZoom * 100)}%</span>
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1.25)}>+</button>
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-xs ml-1" onClick={resetView}>Recentrer</button>
+          </div>
+          <select
+            value={overlayMode}
+            onChange={(e) => setOverlayMode(e.target.value as OverlayMode)}
+            className="input-field text-xs px-2 py-1.5 shadow-lg"
+          >
+            {(Object.keys(OVERLAY_LABELS) as OverlayMode[]).map((mode) => (
+              <option key={mode} value={mode}>{OVERLAY_LABELS[mode]}</option>
+            ))}
+          </select>
+          {overlayMetric && overlayRange && (
+            <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg w-48">
+              <div
+                className="h-2 rounded-full mb-1"
+                style={{ background: `linear-gradient(to right, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).light}, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).dark})` }}
+              />
+              <div className="flex justify-between text-slate-400">
+                <span>{overlayRange.min.toFixed(1)}</span>
+                <span>{overlayRange.max.toFixed(1)}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
