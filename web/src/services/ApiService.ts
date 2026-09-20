@@ -72,6 +72,13 @@ class ApiService {
     )
   }
 
+  stepSimulation(simulationId: SimulationId, count = 1) {
+    return request<{ success: boolean; generation?: number; error?: string }>(
+      `/api/serina/step/${simulationId}`,
+      { method: 'POST', body: JSON.stringify({ count }) }
+    )
+  }
+
   stopSimulation(simulationId: SimulationId) {
     return request<{ success: boolean; error?: string }>(`/api/serina/stop/${simulationId}`, { method: 'POST' })
   }

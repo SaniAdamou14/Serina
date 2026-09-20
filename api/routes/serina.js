@@ -114,6 +114,21 @@ router.post('/speed/:simulationId', async (req, res) => {
 
 /**
  * @swagger
+ * /api/serina/step/{simulationId}:
+ *   post:
+ *     summary: Avance manuellement une simulation de N générations (pause ou lecture)
+ *     tags: [Serina]
+ */
+router.post('/step/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = await simulationEngine.step(req.params.simulationId, req.body.count);
+  res.status(result.success ? 200 : 404).json(result);
+});
+
+/**
+ * @swagger
  * /api/serina/stop/{simulationId}:
  *   post:
  *     summary: Arrête une simulation Serina

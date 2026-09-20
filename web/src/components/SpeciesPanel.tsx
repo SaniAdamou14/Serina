@@ -1,7 +1,6 @@
-import { useState } from 'react'
 import { Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
-import { SpeciesDetailPanel } from './SpeciesDetailPanel'
+import { useSelection } from '@services/SelectionContext'
 
 /** UnifiedWorldSimulator ne modélise pas encore un score de risque
  * d'extinction (voir CONTRIBUTING.md) -- ce seuil de population est un fait
@@ -22,7 +21,7 @@ function getPopulationStatusLabel(population: number) {
 
 export function SpeciesPanel() {
   const { simulationData } = useSimulation()
-  const [detailSpecies, setDetailSpecies] = useState<string | null>(null)
+  const { showSpeciesDetail } = useSelection()
 
   if (!simulationData) {
     return (
@@ -76,7 +75,7 @@ export function SpeciesPanel() {
           return (
             <button
               key={lineage.speciesName}
-              onClick={() => setDetailSpecies(lineage.speciesName)}
+              onClick={() => showSpeciesDetail(lineage.speciesName)}
               className="w-full text-left border border-slate-700 bg-slate-800/40 rounded-lg p-4 hover:border-primary-600 hover:bg-slate-800/70 transition-colors"
             >
               <div className="flex items-center justify-between mb-3">
@@ -131,8 +130,6 @@ export function SpeciesPanel() {
           )
         })}
       </div>
-
-      {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => setDetailSpecies(null)} />}
     </div>
   )
 }

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { Map as MapIcon, Thermometer, Sprout, Crosshair, Swords, Snowflake, Users, Zap, Clock, MapPin, ClipboardList } from 'lucide-react';
+import { Map as MapIcon } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
-import { RegionInfo, IndividualInfo } from '../types';
+import { useSelection } from '@services/SelectionContext';
+import { IndividualInfo } from '../types';
 import { computeLineageHues, creatureColor } from '../utils/lineageColor';
 import { BIOME_PATTERN_IDS, jitterColor } from '../utils/mapTexture';
 import { BiomeTextureDefs } from './BiomeTextureDefs';
 import { CreatureIcon } from './CreatureIcon';
-import { SpeciesDetailPanel } from './SpeciesDetailPanel';
 
 /** Couleurs réelles par biome (nom exact renvoyé par le backend, voir
  * EnvironmentalAdaptation.hpp) -- pas une palette générique par index, pour
@@ -71,9 +71,7 @@ function clampViewBox(vb: ViewBox, worldWidth: number, worldHeight: number): Vie
  */
 export function WorldMap() {
   const { simulationData } = useSimulation();
-  const [selectedRegion, setSelectedRegion] = useState<RegionInfo | null>(null);
-  const [selectedIndividual, setSelectedIndividual] = useState<IndividualInfo | null>(null);
-  const [detailSpecies, setDetailSpecies] = useState<string | null>(null);
+  const { selectRegion, selectIndividual, showSpeciesDetail } = useSelection();
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
@@ -224,10 +222,7 @@ export function WorldMap() {
             return (
               <g
                 key={`${region.gridX}-${region.gridY}`}
-                onClick={() => {
-                  setSelectedRegion(region);
-                  setSelectedIndividual(null);
-                }}
+                onClick={() => selectRegion(region)}
                 style={{ cursor: 'pointer' }}
               >
                 <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}) — ${region.population} individu(s)`}</title>
@@ -268,8 +263,7 @@ export function WorldMap() {
                 headingDegrees={computeHeading(individual)}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setSelectedIndividual(individual);
-                  setSelectedRegion(null);
+                  selectIndividual(individual);
                 }}
               />
             );
@@ -314,7 +308,7 @@ export function WorldMap() {
             <button
               key={lineage.speciesName}
               className="flex items-center gap-1 hover:bg-slate-700/60 rounded px-1 -mx-1"
-              onClick={() => setDetailSpecies(lineage.speciesName)}
+              onClick={() => showSpeciesDetail(lineage.speciesName)}
               title="Voir la fiche complète de l'espèce"
             >
               <span
@@ -327,47 +321,6 @@ export function WorldMap() {
         </div>
       </div>
 
-      {/* Panneau d'inspection flottant en bas à droite : région ou individu sélectionné */}
-      {selectedRegion && (
-        <div className="absolute bottom-3 right-3 w-72 max-h-[60%] overflow-y-auto bg-blue-950/90 backdrop-blur-sm rounded-lg border border-blue-800 p-3 text-sm shadow-lg">
-          <h4 className="font-semibold text-blue-200">
-            {selectedRegion.environmentName || 'Biome inconnu'} — case ({selectedRegion.gridX}, {selectedRegion.gridY})
-          </h4>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-blue-300 text-xs">
-            <div className="flex items-center gap-1"><Thermometer className="w-3.5 h-3.5" /> Température : {selectedRegion.temperature.toFixed(1)}°C</div>
-            <div className="flex items-center gap-1"><Sprout className="w-3.5 h-3.5" /> Producteurs primaires : {(selectedRegion.primaryProducers * 100).toFixed(0)}%</div>
-            <div className="flex items-center gap-1"><Crosshair className="w-3.5 h-3.5" /> Prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
-            <div className="flex items-center gap-1"><Swords className="w-3.5 h-3.5" /> Compétition : {(selectedRegion.competitionIntensity * 100).toFixed(0)}%</div>
-            <div className="flex items-center gap-1"><Snowflake className="w-3.5 h-3.5" /> Stress climatique : {(selectedRegion.climaticStress * 100).toFixed(0)}%</div>
-            <div className="flex items-center gap-1"><Users className="w-3.5 h-3.5" /> Individus ici : {selectedRegion.population}</div>
-          </div>
-        </div>
-      )}
-
-      {selectedIndividual && (
-        <div className="absolute bottom-3 right-3 w-72 max-h-[60%] overflow-y-auto bg-amber-950/90 backdrop-blur-sm rounded-lg border border-amber-800 p-3 text-sm shadow-lg">
-          <h4 className="font-semibold text-amber-200">{selectedIndividual.species} — individu #{selectedIndividual.id}</h4>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2 text-amber-300 text-xs">
-            <div className="flex items-center gap-1"><Zap className="w-3.5 h-3.5" /> Énergie : {selectedIndividual.energy.toFixed(1)}</div>
-            <div className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Âge : {selectedIndividual.age.toFixed(1)}</div>
-            <div className="col-span-2 flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
-          </div>
-          <button
-            className="mt-3 w-full flex items-center justify-center gap-1.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-100 rounded px-2 py-1.5"
-            onClick={() => setDetailSpecies(selectedIndividual.species)}
-          >
-            <ClipboardList className="w-3.5 h-3.5" /> Voir la fiche complète de l'espèce
-          </button>
-        </div>
-      )}
-
-      {!selectedRegion && !selectedIndividual && (
-        <div className="absolute bottom-3 right-3 bg-slate-900/70 backdrop-blur-sm rounded-lg px-3 py-2 text-xs text-slate-400 pointer-events-none shadow-lg">
-          Cliquez une région ou un individu pour l'inspecter. Molette : zoom. Glisser : déplacer.
-        </div>
-      )}
-
-      {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => setDetailSpecies(null)} />}
     </div>
   );
 }

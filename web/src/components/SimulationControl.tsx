@@ -1,24 +1,25 @@
 import { useState } from 'react'
-import { Play, Pause, Square } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
-import { SimulationCommand } from '../types'
 
 const MIN_FOUNDER_COUNT = 5
 const MAX_FOUNDER_COUNT = 400
 const MIN_TICKS_PER_SECOND = 1
 const MAX_TICKS_PER_SECOND = 20
 
+/**
+ * Écran de configuration affiché uniquement tant qu'aucune simulation n'est
+ * active -- l'équivalent de l'écran de création de colonie de RimWorld.
+ * Une fois une simulation démarrée, ce composant disparaît : le contrôle en
+ * direct (vitesse, pause, pas-à-pas, arrêt) vit désormais dans BottomBar.tsx
+ * et TopBar.tsx, toujours visibles quel que soit l'onglet actif.
+ */
 export function SimulationControl() {
   const {
     isConnected,
-    isRunning,
     currentSimulationId,
     availableSimulations,
     connectionError,
-    sendCommand,
     startNewSimulation,
-    stopCurrentSimulation,
-    setSpeed,
     connect,
     disconnect
   } = useSimulation()
@@ -39,30 +40,11 @@ export function SimulationControl() {
     }
   }
 
-  const handleSpeedChange = async (value: number) => {
-    setTicksPerSecond(value)
-    if (currentSimulationId) {
-      await setSpeed(value)
-    }
-  }
-
-  const handleStop = async () => {
-    try {
-      await stopCurrentSimulation()
-    } catch (error) {
-      console.error('Failed to stop simulation:', error)
-    }
-  }
-
-  const handlePlayPause = () => {
-    sendCommand(isRunning ? SimulationCommand.PAUSE : SimulationCommand.RESUME)
-  }
-
   return (
     <div className="card space-y-6">
       <div className="border-b border-slate-700 pb-4">
-        <h2 className="text-lg font-semibold text-slate-100">Contrôle de Simulation</h2>
-        <p className="text-sm text-slate-400">Gestion de l'évolution écologique</p>
+        <h2 className="text-lg font-semibold text-slate-100">Nouvelle simulation</h2>
+        <p className="text-sm text-slate-400">Configurer et démarrer un nouvel écosystème réel</p>
       </div>
 
       {/* Statut de connexion */}
@@ -98,22 +80,9 @@ export function SimulationControl() {
         </div>
       </div>
 
-      {/* Statut de la simulation */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-slate-300">Simulation Actuelle</span>
-          <div className={`status-indicator ${isRunning ? 'status-running' : 'status-stopped'}`}>
-            {currentSimulationId ? (isRunning ? 'En cours' : 'En pause') : 'Aucune simulation'}
-          </div>
-        </div>
-
-        {currentSimulationId && (
-          <div className="bg-blue-950 border border-blue-800 rounded-md p-3">
-            <p className="text-sm text-blue-300">ID : {currentSimulationId}</p>
-          </div>
-        )}
-
-        {!currentSimulationId && (
+      {/* Configuration de la nouvelle simulation */}
+      {!currentSimulationId && (
+        <div className="space-y-3">
           <div className="space-y-3 bg-slate-800/60 border border-slate-700 rounded-md p-3">
             <div>
               <label className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
@@ -157,54 +126,16 @@ export function SimulationControl() {
               />
             </div>
           </div>
-        )}
 
-        {currentSimulationId && isRunning && (
-          <div className="bg-slate-800/60 border border-slate-700 rounded-md p-3">
-            <label className="flex items-center justify-between text-xs font-medium text-slate-300 mb-1">
-              <span>Vitesse de la simulation</span>
-              <span>{ticksPerSecond} génération(s)/s</span>
-            </label>
-            <input
-              type="range"
-              min={MIN_TICKS_PER_SECOND}
-              max={MAX_TICKS_PER_SECOND}
-              value={ticksPerSecond}
-              onChange={(e) => handleSpeedChange(Number(e.target.value))}
-              className="w-full"
-            />
-          </div>
-        )}
-
-        <div className="flex space-x-2">
-          {!currentSimulationId ? (
-            <button
-              onClick={handleStartNew}
-              disabled={!isConnected || isStarting}
-              className="button-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isStarting ? 'Démarrage...' : 'Nouvelle Simulation'}
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={handlePlayPause}
-                disabled={!isConnected}
-                className="button-primary flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isRunning ? <><Pause className="w-4 h-4" /> Pause</> : <><Play className="w-4 h-4" /> Reprendre</>}
-              </button>
-              <button
-                onClick={handleStop}
-                disabled={!isConnected}
-                className="button-danger flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Square className="w-4 h-4" /> Arrêter
-              </button>
-            </>
-          )}
+          <button
+            onClick={handleStartNew}
+            disabled={!isConnected || isStarting}
+            className="button-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isStarting ? 'Démarrage...' : 'Nouvelle Simulation'}
+          </button>
         </div>
-      </div>
+      )}
 
       {/* Simulations disponibles */}
       {availableSimulations.length > 0 && (

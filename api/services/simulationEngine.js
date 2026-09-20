@@ -317,6 +317,26 @@ class SimulationEngine extends EventEmitter {
     return { success: true, ticksPerSecond: rate };
   }
 
+  /**
+   * Avance manuellement une simulation de `count` générations, qu'elle soit
+   * en pause ou en lecture (le daemon supporte `step` dans les deux cas).
+   * Rappelle `pull()` ensuite pour rediffuser l'état réel avancé -- sans ça,
+   * l'UI resterait figée sur l'ancienne génération tant que la simulation
+   * est en pause (aucun sondage périodique ne tourne dans cet état).
+   */
+  async step(simulationId, count = 1) {
+    const instance = this.simulations.get(simulationId);
+    if (!instance) return { success: false, error: `Simulation ${simulationId} not found` };
+
+    const stepResult = await this.client.send('step', simulationId, { count: Math.max(1, Number(count) || 1) });
+    if (stepResult.status !== 'success') {
+      return { success: false, error: stepResult.error || 'serina_daemon step failed' };
+    }
+
+    await this.pull(simulationId);
+    return { success: true, generation: stepResult.generation };
+  }
+
   async stopSimulation(simulationId) {
     const instance = this.simulations.get(simulationId);
     if (!instance) {

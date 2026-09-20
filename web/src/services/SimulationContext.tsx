@@ -14,6 +14,7 @@ interface SimulationContextType {
   startNewSimulation: (options?: { founderCount?: number; seed?: number; ticksPerSecond?: number }) => Promise<void>
   stopCurrentSimulation: () => Promise<void>
   setSpeed: (ticksPerSecond: number) => Promise<void>
+  stepSimulation: (count?: number) => Promise<void>
   connect: () => void
   disconnect: () => void
 }
@@ -159,6 +160,17 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     }
   }, [currentSimulationId])
 
+  const stepSimulation = useCallback(async (count = 1) => {
+    if (!currentSimulationId) return
+    try {
+      await apiService.stepSimulation(currentSimulationId, count)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error('❌ Failed to step simulation:', message)
+      setConnectionError(`Erreur d'avance manuelle : ${message}`)
+    }
+  }, [currentSimulationId])
+
   const sendCommand = useCallback((command: SimulationCommand) => {
     const socket = socketRef.current
 
@@ -199,6 +211,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
     startNewSimulation,
     stopCurrentSimulation,
     setSpeed,
+    stepSimulation,
     connect,
     disconnect
   }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { SimulationDashboard } from '@components/SimulationDashboard'
 import { SimulationProvider } from '@services/SimulationContext'
+import { SelectionProvider } from '@services/SelectionContext'
 import { LoadingScreen } from '@components/LoadingScreen'
 import { ErrorBoundary } from '@components/ErrorBoundary'
 
@@ -23,9 +24,11 @@ function App() {
   return (
     <ErrorBoundary>
       <SimulationProvider>
-        <div className="min-h-screen bg-slate-950">
-          <SimulationDashboard />
-        </div>
+        <SelectionProvider>
+          <div className="min-h-screen bg-slate-950">
+            <SimulationDashboard />
+          </div>
+        </SelectionProvider>
       </SimulationProvider>
     </ErrorBoundary>
   )
