@@ -3,6 +3,8 @@ import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } fro
 import { useSimulation } from '@services/SimulationContext';
 import { RegionInfo, IndividualInfo } from '../types';
 import { computeLineageHues, creatureColor } from '../utils/lineageColor';
+import { BIOME_PATTERN_IDS, jitterColor } from '../utils/mapTexture';
+import { BiomeTextureDefs } from './BiomeTextureDefs';
 import { CreatureIcon } from './CreatureIcon';
 import { SpeciesDetailPanel } from './SpeciesDetailPanel';
 
@@ -76,6 +78,13 @@ export function WorldMap() {
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const lastWorldSize = useRef<{ w: number; h: number } | null>(null);
+  // Position précédente et cap réel par individu, pour orienter sa
+  // silhouette dans le sens de son vrai déplacement entre deux instantanés
+  // plutôt que de la laisser fixe ou orientée au hasard. Mise à jour
+  // pendant le rendu (jamais via setState : c'est un simple cache dérivé,
+  // pas un état qui doit déclencher un nouveau rendu).
+  const previousPositions = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const headings = useRef<Map<number, number>>(new Map());
 
   const regionsData = simulationData?.regions;
   const worldWidth = regionsData ? regionsData.gridWidth * regionsData.cellSize : 0;
@@ -180,6 +189,19 @@ export function WorldMap() {
     return region ? BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR : FALLBACK_BIOME_COLOR;
   };
 
+  const computeHeading = (individual: IndividualInfo): number => {
+    const prev = previousPositions.current.get(individual.id);
+    previousPositions.current.set(individual.id, { x: individual.x, y: individual.y });
+    if (prev) {
+      const dx = individual.x - prev.x;
+      const dy = individual.y - prev.y;
+      if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
+        headings.current.set(individual.id, (Math.atan2(dy, dx) * 180) / Math.PI);
+      }
+    }
+    return headings.current.get(individual.id) ?? 0;
+  };
+
   return (
     <div className="relative h-full w-full bg-slate-950 overflow-hidden">
       <div
@@ -193,25 +215,45 @@ export function WorldMap() {
         onMouseLeave={stopDragging}
       >
         <svg viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`} style={{ width: '100%', height: '100%' }}>
-          {regions.map((region) => (
-            <rect
-              key={`${region.gridX}-${region.gridY}`}
-              x={region.gridX * cellSize}
-              y={region.gridY * cellSize}
-              width={cellSize}
-              height={cellSize}
-              fill={BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR}
-              stroke="#00000033"
-              strokeWidth={cellSize * 0.02}
-              onClick={() => {
-                setSelectedRegion(region);
-                setSelectedIndividual(null);
-              }}
-              style={{ cursor: 'pointer' }}
-            >
-              <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}) — ${region.population} individu(s)`}</title>
-            </rect>
-          ))}
+          <BiomeTextureDefs cellSize={cellSize} />
+
+          {regions.map((region) => {
+            const baseColor = BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR;
+            const patternId = BIOME_PATTERN_IDS[region.environmentName];
+            return (
+              <g
+                key={`${region.gridX}-${region.gridY}`}
+                onClick={() => {
+                  setSelectedRegion(region);
+                  setSelectedIndividual(null);
+                }}
+                style={{ cursor: 'pointer' }}
+              >
+                <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}) — ${region.population} individu(s)`}</title>
+                {/* Teinte de base légèrement variée par case (jamais un
+                    aplat parfaitement uniforme, comme un vrai terrain) puis
+                    motif de texture propre au biome par-dessus. */}
+                <rect
+                  x={region.gridX * cellSize}
+                  y={region.gridY * cellSize}
+                  width={cellSize}
+                  height={cellSize}
+                  fill={jitterColor(baseColor, region.gridX, region.gridY)}
+                  stroke="#00000022"
+                  strokeWidth={cellSize * 0.008}
+                />
+                {patternId && (
+                  <rect
+                    x={region.gridX * cellSize}
+                    y={region.gridY * cellSize}
+                    width={cellSize}
+                    height={cellSize}
+                    fill={`url(#${patternId})`}
+                  />
+                )}
+              </g>
+            );
+          })}
 
           {individuals.map((individual) => {
             const hue = lineageHues.get(individual.species) ?? 0;
@@ -222,6 +264,7 @@ export function WorldMap() {
                 individual={individual}
                 color={color}
                 detailed={detailed}
+                headingDegrees={computeHeading(individual)}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedIndividual(individual);

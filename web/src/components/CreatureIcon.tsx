@@ -150,10 +150,15 @@ interface CreatureIconProps {
   /** Rendu simplifié (point coloré taille réelle) à faible zoom -- le détail
    * des silhouettes est illisible sous quelques pixels, inutile de le payer. */
   detailed: boolean
+  /** Cap réel en degrés (0 = vers +x, sens trigonométrique), dérivé du vrai
+   * déplacement de l'individu entre deux instantanés -- absent (immobile
+   * ou premier instantané) : la silhouette garde son orientation par
+   * défaut plutôt que de sembler regarder au hasard. */
+  headingDegrees?: number
   onClick?: (e: ReactMouseEvent<SVGElement>) => void
 }
 
-export function CreatureIcon({ individual, color, detailed, onClick }: CreatureIconProps) {
+export function CreatureIcon({ individual, color, detailed, headingDegrees, onClick }: CreatureIconProps) {
   const renderScale = 0.7 + individual.sizeScale * 1.1
   const elongationX = 1 + (individual.elongation - 0.5) * 0.5
   const elongationY = 1 - (individual.elongation - 0.5) * 0.3
@@ -176,20 +181,31 @@ export function CreatureIcon({ individual, color, detailed, onClick }: CreatureI
   }
 
   const Glyph = GLYPHS_BY_BIOLOGICAL_TYPE[individual.biologicalType] ?? ArthropodGlyph
+  const shadowRadius = renderScale * 0.55
 
   return (
-    <g
-      transform={`translate(${individual.x} ${individual.y}) scale(${renderScale * elongationX} ${renderScale * elongationY})`}
-      onClick={onClick}
-      style={{ cursor: 'pointer' }}
-    >
+    <g onClick={onClick} style={{ cursor: 'pointer' }}>
       <title>{`${individual.species} #${individual.id}`}</title>
-      <Glyph
-        fill={color}
-        ornamentTier={individual.ornamentTier}
-        sensoryProminence={individual.sensoryProminence}
-        patternTier={individual.patternTier}
+      {/* Ombre au sol : jamais tournée avec le cap, un peu décalée et
+          aplatie comme une vraie ombre portée vue du dessus. */}
+      <ellipse
+        cx={individual.x}
+        cy={individual.y + shadowRadius * 0.35}
+        rx={shadowRadius}
+        ry={shadowRadius * 0.4}
+        fill="#000000"
+        opacity={0.25}
       />
+      <g
+        transform={`translate(${individual.x} ${individual.y}) rotate(${headingDegrees ?? 0}) scale(${renderScale * elongationX} ${renderScale * elongationY})`}
+      >
+        <Glyph
+          fill={color}
+          ornamentTier={individual.ornamentTier}
+          sensoryProminence={individual.sensoryProminence}
+          patternTier={individual.patternTier}
+        />
+      </g>
     </g>
   )
 }
