@@ -455,6 +455,45 @@ TEST_CASE("real predation/competition (Chantier F) does not cause a premature ec
     REQUIRE(everSawAnyAdaptationOrInnovation);
 }
 
+TEST_CASE("evolutionary convergence detection never crashes and produces well-formed signals over a long run", "[worldsim][chantierG][convergence]") {
+    // Chantier G2 : un seuil de speciation bas encourage plusieurs lignees
+    // distinctes a coexister rapidement (dont certaines forcement dans le
+    // meme biome que leur parent, un vrai partage de niche), donnant a
+    // checkConvergence() une vraie chance de s'exercer sur des paires
+    // reelles plutot que de ne jamais avoir assez de lignees pour agir.
+    // Un signal reste un phenomene emergent, pas garanti -- ce test verifie
+    // la SURETE structurelle (jamais de crash, jamais un signal mal forme),
+    // pas qu'un signal apparaisse forcement.
+    WorldSimulationParameters params;
+    params.speciationDistanceThreshold = 0.08;
+    params.speciationIsolationGenerations = 5;
+    params.convergenceCheckInterval = 50;
+
+    UnifiedWorldSimulator sim(params, 13);
+    sim.seedFounderSpecies(30);
+
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    REQUIRE(sim.getGeneration() == 1500);
+    REQUIRE(sim.getPopulationCount() > 0);
+
+    for (const auto &signal : sim.getConvergenceSignals()) {
+        REQUIRE_FALSE(signal.speciesA.empty());
+        REQUIRE_FALSE(signal.speciesB.empty());
+        REQUIRE(signal.speciesA != signal.speciesB);
+        REQUIRE(signal.generation <= 1500);
+        REQUIRE(signal.generation % params.convergenceCheckInterval == 0);
+        // Le motif exact que la fonction pure evaluateConvergenceTrend()
+        // impose : rapprochement de traits, eloignement genetique.
+        REQUIRE(signal.traitDistanceDelta < 0.0);
+        REQUIRE(signal.geneticDistanceDelta > 0.0);
+        REQUIRE(signal.traitDistance >= 0.0);
+        REQUIRE(signal.traitDistance <= 1.0);
+        REQUIRE(signal.geneticDistance >= params.speciationDistanceThreshold);
+    }
+}
+
 TEST_CASE("a newly speciated lineage inherits a brain instead of starting blank", "[worldsim][neat][speciation]") {
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.05; // low threshold: speciation should trigger quickly

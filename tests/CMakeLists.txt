@@ -72,6 +72,14 @@ target_include_directories(test_trait_ecology PRIVATE ${CMAKE_SOURCE_DIR}/includ
 target_compile_features(test_trait_ecology PRIVATE cxx_std_20)
 catch_discover_tests(test_trait_ecology)
 
+# Serina/EvolutionaryConvergence.hpp (detection de convergence evolutive,
+# Chantier G2) : header-only, sans dependance nlohmann_json.
+add_executable(test_evolutionary_convergence test_evolutionary_convergence.cpp)
+target_link_libraries(test_evolutionary_convergence PRIVATE Catch2::Catch2WithMain)
+target_include_directories(test_evolutionary_convergence PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_evolutionary_convergence PRIVATE cxx_std_20)
+catch_discover_tests(test_evolutionary_convergence)
+
 add_executable(test_simulation_serialization test_simulation_serialization.cpp)
 target_link_libraries(test_simulation_serialization PRIVATE
     Catch2::Catch2WithMain

@@ -156,10 +156,24 @@ export interface SpeciationEventInfo {
   geneticDistanceAtSplit: number
 }
 
+/** Un signal de convergence évolutive CANDIDAT (Chantier G2) : mesuré sur des
+ * traits/distances réels à deux instants successifs, jamais une preuve ni un
+ * phénomène mis en scène -- toujours à présenter comme "motif observé". */
+export interface ConvergenceSignalInfo {
+  speciesA: string
+  speciesB: string
+  generation: number
+  traitDistance: number
+  geneticDistance: number
+  traitDistanceDelta: number
+  geneticDistanceDelta: number
+}
+
 export interface LineagesResult {
   status: 'success' | 'error'
   lineages: LineageStatus[]
   speciationEvents: SpeciationEventInfo[]
+  convergenceSignals: ConvergenceSignalInfo[]
   error?: string
 }
 

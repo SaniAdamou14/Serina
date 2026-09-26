@@ -1,6 +1,6 @@
 import { useSimulation } from '@services/SimulationContext';
 import { useState, useEffect, useRef } from 'react';
-import { GitBranch, Dna, BarChart3, TrendingUp, Zap, AlertTriangle, CheckCircle2, Globe2 } from 'lucide-react';
+import { GitBranch, Dna, BarChart3, TrendingUp, Zap, AlertTriangle, CheckCircle2, Globe2, Shuffle } from 'lucide-react';
 import { LineageStatus, SpeciationEventInfo } from '../types';
 
 /** Population en dessous de laquelle une lignée est affichée comme
@@ -298,6 +298,29 @@ export function SpeciesEvolutionTree() {
           </div>
         </div>
       </div>
+
+      {(simulationData?.lineages.convergenceSignals?.length ?? 0) > 0 && (
+        <div className="mt-6 p-4 bg-purple-950 border border-purple-800 rounded-lg">
+          <h5 className="font-semibold text-purple-200 mb-1 flex items-center gap-1.5">
+            <Shuffle className="w-4 h-4" /> Signaux de convergence évolutive (motifs observés)
+          </h5>
+          <p className="text-xs text-purple-400 mb-3">
+            Deux lignées génétiquement distinctes dont les traits mesurés se sont rapprochés alors que leur
+            distance génétique a continué de croître -- un motif candidat détecté sur des mesures réelles,
+            jamais une preuve ni un phénomène mis en scène.
+          </p>
+          <div className="space-y-1.5 text-sm text-purple-300 max-h-40 overflow-y-auto">
+            {simulationData!.lineages.convergenceSignals.map((s, i) => (
+              <div key={`${s.speciesA}-${s.speciesB}-${s.generation}-${i}`} className="text-xs">
+                <span className="italic">{s.speciesA}</span> et <span className="italic">{s.speciesB}</span>
+                {' '}(génération {s.generation}) — distance de traits : {s.traitDistance.toFixed(3)}
+                {' '}({s.traitDistanceDelta.toFixed(3)}), distance génétique : {s.geneticDistance.toFixed(3)}
+                {' '}(+{s.geneticDistanceDelta.toFixed(3)})
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6 p-4 bg-genetic-950 border border-genetic-800 rounded-lg">
         <h5 className="font-semibold text-genetic-200 mb-2 flex items-center gap-1.5"><Globe2 className="w-4 h-4" /> L'Histoire Évolutive de Serina</h5>

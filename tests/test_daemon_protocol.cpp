@@ -166,6 +166,9 @@ TEST_CASE("lineages includes the real speciation event history shape", "[daemon]
     REQUIRE(response["status"] == "success");
     REQUIRE(response["lineages"].size() == 5);
     REQUIRE(response["speciationEvents"].is_array());
+    // Chantier G2 : jamais absent, meme quand aucun signal candidat n'a
+    // encore ete detecte (tableau vide, pas un champ manquant).
+    REQUIRE(response["convergenceSignals"].is_array());
 }
 
 TEST_CASE("play and pause toggle the running flag reported by status", "[daemon]")

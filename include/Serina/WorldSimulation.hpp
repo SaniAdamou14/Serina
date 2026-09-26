@@ -11,6 +11,7 @@
 #include "PopulationManager.hpp"
 #include "EcosystemTaxonomy.hpp"
 #include "TraitEcology.hpp"
+#include "EvolutionaryConvergence.hpp"
 #include "EvolutionaryConstraints.hpp"
 #include "EnvironmentalAdaptation.hpp"
 #include "NEAT.hpp"
@@ -25,6 +26,7 @@
 #include <array>
 #include <memory>
 #include <cstdio>
+#include <set>
 
 // Déclaration avancée seulement (fichier léger, pas l'implémentation
 // complète) : ce header et les autres headers de simulation ne dépendent
@@ -64,6 +66,21 @@ namespace Serina::Simulation
         std::string newSpecies;
         uint32_t generation;
         double geneticDistanceAtSplit;
+    };
+
+    /// @brief Un signal de convergence évolutive CANDIDAT (Chantier G2) :
+    /// mesuré sur des traits/distances réels à deux instants successifs,
+    /// jamais une preuve ni un phénomène mis en scène -- voir
+    /// EvolutionaryConvergence.hpp pour le motif exact détecté.
+    struct ConvergenceSignal
+    {
+        std::string speciesA;
+        std::string speciesB;
+        uint32_t generation;
+        double traitDistance;
+        double geneticDistance;
+        double traitDistanceDelta;
+        double geneticDistanceDelta;
     };
 
     /// @brief Snapshot en lecture seule d'une case de la carte : son biome
@@ -199,6 +216,13 @@ namespace Serina::Simulation
         /// la mutation à l'essai est gardée ou annulée (évolution (1+1)).
         uint32_t brainEvolutionInterval = 8;
 
+        /// Tous les combien de générations la détection de convergence
+        /// évolutive (Chantier G2) recompare les profils de traits/distances
+        /// génétiques de chaque paire de lignées éligible -- une analyse en
+        /// O(paires × échantillon) volontairement peu fréquente, comme
+        /// brainEvolutionInterval.
+        uint32_t convergenceCheckInterval = 50;
+
         NEAT::NEATConfig neat{};
 
         /// Énergie gagnée par génération par un organisme au maximum
@@ -223,7 +247,21 @@ namespace Serina::Simulation
         explicit UnifiedWorldSimulator(WorldSimulationParameters params = {},
                                         uint32_t seed = std::random_device{}())
             : params_(params), grid_(params.gridWidth, params.gridHeight, seed),
-              environments_(seed), seed_(seed), rng_(seed)
+              environments_(seed), seed_(seed),
+              // +1 pour ne pas rejouer exactement le même flux que rng_ tout
+              // en restant entièrement déterministe à partir de la même
+              // graine -- corrige un vrai bug latent trouvé en écrivant les
+              // tests du Chantier G2 : SerinaEvolutionaryConstraints se
+              // construisait avec sa valeur par défaut
+              // (std::random_device{}(), non déterministe) faute d'un
+              // argument explicite ici, ce qui rendait la validation des
+              // mutations biologiques -- et donc la reproductibilité de
+              // toute la simulation à partir d'une graine -- non
+              // reproductible d'une exécution à l'autre. (Ordre
+              // d'initialisation : constraints_ est déclaré avant rng_ dans
+              // la classe, donc listé avant lui ici aussi, pour éviter tout
+              // avertissement -Wreorder.)
+              constraints_(seed + 1), rng_(seed)
         {
         }
 
@@ -287,6 +325,8 @@ namespace Serina::Simulation
 
             if (generation_ % params_.brainEvolutionInterval == 0)
                 evolveBrains();
+            if (generation_ % params_.convergenceCheckInterval == 0)
+                checkConvergence();
         }
 
         uint32_t getGeneration() const { return generation_; }
@@ -317,6 +357,10 @@ namespace Serina::Simulation
         /// régions (discrète) sans dupliquer cette constante.
         double getCellSize() const { return params_.cellSize; }
         const std::vector<SpeciationEvent> &getSpeciationEvents() const { return speciationEvents_; }
+        /// @brief Historique des signaux de convergence évolutive candidats
+        /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
+        /// ce qu'un signal représente réellement et ne représente pas.
+        const std::vector<ConvergenceSignal> &getConvergenceSignals() const { return convergenceSignals_; }
 
         /// @brief Un instantané par espèce vivante, calculé depuis les
         /// individus réels (jamais un tirage aléatoire).
@@ -450,6 +494,19 @@ namespace Serina::Simulation
         /// applySurvivalAndInteractions() (chasse, évasion, effort de
         /// recherche de nourriture).
         std::unordered_map<uint64_t, std::vector<double>> latestBrainOutputs_;
+
+        /// @brief Dernier échantillon (traitDistance, geneticDistance) connu
+        /// pour chaque paire de lignées éligible (Chantier G2), indexé par
+        /// une clé canonique "speciesA|speciesB" (ordre alphabétique, une
+        /// seule entrée par paire non ordonnée). Persiste d'une vérification
+        /// à l'autre -- c'est justement la comparaison à la mesure
+        /// PRÉCÉDENTE qui permet de détecter une tendance, pas un seul
+        /// instantané isolé.
+        std::unordered_map<std::string, Ecology::ConvergenceSample> lastConvergenceSample_;
+        /// @brief Historique réel des signaux de convergence détectés --
+        /// jamais purgé, comme speciationEvents_ : un fait mesuré une fois
+        /// reste un fait, même si la paire cesse ensuite de converger.
+        std::vector<ConvergenceSignal> convergenceSignals_;
 
         /// @brief Pression écologique réelle mesurée à la dernière
         /// génération pour chaque espèce (Chantier F) -- rempli une fois
@@ -1118,6 +1175,93 @@ namespace Serina::Simulation
                     lineageBrain.brain.addConnection(params_.neat);
                 if (chance(rng_) < params_.neat.addNodeMutationRate)
                     lineageBrain.brain.addNode(params_.neat);
+            }
+        }
+
+        /// @brief Détection de convergence évolutive (Chantier G2) : compare
+        /// les profils de traits réels moyens de chaque paire de lignées
+        /// génétiquement distinctes partageant au moins un vrai biome
+        /// occupé, à la mesure précédente de cette même paire -- signale une
+        /// tendance candidate (jamais une preuve) quand la distance de
+        /// traits a diminué alors que la distance génétique a augmenté.
+        /// Volontairement peu fréquente (params_.convergenceCheckInterval) :
+        /// une analyse en O(paires × échantillon), pas un calcul par
+        /// génération.
+        void checkConvergence()
+        {
+            std::unordered_map<std::string, std::vector<size_t>> bySpecies;
+            std::unordered_map<std::string, std::set<Ecosystem::EnvironmentType>> biomesBySpecies;
+            for (size_t i = 0; i < population_.size(); ++i)
+            {
+                if (!population_[i].isAlive())
+                    continue;
+                const std::string &species = population_[i].getSpecies();
+                bySpecies[species].push_back(i);
+                auto [gx, gy] = regionOf(population_[i]);
+                biomesBySpecies[species].insert(grid_.at(gx, gy).environmentType);
+            }
+
+            if (bySpecies.size() < 2)
+                return;
+
+            // Réutilise les traits moyens déjà calculés par buildSnapshots()
+            // plutôt que de les recalculer une seconde fois.
+            auto snapshots = buildSnapshots();
+            std::unordered_map<std::string, const LineageSnapshot *> snapshotByName;
+            for (const auto &snap : snapshots)
+                snapshotByName[snap.speciesName] = &snap;
+
+            std::vector<std::string> names;
+            names.reserve(bySpecies.size());
+            for (const auto &[species, indices] : bySpecies)
+                names.push_back(species);
+
+            for (size_t i = 0; i < names.size(); ++i)
+            {
+                for (size_t j = i + 1; j < names.size(); ++j)
+                {
+                    const std::string &speciesA = names[i];
+                    const std::string &speciesB = names[j];
+
+                    bool shareBiome = false;
+                    for (auto biome : biomesBySpecies[speciesA])
+                    {
+                        if (biomesBySpecies[speciesB].count(biome))
+                        {
+                            shareBiome = true;
+                            break;
+                        }
+                    }
+                    if (!shareBiome)
+                        continue;
+
+                    double geneticDistance = averageInterGroupDistance(bySpecies[speciesA], bySpecies[speciesB]);
+                    // Doivent être génétiquement assez éloignées pour être de
+                    // vraies lignées distinctes -- exclut une paire issue
+                    // d'une scission encore toute récente, qui serait
+                    // trivialement proche des deux côtés sans que ce soit une
+                    // convergence.
+                    if (geneticDistance < params_.speciationDistanceThreshold)
+                        continue;
+
+                    double traitDistance = Ecology::normalizedTraitDistance(
+                        snapshotByName.at(speciesA)->averageTraits, snapshotByName.at(speciesB)->averageTraits);
+
+                    std::string pairKey = speciesA < speciesB ? speciesA + "|" + speciesB : speciesB + "|" + speciesA;
+                    Ecology::ConvergenceSample current{generation_, traitDistance, geneticDistance};
+
+                    auto previousIt = lastConvergenceSample_.find(pairKey);
+                    if (previousIt != lastConvergenceSample_.end())
+                    {
+                        auto signal = Ecology::evaluateConvergenceTrend(previousIt->second, current);
+                        if (signal.isCandidate)
+                        {
+                            convergenceSignals_.push_back({speciesA, speciesB, generation_, traitDistance, geneticDistance,
+                                                            signal.traitDistanceDelta, signal.geneticDistanceDelta});
+                        }
+                    }
+                    lastConvergenceSample_[pairKey] = current;
+                }
             }
         }
 

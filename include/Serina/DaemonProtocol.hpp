@@ -116,6 +116,21 @@ namespace Serina::Daemon
             {"geneticDistanceAtSplit", e.geneticDistanceAtSplit}};
     }
 
+    /// @brief Un signal de convergence évolutive candidat (Chantier G2) --
+    /// voir Simulation::ConvergenceSignal pour ce qu'il représente et ne
+    /// représente pas.
+    inline json convergenceSignalToJson(const Simulation::ConvergenceSignal &s)
+    {
+        return {
+            {"speciesA", s.speciesA},
+            {"speciesB", s.speciesB},
+            {"generation", s.generation},
+            {"traitDistance", s.traitDistance},
+            {"geneticDistance", s.geneticDistance},
+            {"traitDistanceDelta", s.traitDistanceDelta},
+            {"geneticDistanceDelta", s.geneticDistanceDelta}};
+    }
+
     /// @brief Une simulation vivante gérée par le daemon : son état réel,
     /// un mutex propre (le fil de tick et les fils de requête client y
     /// accèdent concurremment) et le rythme auquel elle avance seule quand
@@ -415,6 +430,9 @@ namespace Serina::Daemon
                 r["speciationEvents"] = json::array();
                 for (const auto &e : m.sim->getSpeciationEvents())
                     r["speciationEvents"].push_back(speciationEventToJson(e));
+                r["convergenceSignals"] = json::array();
+                for (const auto &s : m.sim->getConvergenceSignals())
+                    r["convergenceSignals"].push_back(convergenceSignalToJson(s));
                 return r; });
         }
         else if (command == "ping")

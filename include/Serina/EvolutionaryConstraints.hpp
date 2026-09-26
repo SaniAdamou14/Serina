@@ -278,6 +278,13 @@ namespace Serina::Evolution
             metamorphosisConstraint.violationCost = 0.3;
             metamorphosisConstraint.affectedTraits = {Genetics::TraitType::ENERGY_EFFICIENCY, Genetics::TraitType::RESISTANCE};
             metamorphosisConstraint.activationProbability = 0.8; // Pas tous les arthropodes
+            metamorphosisConstraint.validator = [](const Genetics::AdvancedTraitValues& traits) {
+                // Cout metabolique reel de la metamorphose : une resistance
+                // tres elevee (exosquelette renforce a l'age adulte) ne peut
+                // pas se combiner a une efficacite energetique tout aussi
+                // maximale -- l'un se paie par l'autre.
+                return traits.energyEfficiency * traits.resistance < 3.5;
+            };
             arthropodRules.constraints.push_back(metamorphosisConstraint);
 
             arthropodRules.possibleInnovations = {"eusociality", "complex_metamorphosis", "chemical_communication",
@@ -347,6 +354,13 @@ namespace Serina::Evolution
             radialConstraint.violationCost = 0.6;
             radialConstraint.affectedTraits = {Genetics::TraitType::SPEED, Genetics::TraitType::INTELLIGENCE};
             radialConstraint.activationProbability = 1.0;
+            radialConstraint.validator = [](const Genetics::AdvancedTraitValues& traits) {
+                // Un corps a symetrie radiale n'a pas d'avant/arriere
+                // privilegie : ni un deplacement dirige rapide, ni une
+                // cognition complexe orientee (les deux presupposent une
+                // symetrie bilaterale) ne peuvent devenir dominants a la fois.
+                return traits.speed < 1.5 || traits.intelligence < 0.8;
+            };
             cnidarianRules.constraints.push_back(radialConstraint);
 
             cnidarianRules.possibleInnovations = {"colonial_organization", "cnidocyte_enhancement", "polymorphism"};
