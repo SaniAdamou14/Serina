@@ -152,11 +152,47 @@ namespace Serina::Simulation
 
         uint32_t maxAttemptsPerConstraintRetry = 3;
 
-        /// Nombre d'entrées/sorties du cerveau NEAT de chaque lignée : voir
-        /// buildBrainInputs()/applyBrainOutputs() pour ce qu'elles
-        /// signifient concrètement.
-        static constexpr uint32_t brainInputCount = 7;
-        static constexpr uint32_t brainOutputCount = 2;
+        /// Nombre d'entrées/sorties du cerveau NEAT de chaque lignée (Chantier
+        /// G1 : enrichi au-delà du seul déplacement) : voir buildBrainInputs()
+        /// pour ce que représentent les entrées, et moveOrganisms()/
+        /// applySurvivalAndInteractions() pour où chaque sortie est
+        /// réellement consommée.
+        static constexpr uint32_t brainInputCount = 10;
+        static constexpr uint32_t brainOutputCount = 5;
+
+        /// Index des sorties du cerveau dans le vecteur renvoyé par
+        /// NEATGenome::evaluate() -- nommés pour éviter les indices
+        /// magiques aux points de consommation.
+        static constexpr size_t OUTPUT_MOVE_X = 0;
+        static constexpr size_t OUTPUT_MOVE_Y = 1;
+        /// Effort de chasse personnel [0,1] : ne s'applique QUE quand cet
+        /// individu joue le rôle de prédateur dans une relation déjà
+        /// classée par TraitEcology.hpp -- module sa probabilité de succès
+        /// PERSONNELLE autour de la probabilité de base au niveau espèce,
+        /// jamais un canal de gain indépendant (voir applySurvivalAndInteractions()).
+        static constexpr size_t OUTPUT_HUNT_EFFORT = 2;
+        /// Effort d'évasion personnel [0,1] : ne s'applique QUE quand cet
+        /// individu est tiré au sort comme cible d'une chasse -- une chance
+        /// personnelle et bornée d'échapper à l'attaque (jamais totale, voir
+        /// MAX_PERSONAL_EVASION_CHANCE), au-delà du profil de traits moyen
+        /// déjà utilisé pour classer la relation elle-même.
+        static constexpr size_t OUTPUT_EVASION_EFFORT = 3;
+        /// Effort de recherche de nourriture [0,1] : module foragingIncome
+        /// (jamais en dessous d'un plancher de sécurité, voir
+        /// applySurvivalAndInteractions()) -- jamais un second canal de
+        /// revenu indépendant du terme déjà validé comme sûr.
+        static constexpr size_t OUTPUT_FORAGE_EFFORT = 4;
+
+        /// Chance maximale (à effort d'évasion parfait, 1.0) d'échapper à
+        /// une attaque par ailleurs réussie -- bornée pour qu'aucun individu
+        /// ne devienne invulnérable, quel que soit son cerveau.
+        static constexpr double MAX_PERSONAL_EVASION_CHANCE = 0.5;
+
+        /// Ni un individu ne peut totalement s'arrêter de chercher de la
+        /// nourriture par un mauvais tirage/mutation de cerveau : ce
+        /// plancher borne foragingIncome à au moins cette fraction de sa
+        /// valeur pleine, quel que soit l'effort de recherche décidé.
+        static constexpr double MIN_FORAGE_EFFORT_FLOOR = 0.3;
 
         /// Tous les combien de générations un cerveau de lignée est
         /// réévalué : sa fitness mesurée sur la fenêtre écoulée décide si
@@ -404,6 +440,17 @@ namespace Serina::Simulation
         std::unordered_map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
 
+        /// @brief Sorties complètes du cerveau de chaque individu vivant
+        /// pour LA génération courante (Chantier G1) -- vidé et repeuplé à
+        /// chaque appel de moveOrganisms(), jamais accumulé d'une
+        /// génération à l'autre (mémoire bornée par la population vivante,
+        /// pas par l'historique). Indexé par id d'organisme (stable à
+        /// travers removeDead(), contrairement à un index dans population_)
+        /// pour être relu plus tard dans le même step() par
+        /// applySurvivalAndInteractions() (chasse, évasion, effort de
+        /// recherche de nourriture).
+        std::unordered_map<uint64_t, std::vector<double>> latestBrainOutputs_;
+
         /// @brief Pression écologique réelle mesurée à la dernière
         /// génération pour chaque espèce (Chantier F) -- rempli une fois
         /// par applySurvivalAndInteractions(), lu par buildSnapshots() pour
@@ -448,13 +495,50 @@ namespace Serina::Simulation
 
         /// @brief Déplace chaque organisme selon la décision de sa lignée :
         /// le cerveau NEAT de son espèce évalue son environnement local
-        /// (énergie, ressources alentour, pression de prédation) et sort
-        /// une direction. Un individu sans cerveau enregistré (ne devrait
-        /// pas arriver hors tests unitaires isolés) se rabat sur une
-        /// marche aléatoire plutôt que de planter.
+        /// (énergie, ressources alentour, pression de prédation, présence
+        /// et agressivité perçue d'autres espèces à proximité -- Chantier
+        /// G1) et sort une direction plus trois efforts personnels (chasse,
+        /// évasion, recherche de nourriture) consommés plus tard dans le
+        /// même step() par applySurvivalAndInteractions(). Un individu sans
+        /// cerveau enregistré (ne devrait pas arriver hors tests unitaires
+        /// isolés) se rabat sur une marche aléatoire et des efforts neutres
+        /// plutôt que de planter.
         void moveOrganisms()
         {
             std::uniform_real_distribution<double> fallback(-params_.cellSize * 0.5, params_.cellSize * 0.5);
+            latestBrainOutputs_.clear();
+
+            // --- Agrégats réels par région pour les nouvelles entrées
+            // sensorielles (présence/agressivité perçue d'autres espèces) --
+            // un passage de plus sur population_, même ordre de complexité
+            // que le reste du moteur (voir Chantier F pour le même patron). ---
+            struct RegionAggregate
+            {
+                uint32_t totalAlive = 0;
+                double totalAggression = 0.0;
+            };
+            struct RegionSpeciesAggregate
+            {
+                uint32_t count = 0;
+                double aggressionSum = 0.0;
+            };
+            std::unordered_map<long long, RegionAggregate> regionTotals;
+            std::unordered_map<long long, std::unordered_map<std::string, RegionSpeciesAggregate>> regionSpeciesTotals;
+
+            for (const auto &organism : population_)
+            {
+                if (!organism.isAlive())
+                    continue;
+                auto [gx, gy] = regionOf(organism);
+                long long region = regionKey(gx, gy);
+                double aggression = normalizeTrait(Genetics::TraitType::AGGRESSION, organism.getGenome().getTrait(Genetics::TraitType::AGGRESSION));
+                auto &total = regionTotals[region];
+                total.totalAlive++;
+                total.totalAggression += aggression;
+                auto &speciesAgg = regionSpeciesTotals[region][organism.getSpecies()];
+                speciesAgg.count++;
+                speciesAgg.aggressionSum += aggression;
+            }
 
             for (auto &organism : population_)
             {
@@ -465,14 +549,33 @@ namespace Serina::Simulation
                 auto brainIt = brains_.find(organism.getSpecies());
                 if (brainIt != brains_.end())
                 {
-                    auto inputs = buildBrainInputs(organism);
+                    auto [gx, gy] = regionOf(organism);
+                    long long region = regionKey(gx, gy);
+                    const auto &total = regionTotals.at(region);           // cet organisme y a déjà contribué
+                    const auto &ownSpeciesAgg = regionSpeciesTotals.at(region).at(organism.getSpecies());
+                    uint32_t otherCount = total.totalAlive - ownSpeciesAgg.count;
+                    double otherAggressionSum = total.totalAggression - ownSpeciesAgg.aggressionSum;
+                    double perceivedAggression = otherCount > 0 ? otherAggressionSum / otherCount : 0.0;
+                    double otherSpeciesDensity = Ecology::densitySaturation(otherCount, 10.0);
+
+                    bool recentPredationPressure = false;
+                    auto pressureIt = ecologicalPressure_.find(organism.getSpecies());
+                    if (pressureIt != ecologicalPressure_.end())
+                        recentPredationPressure = pressureIt->second.isPreyOfSomeone;
+
+                    auto inputs = buildBrainInputs(organism, otherSpeciesDensity, perceivedAggression, recentPredationPressure);
                     auto outputs = brainIt->second.brain.evaluate(inputs);
+                    latestBrainOutputs_[organism.getId()] = outputs;
+
                     // Les neurones de sortie de NEATGenome utilisent
                     // l'activation SIGMOID par défaut (image [0,1]) ; on
-                    // remet à l'échelle [-1,1] nous-mêmes plutôt que de
-                    // modifier NEAT.hpp pour un besoin propre à cet appelant.
-                    double moveX = outputs[0] * 2.0 - 1.0;
-                    double moveY = outputs[1] * 2.0 - 1.0;
+                    // remet le déplacement à l'échelle [-1,1] nous-mêmes
+                    // plutôt que de modifier NEAT.hpp pour un besoin propre
+                    // à cet appelant. Les trois autres sorties (chasse,
+                    // évasion, recherche de nourriture) restent en [0,1]
+                    // natif -- ce sont déjà des efforts/probabilités.
+                    double moveX = outputs[WorldSimulationParameters::OUTPUT_MOVE_X] * 2.0 - 1.0;
+                    double moveY = outputs[WorldSimulationParameters::OUTPUT_MOVE_Y] * 2.0 - 1.0;
                     double speed = organism.getGenome().getTrait(Genetics::TraitType::SPEED);
                     dx = moveX * params_.cellSize * speed;
                     dy = moveY * params_.cellSize * speed;
@@ -481,6 +584,9 @@ namespace Serina::Simulation
                 {
                     dx = fallback(rng_);
                     dy = fallback(rng_);
+                    // Valeurs neutres/sûres pour un individu sans cerveau :
+                    // ni bonus ni pénalité de chasse/évasion/alimentation.
+                    latestBrainOutputs_[organism.getId()] = {0.5, 0.5, 1.0, 1.0, 1.0};
                 }
 
                 double nx = std::clamp(organism.getX() + dx, 0.0, worldWidth() - 1e-6);
@@ -491,10 +597,15 @@ namespace Serina::Simulation
 
         /// @brief Construit les entrées sensorielles d'un organisme pour
         /// son cerveau de lignée : énergie propre, ressources locales et
-        /// des quatre régions voisines (le signal dont le réseau a besoin
-        /// pour apprendre "aller vers plus de ressources"), pression de
-        /// prédation locale. Toutes normalisées dans [0,1].
-        std::vector<double> buildBrainInputs(const Evolution::Organism &organism) const
+        /// des quatre régions voisines, pression de prédation locale
+        /// (entrées historiques) plus trois entrées réelles ajoutées au
+        /// Chantier G1 -- densité d'individus d'AUTRES espèces à proximité,
+        /// leur agressivité moyenne perçue, et si cette espèce a été proie
+        /// de quelqu'un quelque part dans le monde à LA GÉNÉRATION
+        /// PRÉCÉDENTE (ecologicalPressure_, mesuré, jamais un signal
+        /// inventé). Toutes normalisées dans [0,1].
+        std::vector<double> buildBrainInputs(const Evolution::Organism &organism, double otherSpeciesDensity,
+                                              double perceivedAggression, bool recentPredationPressure) const
         {
             auto [gx, gy] = regionOf(organism);
             const auto *localEnv = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
@@ -520,7 +631,10 @@ namespace Serina::Simulation
                 std::clamp(organism.getEnergy() / 200.0, 0.0, 1.0),
                 localResource,
                 neighborResources[0], neighborResources[1], neighborResources[2], neighborResources[3],
-                localPredation};
+                localPredation,
+                otherSpeciesDensity,
+                perceivedAggression,
+                recentPredationPressure ? 1.0 : 0.0};
         }
 
         /// @brief Profil de traits réel moyen par (région, espèce), avec les
@@ -636,6 +750,18 @@ namespace Serina::Simulation
                 double efficiency = organism.getGenome().getTrait(Genetics::TraitType::ENERGY_EFFICIENCY);
                 double foragingIncome = resourceLevel * efficiency * params_.foragingRate;
 
+                // Effort de recherche de nourriture décidé par le cerveau
+                // (Chantier G1) : jamais en dessous du plancher de sécurité
+                // MIN_FORAGE_EFFORT_FLOOR, quel que soit l'effort choisi --
+                // un canal existant module son intensité, ce n'est jamais
+                // un second canal de revenu indépendant.
+                double forageEffort = 1.0;
+                auto brainOutputsIt = latestBrainOutputs_.find(organism.getId());
+                if (brainOutputsIt != latestBrainOutputs_.end() && brainOutputsIt->second.size() > WorldSimulationParameters::OUTPUT_FORAGE_EFFORT)
+                    forageEffort = brainOutputsIt->second[WorldSimulationParameters::OUTPUT_FORAGE_EFFORT];
+                foragingIncome *= (WorldSimulationParameters::MIN_FORAGE_EFFORT_FLOOR +
+                                    (1.0 - WorldSimulationParameters::MIN_FORAGE_EFFORT_FLOOR) * forageEffort);
+
                 auto relIt = regionRelations.find(region);
                 if (relIt != regionRelations.end())
                 {
@@ -662,8 +788,14 @@ namespace Serina::Simulation
             // exactement nulle (même constante des deux côtés), tirée au
             // sort indépendamment pour chaque individu prédateur plutôt
             // qu'un drain garanti à chaque génération (garde-fou impératif
-            // du Chantier F). ---
+            // du Chantier F). Chantier G1 : la probabilité de base au
+            // niveau espèce reste la même autorité, mais chaque individu y
+            // ajoute un effort de chasse (prédateur) ou d'évasion (proie)
+            // personnel décidé par son propre cerveau -- jamais un second
+            // canal indépendant, seulement une modulation bornée de ce qui
+            // existe déjà. ---
             std::uniform_real_distribution<double> huntRoll(0.0, 1.0);
+            std::uniform_real_distribution<double> evasionRoll(0.0, 1.0);
             for (auto &[region, relations] : regionRelations)
             {
                 const auto &speciesHere = regionSpecies[region];
@@ -703,12 +835,35 @@ namespace Serina::Simulation
                     {
                         if (!population_[predatorIdx].isAlive())
                             continue;
-                        if (huntRoll(rng_) >= probability)
+
+                        double huntEffort = 1.0;
+                        auto predatorOutputsIt = latestBrainOutputs_.find(population_[predatorIdx].getId());
+                        if (predatorOutputsIt != latestBrainOutputs_.end() && predatorOutputsIt->second.size() > WorldSimulationParameters::OUTPUT_HUNT_EFFORT)
+                            huntEffort = predatorOutputsIt->second[WorldSimulationParameters::OUTPUT_HUNT_EFFORT];
+                        // Borné à [50%, 100%] de la probabilité de base au
+                        // niveau espèce -- un effort de chasse personnel ne
+                        // peut jamais faire dépasser ce que le profil de
+                        // traits moyen autorise, seulement s'en approcher ou
+                        // s'en éloigner de moitié au pire.
+                        double personalProbability = probability * (0.5 + 0.5 * huntEffort);
+                        if (huntRoll(rng_) >= personalProbability)
                             continue;
 
                         size_t preyIdx = preyIndices[preyPick(rng_)];
                         if (!population_[preyIdx].isAlive())
                             continue;
+
+                        double evasionEffort = 0.0;
+                        auto preyOutputsIt = latestBrainOutputs_.find(population_[preyIdx].getId());
+                        if (preyOutputsIt != latestBrainOutputs_.end() && preyOutputsIt->second.size() > WorldSimulationParameters::OUTPUT_EVASION_EFFORT)
+                            evasionEffort = preyOutputsIt->second[WorldSimulationParameters::OUTPUT_EVASION_EFFORT];
+                        // Chance personnelle et bornée d'échapper à une
+                        // attaque par ailleurs réussie -- jamais totale
+                        // (voir MAX_PERSONAL_EVASION_CHANCE), au-delà du
+                        // profil de traits moyen déjà utilisé pour classer
+                        // la relation elle-même.
+                        if (evasionRoll(rng_) < evasionEffort * WorldSimulationParameters::MAX_PERSONAL_EVASION_CHANCE)
+                            continue; // la proie a évité l'attaque : aucun transfert, comme une chasse manquée
 
                         // Transfert à somme exactement nulle : la MÊME
                         // constante des deux côtés d'un événement unique et

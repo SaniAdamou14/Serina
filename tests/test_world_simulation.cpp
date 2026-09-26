@@ -374,6 +374,34 @@ TEST_CASE("lineage brains evolve structurally over generations via (1+1)-ES", "[
     REQUIRE(anyComplexityChanged);
 }
 
+TEST_CASE("founder brains have the enriched G1 topology from the start (10 inputs, 5 outputs)", "[worldsim][neat][chantierG]") {
+    // Chantier G1 : le cerveau NEAT est passe de 7 entrees/2 sorties (seul
+    // le deplacement) a 10 entrees/5 sorties (densite/agressivite percue
+    // d'autres especes a proximite, pression de predation recente en
+    // entree ; effort de chasse/evasion/recherche de nourriture en sortie,
+    // en plus du deplacement). Une topologie fraichement construite est
+    // entierement connectee (chaque entree vers chaque sortie), donc sa
+    // complexite exacte avant toute mutation est un calcul verifiable :
+    // inputs + outputs + inputs*outputs.
+    REQUIRE(WorldSimulationParameters::brainInputCount == 10);
+    REQUIRE(WorldSimulationParameters::brainOutputCount == 5);
+
+    UnifiedWorldSimulator sim({}, 606);
+    sim.seedFounderSpecies(10);
+
+    size_t expectedMinimalComplexity =
+        WorldSimulationParameters::brainInputCount +
+        WorldSimulationParameters::brainOutputCount +
+        WorldSimulationParameters::brainInputCount *
+            WorldSimulationParameters::brainOutputCount;
+    REQUIRE(expectedMinimalComplexity == 65);
+
+    for (const auto &snap : sim.getLineageSnapshots()) {
+        REQUIRE(sim.hasBrain(snap.speciesName));
+        REQUIRE(sim.getBrainComplexity(snap.speciesName) == expectedMinimalComplexity);
+    }
+}
+
 TEST_CASE("real predation/competition (Chantier F) does not cause a premature ecosystem collapse", "[worldsim][ecology]") {
     // Test de non-régression bloquant explicitement requis par le Chantier F
     // (réalisme écologique par profils de traits, TraitEcology.hpp) : le
