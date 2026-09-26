@@ -15,6 +15,7 @@ import { HistoryView } from './HistoryView'
 import { WorldMap } from './WorldMap'
 import { SpeciesDetailPanel } from './SpeciesDetailPanel'
 import { SpeciesComparisonPanel } from './SpeciesComparisonPanel'
+import { EventTicker } from './EventTicker'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
 
@@ -44,6 +45,7 @@ export function SimulationDashboard() {
   return (
     <div className="h-screen flex flex-col bg-slate-950 overflow-hidden">
       <TopBar />
+      <EventTicker />
 
       {isExtinct && (
         <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-2 text-sm text-red-300 shrink-0">
