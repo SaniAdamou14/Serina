@@ -111,7 +111,6 @@ export function useEcologicalEvents(
 
     previousSpeciesNames.current = currentNames
     previousPopulations.current = new Map(lineages.map((l) => [l.speciesName, l.population]))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick])
 
   return { events, dismiss }
