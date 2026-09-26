@@ -9,6 +9,7 @@ import { BIOME_PATTERN_IDS, jitterColor } from '../utils/mapTexture';
 import { OverlayMode, OVERLAY_LABELS, sequentialColor, ramp } from '../utils/overlayColor';
 import { BiomeTextureDefs } from './BiomeTextureDefs';
 import { CreatureIcon } from './CreatureIcon';
+import { Minimap } from './Minimap';
 
 /** Une métrique réelle par région (RegionInfo) pour chaque overlay -- pas
  * de biome ici, géré séparément (rendu de base toujours visible). */
@@ -178,6 +179,13 @@ export function WorldMap() {
     const w = worldWidth * INITIAL_VIEW_FRACTION;
     const h = worldHeight * INITIAL_VIEW_FRACTION;
     setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
+  };
+
+  const navigateFromMinimap = (worldX: number, worldY: number) => {
+    setViewBox((current) => {
+      if (!current) return current;
+      return clampViewBox({ x: worldX - current.w / 2, y: worldY - current.h / 2, w: current.w, h: current.h }, worldWidth, worldHeight);
+    });
   };
 
   if (!simulationData || !viewBox) {
@@ -393,6 +401,18 @@ export function WorldMap() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="absolute bottom-3 right-3 pointer-events-none">
+        <Minimap
+          regions={regions}
+          cellSize={cellSize}
+          worldWidth={worldWidth}
+          worldHeight={worldHeight}
+          viewBox={viewBox}
+          biomeColors={BIOME_COLORS}
+          onNavigate={navigateFromMinimap}
+        />
       </div>
 
     </div>
