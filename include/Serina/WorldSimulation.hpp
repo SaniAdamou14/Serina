@@ -10,7 +10,7 @@
 #include "Region.hpp"
 #include "PopulationManager.hpp"
 #include "EcosystemTaxonomy.hpp"
-#include "EcologicalInteractions.hpp"
+#include "TraitEcology.hpp"
 #include "EvolutionaryConstraints.hpp"
 #include "EnvironmentalAdaptation.hpp"
 #include "NEAT.hpp"
@@ -24,6 +24,7 @@
 #include <optional>
 #include <array>
 #include <memory>
+#include <cstdio>
 
 // Déclaration avancée seulement (fichier léger, pas l'implémentation
 // complète) : ce header et les autres headers de simulation ne dépendent
@@ -395,7 +396,6 @@ namespace Serina::Simulation
         /// SimulationSerialization.hpp).
         uint32_t seed_;
         Taxonomy::EcosystemTaxonomy taxonomy_;
-        Ecology::EcologicalInteractionManager interactions_;
         Evolution::SerinaEvolutionaryConstraints constraints_;
 
         std::vector<Evolution::Organism> population_;
@@ -403,6 +403,19 @@ namespace Serina::Simulation
         std::unordered_map<std::string, uint32_t> divergentStreak_; ///< par espèce
         std::unordered_map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
+
+        /// @brief Pression écologique réelle mesurée à la dernière
+        /// génération pour chaque espèce (Chantier F) -- rempli une fois
+        /// par applySurvivalAndInteractions(), lu par buildSnapshots() pour
+        /// journaliser des adaptations honnêtes (jamais une liste
+        /// inventée : uniquement si une pression réelle a été détectée
+        /// cette génération même).
+        struct EcologicalPressureSummary
+        {
+            bool isPreyOfSomeone = false;
+            bool isInCompetition = false;
+        };
+        std::unordered_map<std::string, EcologicalPressureSummary> ecologicalPressure_;
 
         uint32_t generation_ = 0;
         mutable std::mt19937 rng_;
@@ -510,21 +523,103 @@ namespace Serina::Simulation
                 localPredation};
         }
 
+        /// @brief Profil de traits réel moyen par (région, espèce), avec les
+        /// index des individus vivants qui le composent -- construit une
+        /// seule fois par génération, jamais recalculé par paire
+        /// d'organismes (voir applySurvivalAndInteractions()).
+        struct RegionSpeciesEntry
+        {
+            Ecology::RegionalSpeciesProfile profile;
+            std::vector<size_t> individualIndices;
+        };
+
+        /// @brief Point d'entrée du réalisme écologique (Chantier F) :
+        /// agrège les vrais profils de traits par (région, espèce), classe
+        /// chaque paire d'espèces cohabitantes une seule fois par région
+        /// (jamais par individu), puis applique le métabolisme, une
+        /// alimentation réelle éventuellement pénalisée par compétition, et
+        /// une prédation à somme nulle tirée au sort par individu prédateur.
         void applySurvivalAndInteractions()
         {
-            // Compte la population de chaque espèce par région, pour que
-            // les interactions écologiques (prédation, compétition...)
-            // réagissent à qui est réellement présent localement plutôt
-            // qu'à un total global.
-            std::unordered_map<long long, std::unordered_map<std::string, uint32_t>> regionSpeciesCounts;
-            for (const auto &organism : population_)
+            // --- Passe 1 : profil de traits réel moyen par (région, espèce) ---
+            std::unordered_map<long long, std::unordered_map<std::string, RegionSpeciesEntry>> regionSpecies;
+            for (size_t i = 0; i < population_.size(); ++i)
             {
+                const auto &organism = population_[i];
                 if (!organism.isAlive())
                     continue;
                 auto [gx, gy] = regionOf(organism);
-                regionSpeciesCounts[regionKey(gx, gy)][organism.getSpecies()]++;
+                auto &entry = regionSpecies[regionKey(gx, gy)][organism.getSpecies()];
+                entry.individualIndices.push_back(i);
+                const auto &genome = organism.getGenome();
+                entry.profile.population++;
+                entry.profile.avgSize += normalizeTrait(Genetics::TraitType::SIZE, genome.getTrait(Genetics::TraitType::SIZE));
+                entry.profile.avgAggression += normalizeTrait(Genetics::TraitType::AGGRESSION, genome.getTrait(Genetics::TraitType::AGGRESSION));
+                entry.profile.avgVision += normalizeTrait(Genetics::TraitType::VISION_RANGE, genome.getTrait(Genetics::TraitType::VISION_RANGE));
+                entry.profile.avgSpeed += normalizeTrait(Genetics::TraitType::SPEED, genome.getTrait(Genetics::TraitType::SPEED));
+                entry.profile.avgResistance += normalizeTrait(Genetics::TraitType::RESISTANCE, genome.getTrait(Genetics::TraitType::RESISTANCE));
+            }
+            for (auto &[region, bySpecies] : regionSpecies)
+            {
+                for (auto &[species, entry] : bySpecies)
+                {
+                    double n = static_cast<double>(entry.profile.population);
+                    entry.profile.avgSize /= n;
+                    entry.profile.avgAggression /= n;
+                    entry.profile.avgVision /= n;
+                    entry.profile.avgSpeed /= n;
+                    entry.profile.avgResistance /= n;
+                }
             }
 
+            // --- Classe chaque paire d'espèces cohabitant une région, UNE
+            // SEULE FOIS par région (jamais par individu) ---
+            struct RegionRelation
+            {
+                std::string speciesA;
+                std::string speciesB;
+                Ecology::RelationClassification classification;
+            };
+            std::unordered_map<long long, std::vector<RegionRelation>> regionRelations;
+            std::unordered_map<std::string, EcologicalPressureSummary> pressureThisGeneration;
+
+            for (auto &[region, bySpecies] : regionSpecies)
+            {
+                std::vector<std::string> names;
+                names.reserve(bySpecies.size());
+                for (auto &[species, entry] : bySpecies)
+                    names.push_back(species);
+
+                auto &relations = regionRelations[region];
+                for (size_t i = 0; i < names.size(); ++i)
+                {
+                    for (size_t j = i + 1; j < names.size(); ++j)
+                    {
+                        auto classification = Ecology::classifyRelation(bySpecies[names[i]].profile, bySpecies[names[j]].profile);
+                        if (classification.relation == Ecology::EcologicalRelation::NEUTRAL)
+                            continue;
+                        relations.push_back({names[i], names[j], classification});
+
+                        if (classification.relation == Ecology::EcologicalRelation::COMPETITION)
+                        {
+                            pressureThisGeneration[names[i]].isInCompetition = true;
+                            pressureThisGeneration[names[j]].isInCompetition = true;
+                        }
+                        else if (classification.relation == Ecology::EcologicalRelation::A_PREYS_ON_B)
+                        {
+                            pressureThisGeneration[names[j]].isPreyOfSomeone = true;
+                        }
+                        else if (classification.relation == Ecology::EcologicalRelation::B_PREYS_ON_A)
+                        {
+                            pressureThisGeneration[names[i]].isPreyOfSomeone = true;
+                        }
+                    }
+                }
+            }
+            ecologicalPressure_ = std::move(pressureThisGeneration);
+
+            // --- Passe 2 : métabolisme + alimentation (pénalisée par
+            // compétition réelle, jamais un canal de drain séparé) ---
             for (auto &organism : population_)
             {
                 if (!organism.isAlive())
@@ -533,37 +628,98 @@ namespace Serina::Simulation
                 organism.update(1.0); // métabolisme, âge — logique existante d'Organism
 
                 auto [gx, gy] = regionOf(organism);
+                long long region = regionKey(gx, gy);
                 auto environmentType = grid_.at(gx, gy).environmentType;
-                const auto &localCounts = regionSpeciesCounts[regionKey(gx, gy)];
 
-                // Alimentation réelle : l'organisme puise de l'énergie dans
-                // les ressources primaires réelles de sa région, modulée par
-                // son efficacité énergétique réelle (trait diploïde) — le
-                // seul revenu positif de toute la boucle de survie. Sans ce
-                // terme, organism.update() ci-dessus ne fait que drainer
-                // l'énergie et rien ne la remplace jamais.
                 const auto *localEnv = environments_.getEnvironment(environmentType);
                 double resourceLevel = localEnv ? localEnv->resources.primaryProducers : 0.5;
                 double efficiency = organism.getGenome().getTrait(Genetics::TraitType::ENERGY_EFFICIENCY);
                 double foragingIncome = resourceLevel * efficiency * params_.foragingRate;
-                if (foragingIncome > 0.0)
-                    organism.setEnergy(organism.getEnergy() + foragingIncome);
 
-                double energyDelta = 0.0;
-                for (const auto &interaction : interactions_.getSpeciesInteractions(organism.getSpecies()))
+                auto relIt = regionRelations.find(region);
+                if (relIt != regionRelations.end())
                 {
-                    const std::string &partner =
-                        (interaction.speciesA == organism.getSpecies()) ? interaction.speciesB : interaction.speciesA;
-                    auto it = localCounts.find(partner);
-                    uint32_t partnerPopulation = (it != localCounts.end()) ? it->second : 0;
-                    if (partnerPopulation == 0)
-                        continue;
-
-                    energyDelta += interactions_.calculatePopulationImpact(interaction, environmentType, partnerPopulation) * 10.0;
+                    const auto &speciesHere = regionSpecies[region];
+                    for (const auto &rel : relIt->second)
+                    {
+                        if (rel.classification.relation != Ecology::EcologicalRelation::COMPETITION)
+                            continue;
+                        if (organism.getSpecies() != rel.speciesA && organism.getSpecies() != rel.speciesB)
+                            continue;
+                        const std::string &rival = (organism.getSpecies() == rel.speciesA) ? rel.speciesB : rel.speciesA;
+                        auto rivalIt = speciesHere.find(rival);
+                        uint32_t rivalPopulation = (rivalIt != speciesHere.end()) ? rivalIt->second.profile.population : 0;
+                        double penalty = Ecology::competitionForagingPenalty(rel.classification.dominanceGap, rivalPopulation);
+                        foragingIncome *= (1.0 - penalty);
+                    }
                 }
 
-                if (energyDelta != 0.0)
-                    organism.setEnergy(organism.getEnergy() + energyDelta);
+                if (foragingIncome > 0.0)
+                    organism.setEnergy(organism.getEnergy() + foragingIncome);
+            }
+
+            // --- Passe 3 : prédation -- transaction appairée à somme
+            // exactement nulle (même constante des deux côtés), tirée au
+            // sort indépendamment pour chaque individu prédateur plutôt
+            // qu'un drain garanti à chaque génération (garde-fou impératif
+            // du Chantier F). ---
+            std::uniform_real_distribution<double> huntRoll(0.0, 1.0);
+            for (auto &[region, relations] : regionRelations)
+            {
+                const auto &speciesHere = regionSpecies[region];
+                for (const auto &rel : relations)
+                {
+                    std::string predatorSpecies, preySpecies;
+                    if (rel.classification.relation == Ecology::EcologicalRelation::A_PREYS_ON_B)
+                    {
+                        predatorSpecies = rel.speciesA;
+                        preySpecies = rel.speciesB;
+                    }
+                    else if (rel.classification.relation == Ecology::EcologicalRelation::B_PREYS_ON_A)
+                    {
+                        predatorSpecies = rel.speciesB;
+                        preySpecies = rel.speciesA;
+                    }
+                    else
+                    {
+                        continue; // compétition déjà traitée en passe 2
+                    }
+
+                    auto predatorIt = speciesHere.find(predatorSpecies);
+                    auto preyIt = speciesHere.find(preySpecies);
+                    if (predatorIt == speciesHere.end() || preyIt == speciesHere.end())
+                        continue;
+                    const auto &preyIndices = preyIt->second.individualIndices;
+                    if (preyIndices.empty())
+                        continue;
+
+                    double probability = Ecology::predationEncounterProbability(
+                        rel.classification.dominanceGap, preyIt->second.profile.population);
+                    if (probability <= 0.0)
+                        continue;
+
+                    std::uniform_int_distribution<size_t> preyPick(0, preyIndices.size() - 1);
+                    for (size_t predatorIdx : predatorIt->second.individualIndices)
+                    {
+                        if (!population_[predatorIdx].isAlive())
+                            continue;
+                        if (huntRoll(rng_) >= probability)
+                            continue;
+
+                        size_t preyIdx = preyIndices[preyPick(rng_)];
+                        if (!population_[preyIdx].isAlive())
+                            continue;
+
+                        // Transfert à somme exactement nulle : la MÊME
+                        // constante des deux côtés d'un événement unique et
+                        // appairé (pas deux tirages indépendants qui
+                        // pourraient déséquilibrer le bilan énergétique
+                        // total quand prédateurs et proies sont en nombre
+                        // différent).
+                        population_[predatorIdx].setEnergy(population_[predatorIdx].getEnergy() + Ecology::PREDATION_ENERGY_TRANSFER);
+                        population_[preyIdx].setEnergy(population_[preyIdx].getEnergy() - Ecology::PREDATION_ENERGY_TRANSFER);
+                    }
+                }
             }
         }
 
@@ -714,8 +870,6 @@ namespace Serina::Simulation
 
             for (size_t idx : splittingGroup)
                 population_[idx].setSpecies(newName);
-
-            interactions_.evolveInteractions(parentSpecies, newName);
 
             // Le comportement diverge en même temps que le génome : la
             // nouvelle lignée hérite du cerveau (stable, éprouvé) du
@@ -956,6 +1110,63 @@ namespace Serina::Simulation
                     snap.averageTraits.hearingAcuity = sum.hearingAcuity / n;
                     snap.averageTraits.camouflage = sum.camouflage / n;
                     snap.averageTraits.socialBehavior = sum.socialBehavior / n;
+
+                    // Adaptations réelles : un trait moyen mesurablement
+                    // au-dessus de sa valeur par défaut biologique, alors
+                    // que cette espèce subit une pression écologique
+                    // RÉELLEMENT détectée à la génération courante (voir
+                    // ecologicalPressure_, rempli par
+                    // applySurvivalAndInteractions()) -- jamais une liste
+                    // inventée ni un seuil arbitraire décorrélé d'un
+                    // événement mesuré.
+                    auto pressureIt = ecologicalPressure_.find(species);
+                    bool preyPressure = pressureIt != ecologicalPressure_.end() && pressureIt->second.isPreyOfSomeone;
+                    bool competitionPressure = pressureIt != ecologicalPressure_.end() && pressureIt->second.isInCompetition;
+
+                    auto aboveDefaultByMargin = [](double average, Genetics::TraitType type, double marginFraction) {
+                        const auto &bounds = Genetics::TRAIT_BOUNDS[static_cast<size_t>(type)];
+                        double margin = (bounds.max - bounds.min) * marginFraction;
+                        return average > bounds.defaultValue + margin;
+                    };
+                    auto formatValue = [](double v) {
+                        char buf[32];
+                        std::snprintf(buf, sizeof(buf), "%.2f", v);
+                        return std::string(buf);
+                    };
+
+                    if (preyPressure && aboveDefaultByMargin(snap.averageTraits.resistance, Genetics::TraitType::RESISTANCE, 0.15))
+                        snap.adaptations.push_back(
+                            "Résistance moyenne élevée (" + formatValue(snap.averageTraits.resistance) +
+                            ") alors qu'une pression de prédation réelle est mesurée cette génération.");
+                    if (preyPressure && aboveDefaultByMargin(snap.averageTraits.speed, Genetics::TraitType::SPEED, 0.15))
+                        snap.adaptations.push_back(
+                            "Vitesse de fuite moyenne élevée (" + formatValue(snap.averageTraits.speed) +
+                            ") alors qu'une pression de prédation réelle est mesurée cette génération.");
+                    if (competitionPressure && aboveDefaultByMargin(snap.averageTraits.energyEfficiency, Genetics::TraitType::ENERGY_EFFICIENCY, 0.15))
+                        snap.adaptations.push_back(
+                            "Efficacité énergétique moyenne élevée (" + formatValue(snap.averageTraits.energyEfficiency) +
+                            ") alors qu'une compétition réelle pour les ressources est mesurée cette génération.");
+
+                    // Innovations réelles : le cerveau NEAT stable de cette
+                    // lignée a réellement grandi au-delà de sa topologie
+                    // minimale de départ (entrées->sorties directement
+                    // connectées, sans neurone caché) -- une mutation
+                    // structurelle (addNode/addConnection) a donc été
+                    // conservée par l'évolution (1+1) au moins une fois.
+                    // Volontairement décrit sobrement : ceci ne mesure
+                    // qu'une croissance topologique réelle, jamais un
+                    // comportement plus "intelligent" (voir Chantier G).
+                    auto brainIt = brains_.find(species);
+                    if (brainIt != brains_.end())
+                    {
+                        size_t complexity = brainIt->second.stableBrain.getComplexity();
+                        size_t minimalComplexity = WorldSimulationParameters::brainInputCount + WorldSimulationParameters::brainOutputCount +
+                                                    WorldSimulationParameters::brainInputCount * WorldSimulationParameters::brainOutputCount;
+                        if (complexity > minimalComplexity + 2)
+                            snap.innovations.push_back(
+                                "Cerveau NEAT structurellement enrichi (" + std::to_string(complexity) +
+                                " nœuds/connexions, contre " + std::to_string(minimalComplexity) + " à la fondation de la lignée).");
+                    }
                 }
 
                 snapshots.push_back(std::move(snap));

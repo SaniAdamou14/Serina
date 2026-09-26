@@ -374,6 +374,59 @@ TEST_CASE("lineage brains evolve structurally over generations via (1+1)-ES", "[
     REQUIRE(anyComplexityChanged);
 }
 
+TEST_CASE("real predation/competition (Chantier F) does not cause a premature ecosystem collapse", "[worldsim][ecology]") {
+    // Test de non-régression bloquant explicitement requis par le Chantier F
+    // (réalisme écologique par profils de traits, TraitEcology.hpp) : le
+    // garde-fou impératif est qu'ajouter une vraie prédation/compétition ne
+    // doit jamais reproduire l'incident de famine passé (un canal de drain
+    // mal calibré qui garantissait l'extinction totale). Deux des cinq
+    // fondateurs (Serinus canaria et Gryllus seriensis) préfèrent tous deux
+    // GRASSLAND et cohabitent donc réellement dès la génération 0 -- ce
+    // n'est pas un scénario artificiel, c'est le placement normal des
+    // fondateurs qui garantit qu'au moins une paire d'espèces est
+    // effectivement exposée aux nouvelles règles dès le départ.
+    UnifiedWorldSimulator sim({}, 4242);
+    sim.seedFounderSpecies(30);
+    size_t initialPopulation = sim.getPopulationCount();
+
+    bool everSawAnyAdaptationOrInnovation = false;
+    const int totalGenerations = 1500;
+    const int checkpointInterval = 50;
+
+    for (int i = 1; i <= totalGenerations; ++i) {
+        sim.step();
+
+        if (i % checkpointInterval == 0) {
+            REQUIRE(sim.getPopulationCount() > 0);
+            // Pas d'explosion sans borne non plus (aucun mécanisme de
+            // régulation de densité n'a été ajouté par ce chantier -- une
+            // croissance déraisonnable indiquerait que la compétition
+            // n'agit jamais réellement, pas juste qu'elle est douce).
+            REQUIRE(sim.getPopulationCount() < initialPopulation * 20);
+
+            for (const auto &snap : sim.getLineageSnapshots()) {
+                if (!snap.adaptations.empty() || !snap.innovations.empty())
+                    everSawAnyAdaptationOrInnovation = true;
+            }
+        }
+    }
+
+    REQUIRE(sim.getGeneration() == static_cast<uint32_t>(totalGenerations));
+    REQUIRE(sim.getPopulationCount() > 0);
+
+    // Au moins deux lignées distinctes doivent avoir survécu -- si la
+    // prédation/compétition était mal calibrée au point d'éliminer toutes
+    // les espèces sauf une très tôt, ce serait le signe d'un déséquilibre
+    // réel, pas d'un résultat acceptable de la sélection naturelle normale.
+    auto finalSnapshots = sim.getLineageSnapshots();
+    REQUIRE(finalSnapshots.size() >= 2);
+
+    // Preuve que le câblage adaptations/innovations (LineageSnapshot) est
+    // réellement vivant sur un run réaliste, pas seulement une liste qui
+    // reste vide par construction.
+    REQUIRE(everSawAnyAdaptationOrInnovation);
+}
+
 TEST_CASE("a newly speciated lineage inherits a brain instead of starting blank", "[worldsim][neat][speciation]") {
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.05; // low threshold: speciation should trigger quickly

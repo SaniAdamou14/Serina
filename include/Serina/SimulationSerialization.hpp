@@ -16,9 +16,12 @@
 // propre générateur aléatoire, et le générateur aléatoire du simulateur
 // lui-même -- voir le plan pour le détail de ce qui est sciemment REGÉNÉRÉ
 // plutôt que sérialisé (grid_/environments_/constraints_, déterministes à
-// partir de (params, seed)) et ce qui est sciemment IGNORÉ (interactions_,
-// déjà inerte pour ce moteur -- voir Chantier F ; taxonomy_, déjà non
-// déterministe à la construction même sans sauvegarde).
+// partir de (params, seed)) et ce qui est sciemment IGNORÉ (taxonomy_, déjà
+// non déterministe à la construction même sans sauvegarde). Le membre
+// interactions_ (EcologicalInteractionManager, déjà inerte pour ce moteur)
+// a depuis été retiré entièrement de UnifiedWorldSimulator au profit d'une
+// classification par traits réels sans état à sérialiser -- voir
+// TraitEcology.hpp (Chantier F).
 
 #include "WorldSimulation.hpp"
 #include <nlohmann/json.hpp>
