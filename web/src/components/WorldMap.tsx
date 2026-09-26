@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { Map as MapIcon, ChevronUp, ChevronDown } from 'lucide-react';
+import { Map as MapIcon, ChevronUp, ChevronDown, Pin, PinOff, Columns3 } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { useSelection } from '@services/SelectionContext';
 import { IndividualInfo, RegionInfo } from '../types';
@@ -83,7 +83,7 @@ function clampViewBox(vb: ViewBox, worldWidth: number, worldHeight: number): Vie
  */
 export function WorldMap() {
   const { simulationData } = useSimulation();
-  const { selectRegion, selectIndividual, showSpeciesDetail } = useSelection();
+  const { selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -384,24 +384,46 @@ export function WorldMap() {
               ))}
             </div>
             <div className="flex flex-wrap gap-2 border-t border-slate-700 pt-2">
-              {(lineages ?? []).map((lineage) => (
-                <button
-                  key={lineage.speciesName}
-                  className="flex items-center gap-1 hover:bg-slate-700/60 rounded px-1 -mx-1"
-                  onClick={() => showSpeciesDetail(lineage.speciesName)}
-                  title="Voir la fiche complète de l'espèce"
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
-                    style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
-                  />
-                  <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
-                </button>
-              ))}
+              {(lineages ?? []).map((lineage) => {
+                const isPinned = pinnedSpecies.includes(lineage.speciesName);
+                return (
+                  <div key={lineage.speciesName} className="flex items-center gap-0.5 hover:bg-slate-700/60 rounded px-1 -mx-1">
+                    <button
+                      className="flex items-center gap-1"
+                      onClick={() => showSpeciesDetail(lineage.speciesName)}
+                      title="Voir la fiche complète de l'espèce"
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                        style={{ background: creatureColor(lineageHues.get(lineage.speciesName) ?? 0, 0, FALLBACK_BIOME_COLOR) }}
+                      />
+                      <span className="text-slate-300">{lineage.speciesName} ({lineage.population})</span>
+                    </button>
+                    <button
+                      className={isPinned ? 'text-primary-400' : 'text-slate-600 hover:text-slate-300'}
+                      onClick={() => togglePinnedSpecies(lineage.speciesName)}
+                      title={isPinned ? 'Retirer de la comparaison' : 'Épingler pour comparer'}
+                    >
+                      {isPinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
+
+      {pinnedSpecies.length >= 2 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
+          <button
+            className="button-primary px-3 py-1.5 text-xs flex items-center gap-1.5 shadow-lg pointer-events-auto"
+            onClick={() => setCompareOpen(true)}
+          >
+            <Columns3 className="w-3.5 h-3.5" /> Comparer ({pinnedSpecies.length})
+          </button>
+        </div>
+      )}
 
       <div className="absolute bottom-3 right-3 pointer-events-none">
         <Minimap

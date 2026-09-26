@@ -14,6 +14,7 @@ import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
 import { HistoryView } from './HistoryView'
 import { WorldMap } from './WorldMap'
 import { SpeciesDetailPanel } from './SpeciesDetailPanel'
+import { SpeciesComparisonPanel } from './SpeciesComparisonPanel'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
 
@@ -28,7 +29,7 @@ import { useSelection } from '@services/SelectionContext'
  */
 export function SimulationDashboard() {
   const { currentSimulationId, simulationData } = useSimulation()
-  const { detailSpecies, showSpeciesDetail } = useSelection()
+  const { detailSpecies, showSpeciesDetail, compareOpen } = useSelection()
   const [activeTab, setActiveTab] = useState<DashboardTab>('map')
 
   // Fait réel observé en production : une simulation peut perdre toute sa
@@ -101,6 +102,7 @@ export function SimulationDashboard() {
       <BottomBar />
 
       {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => showSpeciesDetail(null)} />}
+      {compareOpen && <SpeciesComparisonPanel />}
     </div>
   )
 }

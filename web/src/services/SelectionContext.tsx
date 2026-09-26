@@ -12,9 +12,15 @@ interface SelectionContextType {
   selectedRegion: RegionInfo | null
   selectedIndividual: IndividualInfo | null
   detailSpecies: string | null
+  /** Lignées épinglées pour comparaison côte à côte (Chantier E4). */
+  pinnedSpecies: string[]
+  compareOpen: boolean
   selectRegion: (region: RegionInfo | null) => void
   selectIndividual: (individual: IndividualInfo | null) => void
   showSpeciesDetail: (speciesName: string | null) => void
+  togglePinnedSpecies: (speciesName: string) => void
+  clearPinnedSpecies: () => void
+  setCompareOpen: (open: boolean) => void
   clearSelection: () => void
 }
 
@@ -24,6 +30,8 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
   const [selectedRegion, setSelectedRegion] = useState<RegionInfo | null>(null)
   const [selectedIndividual, setSelectedIndividual] = useState<IndividualInfo | null>(null)
   const [detailSpecies, setDetailSpecies] = useState<string | null>(null)
+  const [pinnedSpecies, setPinnedSpecies] = useState<string[]>([])
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const selectRegion = useCallback((region: RegionInfo | null) => {
     setSelectedRegion(region)
@@ -44,9 +52,33 @@ export function SelectionProvider({ children }: { children: ReactNode }) {
     setSelectedIndividual(null)
   }, [])
 
+  const togglePinnedSpecies = useCallback((speciesName: string) => {
+    setPinnedSpecies((current) =>
+      current.includes(speciesName) ? current.filter((s) => s !== speciesName) : [...current, speciesName]
+    )
+  }, [])
+
+  const clearPinnedSpecies = useCallback(() => {
+    setPinnedSpecies([])
+    setCompareOpen(false)
+  }, [])
+
   return (
     <SelectionContext.Provider
-      value={{ selectedRegion, selectedIndividual, detailSpecies, selectRegion, selectIndividual, showSpeciesDetail, clearSelection }}
+      value={{
+        selectedRegion,
+        selectedIndividual,
+        detailSpecies,
+        pinnedSpecies,
+        compareOpen,
+        selectRegion,
+        selectIndividual,
+        showSpeciesDetail,
+        togglePinnedSpecies,
+        clearPinnedSpecies,
+        setCompareOpen,
+        clearSelection
+      }}
     >
       {children}
     </SelectionContext.Provider>
