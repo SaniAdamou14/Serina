@@ -10,6 +10,7 @@
 #include <random>
 #include <cmath>
 #include <iostream>
+#include <sstream>
 
 namespace Serina::Evolution
 {
@@ -124,6 +125,22 @@ namespace Serina::Evolution
             : rng_(seed), currentGeneration_(0)
         {
             initializeBiologicalGroupRules();
+        }
+
+        /// @brief État du générateur pour sauvegarde/reprise déterministe --
+        /// rng_ avance à chaque validateMutation() (jet d'activation d'une
+        /// contrainte), reconstruire l'objet avec la même graine ne suffit
+        /// donc pas à reprendre à mi-parcours.
+        std::string getRngState() const
+        {
+            std::ostringstream oss;
+            oss << rng_;
+            return oss.str();
+        }
+        void setRngState(const std::string &state)
+        {
+            std::istringstream iss(state);
+            iss >> rng_;
         }
 
         /// @brief Initialise les règles pour chaque groupe biologique

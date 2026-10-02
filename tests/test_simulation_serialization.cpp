@@ -32,6 +32,33 @@ namespace
             REQUIRE(snapsA[i].age == snapsB[i].age);
         }
     }
+
+    /// @brief Même comparaison que requireIdenticalState(), SAUF l'id --
+    /// réservée à la comparaison entre deux simulateurs INDÉPENDANTS
+    /// construits séparément dans le même process. Organism::nextId_ est un
+    /// compteur global PARTAGÉ par tout le process (voir PopulationManager.hpp) :
+    /// deux simulateurs construits l'un après l'autre consomment donc des
+    /// plages d'id différentes même avec un comportement par ailleurs
+    /// parfaitement déterministe -- ce n'est pas une divergence réelle,
+    /// juste une conséquence attendue du compteur partagé.
+    void requireIdenticalStateIgnoringId(const UnifiedWorldSimulator &a, const UnifiedWorldSimulator &b)
+    {
+        REQUIRE(a.getGeneration() == b.getGeneration());
+        REQUIRE(a.getPopulationCount() == b.getPopulationCount());
+
+        auto snapsA = a.getIndividualSnapshots();
+        auto snapsB = b.getIndividualSnapshots();
+        REQUIRE(snapsA.size() == snapsB.size());
+        for (size_t i = 0; i < snapsA.size(); ++i)
+        {
+            INFO("individu #" << i);
+            REQUIRE(snapsA[i].species == snapsB[i].species);
+            REQUIRE(snapsA[i].x == snapsB[i].x);
+            REQUIRE(snapsA[i].y == snapsB[i].y);
+            REQUIRE(snapsA[i].energy == snapsB[i].energy);
+            REQUIRE(snapsA[i].age == snapsB[i].age);
+        }
+    }
 }
 
 TEST_CASE("deserializing a saved simulation reproduces its exact state", "[serialization]")
@@ -50,31 +77,21 @@ TEST_CASE("deserializing a saved simulation reproduces its exact state", "[seria
     requireIdenticalState(original, *restored);
 }
 
-TEST_CASE("a restored simulation keeps stepping without corruption after reload", "[serialization]")
+TEST_CASE("a restored simulation continues bit-identically to a reference that was never saved", "[serialization]")
 {
-    // Note honnête, découverte en écrivant ce test : on ne peut PAS exiger
-    // un déterminisme bit-à-bit après reprise en comparant `original` et
-    // `restored` step-à-step au-delà du point de reprise. Ce n'est pas une
-    // limite du code de sauvegarde/reprise lui-même (l'état au moment de la
-    // reprise, lui, est prouvé identique ci-dessus, exactement) : c'est une
-    // caractéristique préexistante du moteur, confirmée en isolant la
-    // cause -- AdvancedGenome::mutate() (appelé à chaque reproduction,
-    // WorldSimulation.hpp ~L645) tire sur un générateur aléatoire PARTAGÉ
-    // au niveau du fil d'exécution (AdvancedGenetics.hpp:203,
-    // `thread_local std::mt19937 engine(std::random_device{}())`), pas un
-    // générateur propre à chaque simulation, sérialisable. Vérifié
-    // directement : deux simulateurs INDÉPENDANTS construits avec exactement
-    // la même graine (555) divergent déjà après 25 pas (57 contre 55
-    // individus vivants) sans aucune sauvegarde/reprise impliquée -- la
-    // mutation génétique n'a jamais été reproductible dans ce moteur, avec
-    // ou sans ce chantier. Le rendre reproductible serait un changement
-    // séparé et plus large (RNG de mutation propre à chaque simulation),
-    // hors périmètre ici.
-    //
-    // Ce test vérifie donc ce qui est réellement garanti : après une
-    // reprise, la simulation continue d'avancer sans corruption (pas de
-    // plantage, génération réellement croissante, population réelle non
-    // négative) sur un nombre de pas conséquent.
+    // Renforce un test auparavant volontairement plus faible : la note
+    // d'origine documentait qu'un déterminisme bit-à-bit après reprise
+    // était IMPOSSIBLE, à cause d'un générateur aléatoire partagé au niveau
+    // du fil d'exécution utilisé par AdvancedGenome::mutate()/crossover()
+    // (AdvancedGenetics.hpp) et d'une graine non déterministe sur
+    // EcosystemTaxonomy/SerinaEvolutionaryConstraints (membres taxonomy_/
+    // constraints_ de UnifiedWorldSimulator). Les deux ont depuis été
+    // corrigés (voir le test dédié dans test_world_simulation.cpp qui les a
+    // révélés) -- ce test prouve maintenant que la reprise est VRAIMENT
+    // transparente : une simulation jamais interrompue et une simulation
+    // sauvegardée puis rechargée à mi-parcours, toutes deux construites
+    // avec la même graine, produisent un état identique à la génération
+    // finale -- pas seulement "ça continue sans planter".
     UnifiedWorldSimulator original(Simulation::WorldSimulationParameters{}, /*seed=*/54321);
     original.seedFounderSpecies(15);
     for (int i = 0; i < 25; ++i)
@@ -84,16 +101,19 @@ TEST_CASE("a restored simulation keeps stepping without corruption after reload"
     auto blob = original.toJson();
     auto restored = UnifiedWorldSimulator::fromJson(blob);
 
+    // Référence indépendante : jamais sauvegardée/rechargée, mais construite
+    // avec exactement la même graine et avancée du même nombre total de pas.
+    UnifiedWorldSimulator reference(Simulation::WorldSimulationParameters{}, /*seed=*/54321);
+    reference.seedFounderSpecies(15);
+    for (int i = 0; i < 25 + 15; ++i)
+        reference.step();
+
     for (int i = 0; i < 15; ++i)
         restored->step();
 
     REQUIRE(restored->getGeneration() == generationAtSave + 15);
-    REQUIRE(restored->getPopulationCount() > 0);
-    for (const auto &snap : restored->getIndividualSnapshots())
-    {
-        REQUIRE(snap.energy >= 0.0);
-        REQUIRE(snap.age >= 0.0);
-    }
+    REQUIRE(restored->getGeneration() == reference.getGeneration());
+    requireIdenticalStateIgnoringId(*restored, reference);
 }
 
 TEST_CASE("the two global counters (organism id, NEAT innovation) only ever advance on restore, never regress", "[serialization]")

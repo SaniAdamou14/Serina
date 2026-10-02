@@ -100,6 +100,28 @@ namespace Serina::Taxonomy
         TaxonomicNameGenerator(uint32_t seed = std::random_device{}())
             : rng_(seed) {}
 
+        /// @brief État complet pour sauvegarde/reprise déterministe (Chantier
+        /// "RNG de mutation propre à chaque simulation") : le générateur
+        /// aléatoire ET les compteurs d'unicité, tous deux de l'état
+        /// mutable qui avance à chaque espèce nommée -- reconstruire
+        /// l'objet avec la même graine ne suffit pas à reprendre à
+        /// mi-parcours, il faut restaurer où le flux en était rendu.
+        std::string getRngState() const
+        {
+            std::ostringstream oss;
+            oss << rng_;
+            return oss.str();
+        }
+        void setRngState(const std::string &state)
+        {
+            std::istringstream iss(state);
+            iss >> rng_;
+        }
+        const std::unordered_map<std::string, uint32_t> &getGenusCounters() const { return genusCounters_; }
+        const std::unordered_map<std::string, uint32_t> &getSpeciesCounters() const { return speciesCounters_; }
+        void setGenusCounters(std::unordered_map<std::string, uint32_t> counters) { genusCounters_ = std::move(counters); }
+        void setSpeciesCounters(std::unordered_map<std::string, uint32_t> counters) { speciesCounters_ = std::move(counters); }
+
         /// @brief Génère un nom de genre basé sur les caractéristiques
         std::string generateGenus(BiologicalType type, const std::vector<std::string>& traits = {})
         {
@@ -350,6 +372,14 @@ namespace Serina::Taxonomy
     public:
         EcosystemTaxonomy(uint32_t seed = std::random_device{}())
             : nameGenerator_(seed), currentGeneration_(0) {}
+
+        /// @brief Délègue à TaxonomicNameGenerator -- voir son commentaire.
+        std::string getRngState() const { return nameGenerator_.getRngState(); }
+        void setRngState(const std::string &state) { nameGenerator_.setRngState(state); }
+        const std::unordered_map<std::string, uint32_t> &getGenusCounters() const { return nameGenerator_.getGenusCounters(); }
+        const std::unordered_map<std::string, uint32_t> &getSpeciesCounters() const { return nameGenerator_.getSpeciesCounters(); }
+        void setGenusCounters(std::unordered_map<std::string, uint32_t> counters) { nameGenerator_.setGenusCounters(std::move(counters)); }
+        void setSpeciesCounters(std::unordered_map<std::string, uint32_t> counters) { nameGenerator_.setSpeciesCounters(std::move(counters)); }
 
         /// @brief Enregistre une nouvelle espèce
         std::string registerNewSpecies(BiologicalType type, const std::vector<std::string>& traits = {},

@@ -200,15 +200,24 @@ namespace Serina::Genetics
         double fitness_;
         mutable std::optional<std::unordered_map<TraitType, double>> phenotypeCache_;
 
-        static std::mt19937 &getRandomEngine()
-        {
-            thread_local std::mt19937 engine(std::random_device{}());
-            return engine;
-        }
+        /// @brief Générateur PROPRE À CE GÉNOME, jamais partagé -- corrige un
+        /// vrai bug de reproductibilité : ce membre remplaçait auparavant un
+        /// générateur `thread_local` unique partagé par TOUS les génomes du
+        /// process (toutes simulations confondues), ce qui rendait la
+        /// mutation génétique non reproductible même à graine de simulation
+        /// identique (deux UnifiedWorldSimulator construits avec la même
+        /// graine divergeaient génétiquement après ~25 pas, documenté comme
+        /// limite connue depuis le Chantier H). Chaque génome reçoit
+        /// maintenant sa propre graine, dérivée déterministement du flux du
+        /// simulateur ou du parent qui l'a engendré (voir seedFounderSpecies()/
+        /// crossover() ci-dessous) -- le même rôle que NEAT::NEATGenome::rng_
+        /// joue déjà pour les cerveaux de lignée.
+        mutable std::mt19937 rng_;
 
     public:
         /// @brief Constructeur par défaut avec traits aléatoires
-        AdvancedGenome(uint32_t generation = 0) : generation_(generation), fitness_(0.0)
+        AdvancedGenome(uint32_t generation = 0, uint32_t seed = std::random_device{}())
+            : generation_(generation), fitness_(0.0), rng_(seed)
         {
             initializeRandomTraits();
             generateLineageId();
@@ -219,14 +228,16 @@ namespace Serina::Genetics
         /// identifiant de lignage aléatoire -- réservé à la restauration
         /// d'une simulation sauvegardée (SimulationSerialization.hpp), où
         /// l'appelant restaure l'identifiant exact via setLineageId()
-        /// juste après. Sans ça, chaque organisme rechargé perturberait
-        /// inutilement le générateur aléatoire partagé au niveau du fil
-        /// d'exécution (getRandomEngine(), ci-dessous) -- un effet de bord
-        /// qui affecterait même les AUTRES simulations en cours dans le
-        /// même process, sans aucun bénéfice puisque la valeur tirée est
-        /// immédiatement écrasée.
-        AdvancedGenome(const std::vector<GeneticTrait> &traits, uint32_t generation = 0, bool generateNewLineageId = true)
-            : traits_(traits), generation_(generation), fitness_(0.0)
+        /// juste après.
+        /// @param seed Graine du générateur propre à ce génome (voir rng_
+        /// ci-dessus) -- par défaut non déterministe pour les appelants qui
+        /// ne s'en soucient pas (ancien pipeline SerinaSimulator.hpp), mais
+        /// le nouveau moteur (WorldSimulation.hpp) en fournit toujours une
+        /// dérivée de son propre flux pour rester entièrement reproductible
+        /// à partir d'une seule graine de simulation.
+        AdvancedGenome(const std::vector<GeneticTrait> &traits, uint32_t generation = 0, bool generateNewLineageId = true,
+                       uint32_t seed = std::random_device{}())
+            : traits_(traits), generation_(generation), fitness_(0.0), rng_(seed)
         {
             ensureAllTraits();
             if (generateNewLineageId)
@@ -239,7 +250,7 @@ namespace Serina::Genetics
             traits_.clear();
             traits_.reserve(static_cast<size_t>(TraitType::TRAIT_COUNT));
 
-            auto &rng = getRandomEngine();
+            auto &rng = rng_;
             std::uniform_real_distribution<double> valueDist(0.0, 1.0);
             std::uniform_real_distribution<double> dominanceDist(0.0, 1.0);
 
@@ -264,7 +275,7 @@ namespace Serina::Genetics
                 present[static_cast<size_t>(trait.type)] = true;
             }
 
-            auto &rng = getRandomEngine();
+            auto &rng = rng_;
             std::uniform_real_distribution<double> dist(0.0, 1.0);
 
             for (size_t i = 0; i < present.size(); ++i)
@@ -286,7 +297,7 @@ namespace Serina::Genetics
         /// @brief Génère un identifiant unique pour le lignage
         void generateLineageId()
         {
-            auto &rng = getRandomEngine();
+            auto &rng = rng_;
             std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
 
             std::stringstream ss;
@@ -331,7 +342,7 @@ namespace Serina::Genetics
         /// @brief Applique une mutation selon la configuration
         void mutate(const MutationConfig &config)
         {
-            auto &rng = getRandomEngine();
+            auto &rng = rng_;
             std::uniform_real_distribution<double> probDist(0.0, 1.0);
             std::normal_distribution<double> gaussianDist(0.0, config.gaussianStdDev);
 
@@ -384,7 +395,7 @@ namespace Serina::Genetics
         AdvancedTraitValues mutate(const AdvancedTraitValues& originalTraits, double mutationRate) const
         {
             AdvancedTraitValues mutatedTraits = originalTraits;
-            auto &rng = const_cast<std::mt19937&>(getRandomEngine());
+            auto &rng = rng_;
             std::uniform_real_distribution<double> probDist(0.0, 1.0);
             std::normal_distribution<double> gaussianDist(0.0, 0.1); // 10% de déviation standard
 
@@ -463,7 +474,7 @@ namespace Serina::Genetics
             std::vector<GeneticTrait> offspringTraits;
             offspringTraits.reserve(traits_.size());
 
-            auto &rng = getRandomEngine();
+            auto &rng = rng_;
             std::uniform_real_distribution<double> uniform(0.0, 1.0);
 
             for (size_t i = 0; i < traits_.size(); ++i)
@@ -521,7 +532,32 @@ namespace Serina::Genetics
                 }
             }
 
-            return AdvancedGenome(offspringTraits, generation_ + 1);
+            // Graine du nouveau génome dérivée du flux de CE parent (déjà
+            // avancé par le croisement ci-dessus), jamais du générateur
+            // partagé retiré -- rend tout l'arbre généalogique reproductible
+            // à partir de la seule graine de la simulation d'origine.
+            uint32_t childSeed = static_cast<uint32_t>(rng());
+            return AdvancedGenome(offspringTraits, generation_ + 1, true, childSeed);
+        }
+
+        /// @brief État exact du générateur propre à ce génome, sérialisé via
+        /// les opérateurs de flux standards de std::mt19937 (même mécanisme
+        /// que NEAT::NEATGenome::getRngState()) -- la seule façon correcte
+        /// d'obtenir une reprise vraiment déterministe de la lignée
+        /// génétique après sauvegarde/chargement.
+        std::string getRngState() const
+        {
+            std::ostringstream oss;
+            oss << rng_;
+            return oss.str();
+        }
+
+        /// @brief Restaure l'état exact du générateur -- réservé à la
+        /// reprise d'une simulation sauvegardée.
+        void setRngState(const std::string &state)
+        {
+            std::istringstream iss(state);
+            iss >> rng_;
         }
     };
 

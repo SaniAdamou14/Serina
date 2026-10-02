@@ -248,20 +248,25 @@ namespace Serina::Simulation
                                         uint32_t seed = std::random_device{}())
             : params_(params), grid_(params.gridWidth, params.gridHeight, seed),
               environments_(seed), seed_(seed),
-              // +1 pour ne pas rejouer exactement le même flux que rng_ tout
-              // en restant entièrement déterministe à partir de la même
-              // graine -- corrige un vrai bug latent trouvé en écrivant les
-              // tests du Chantier G2 : SerinaEvolutionaryConstraints se
-              // construisait avec sa valeur par défaut
-              // (std::random_device{}(), non déterministe) faute d'un
-              // argument explicite ici, ce qui rendait la validation des
-              // mutations biologiques -- et donc la reproductibilité de
-              // toute la simulation à partir d'une graine -- non
-              // reproductible d'une exécution à l'autre. (Ordre
-              // d'initialisation : constraints_ est déclaré avant rng_ dans
-              // la classe, donc listé avant lui ici aussi, pour éviter tout
-              // avertissement -Wreorder.)
-              constraints_(seed + 1), rng_(seed)
+              // +N (jamais +0, pour ne pas rejouer exactement le même flux
+              // que rng_) tout en restant entièrement déterministe à partir
+              // de la même graine -- corrige deux vrais bugs latents trouvés
+              // en poursuivant la reproductibilité jusqu'au bout (un premier
+              // trouvé en écrivant les tests du Chantier G2, un second en
+              // vérifiant empiriquement que deux simulateurs à graine
+              // identique restent identiques au-delà de la mutation
+              // génétique elle-même) : EcosystemTaxonomy (taxonomy_,
+              // utilisée pour nommer chaque nouvelle espèce à la
+              // spéciation) et SerinaEvolutionaryConstraints (constraints_)
+              // se construisaient toutes deux avec leur valeur par défaut
+              // (std::random_device{}(), non déterministe) faute d'argument
+              // explicite ici -- le nom d'une espèce née par spéciation, et
+              // la validation de ses mutations, divergeaient donc d'une
+              // exécution à l'autre même à graine de simulation identique.
+              // (Ordre d'initialisation : taxonomy_ puis constraints_ sont
+              // déclarés avant rng_ dans la classe, donc listés avant lui
+              // ici aussi, pour éviter tout avertissement -Wreorder.)
+              taxonomy_(seed + 2), constraints_(seed + 1), rng_(seed)
         {
         }
 
@@ -300,7 +305,13 @@ namespace Serina::Simulation
                 for (uint32_t i = 0; i < individualsPerFounder; ++i)
                 {
                     auto [gx, gy] = candidateRegions[regionPick(rng_)];
-                    auto genome = std::make_unique<Genetics::AdvancedGenome>(generation_);
+                    // Graine dérivée du flux du simulateur (jamais le
+                    // générateur partagé retiré d'AdvancedGenetics.hpp) --
+                    // pour que deux UnifiedWorldSimulator construits avec la
+                    // même graine produisent des génomes fondateurs
+                    // réellement identiques, pas seulement des positions
+                    // identiques.
+                    auto genome = std::make_unique<Genetics::AdvancedGenome>(generation_, static_cast<uint32_t>(rng_()));
                     Evolution::Organism organism(std::move(genome), founder.commonName);
                     placeInRegion(organism, gx, gy);
                     organism.setEnergy(100.0);

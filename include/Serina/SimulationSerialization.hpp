@@ -15,13 +15,21 @@
 // organisme, pas seulement le phénotype), topologie NEAT complète avec son
 // propre générateur aléatoire, et le générateur aléatoire du simulateur
 // lui-même -- voir le plan pour le détail de ce qui est sciemment REGÉNÉRÉ
-// plutôt que sérialisé (grid_/environments_/constraints_, déterministes à
-// partir de (params, seed)) et ce qui est sciemment IGNORÉ (taxonomy_, déjà
-// non déterministe à la construction même sans sauvegarde). Le membre
-// interactions_ (EcologicalInteractionManager, déjà inerte pour ce moteur)
-// a depuis été retiré entièrement de UnifiedWorldSimulator au profit d'une
-// classification par traits réels sans état à sérialiser -- voir
-// TraitEcology.hpp (Chantier F).
+// plutôt que sérialisé (grid_/environments_/constraints_/taxonomy_,
+// déterministes à partir de (params, seed) depuis la correction du bug de
+// reproductibilité du générateur de noms d'espèces -- voir le constructeur
+// de UnifiedWorldSimulator). Le membre interactions_
+// (EcologicalInteractionManager, déjà inerte pour ce moteur) a depuis été
+// retiré entièrement de UnifiedWorldSimulator au profit d'une classification
+// par traits réels sans état à sérialiser -- voir TraitEcology.hpp
+// (Chantier F). ecologicalPressure_/lastConvergenceSample_/
+// convergenceSignals_ (Chantiers F/G1/G2) SONT en revanche sérialisés : le
+// premier est une vraie entrée du cerveau de chaque lignée au step suivant
+// (omis initialement, trouvé en vérifiant empiriquement qu'une reprise
+// restait bit-identique à une simulation jamais interrompue -- elle ne
+// l'était pas, précisément à cause de cet oubli), les deux autres pour ne
+// pas perdre un signal de convergence en cours de détection ni l'historique
+// déjà observé.
 
 #include "WorldSimulation.hpp"
 #include <nlohmann/json.hpp>
@@ -59,13 +67,18 @@ namespace Serina::Simulation
 
     /// @brief Les 24 allèles complets (12 traits x 2), pas seulement le
     /// phénotype -- perdre la dominance/l'origine de chaque allèle
-    /// romprait un croisement ou une mutation futurs corrects.
+    /// romprait un croisement ou une mutation futurs corrects. Inclut aussi
+    /// l'état exact du générateur propre à ce génome (rng_, voir
+    /// AdvancedGenetics.hpp) -- sans lui, une lignée reprise muterait de
+    /// façon imprévisible plutôt que de continuer son propre flux
+    /// déterministe là où la sauvegarde l'a interrompu.
     inline json genomeToJson(const Genetics::AdvancedGenome &g)
     {
         json traits = json::array();
         for (const auto &t : g.getTraits())
             traits.push_back(geneticTraitToJson(t));
-        return json{{"traits", traits}, {"generation", g.getGeneration()}, {"lineageId", g.getLineageId()}, {"fitness", g.getFitness()}};
+        return json{{"traits", traits}, {"generation", g.getGeneration()}, {"lineageId", g.getLineageId()},
+                    {"fitness", g.getFitness()}, {"rngState", g.getRngState()}};
     }
 
     inline Genetics::AdvancedGenome genomeFromJson(const json &j)
@@ -75,11 +88,16 @@ namespace Serina::Simulation
             traits.push_back(geneticTraitFromJson(tj));
         // generateNewLineageId=false : voir le commentaire sur ce paramètre
         // dans AdvancedGenetics.hpp -- on restaure l'id exact juste en
-        // dessous, pas la peine de tirer un nouveau (et perturber le
-        // générateur partagé de toutes les simulations du process).
+        // dessous, pas la peine d'en tirer un nouveau.
         Genetics::AdvancedGenome genome(traits, j.at("generation").get<uint32_t>(), /*generateNewLineageId=*/false);
         genome.setFitness(j.value("fitness", 0.0));
         genome.setLineageId(j.at("lineageId").get<std::string>());
+        // "" par défaut : rétrocompatibilité avec une sauvegarde locale
+        // antérieure à ce champ -- le génome garde alors la graine non
+        // déterministe de son constructeur plutôt que de planter.
+        std::string rngState = j.value("rngState", "");
+        if (!rngState.empty())
+            genome.setRngState(rngState);
         return genome;
     }
 
@@ -215,6 +233,28 @@ namespace Serina::Simulation
         return json{{"parentSpecies", e.parentSpecies}, {"newSpecies", e.newSpecies}, {"generation", e.generation}, {"geneticDistanceAtSplit", e.geneticDistanceAtSplit}};
     }
 
+    // Même raison que ci-dessus (ADL) : nommé différemment de
+    // DaemonProtocol.hpp::convergenceSignalToJson.
+    inline json serializeConvergenceSignal(const ConvergenceSignal &s)
+    {
+        return json{{"speciesA", s.speciesA}, {"speciesB", s.speciesB}, {"generation", s.generation},
+                    {"traitDistance", s.traitDistance}, {"geneticDistance", s.geneticDistance},
+                    {"traitDistanceDelta", s.traitDistanceDelta}, {"geneticDistanceDelta", s.geneticDistanceDelta}};
+    }
+
+    inline ConvergenceSignal convergenceSignalFromJson(const json &j)
+    {
+        ConvergenceSignal s;
+        s.speciesA = j.at("speciesA").get<std::string>();
+        s.speciesB = j.at("speciesB").get<std::string>();
+        s.generation = j.at("generation").get<uint32_t>();
+        s.traitDistance = j.at("traitDistance").get<double>();
+        s.geneticDistance = j.at("geneticDistance").get<double>();
+        s.traitDistanceDelta = j.at("traitDistanceDelta").get<double>();
+        s.geneticDistanceDelta = j.at("geneticDistanceDelta").get<double>();
+        return s;
+    }
+
     inline SpeciationEvent speciationEventFromJson(const json &j)
     {
         SpeciationEvent e;
@@ -248,7 +288,8 @@ namespace Serina::Simulation
             {"speciationIsolationGenerations", params_.speciationIsolationGenerations},
             {"maxAttemptsPerConstraintRetry", params_.maxAttemptsPerConstraintRetry},
             {"brainEvolutionInterval", params_.brainEvolutionInterval},
-            {"foragingRate", params_.foragingRate}};
+            {"foragingRate", params_.foragingRate},
+            {"convergenceCheckInterval", params_.convergenceCheckInterval}};
 
         json population = json::array();
         for (const auto &org : population_)
@@ -274,6 +315,56 @@ namespace Serina::Simulation
         for (const auto &e : speciationEvents_)
             events.push_back(serializeSpeciationEvent(e));
         j["speciationEvents"] = events;
+
+        // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
+        // génération avant la sauvegarde -- lue par buildBrainInputs() au
+        // step suivant (entrée "recentPredationPressure"). Sans elle, une
+        // reprise changerait silencieusement une entrée réelle du cerveau
+        // de chaque lignée (repartirait à "aucune pression" au lieu de
+        // l'état réel juste avant la coupure), avec un effet en cascade sur
+        // le mouvement -- trouvé en vérifiant empiriquement qu'une reprise
+        // reste bit-identique à une simulation jamais interrompue.
+        json pressure = json::object();
+        for (const auto &[name, summary] : ecologicalPressure_)
+            pressure[name] = {{"isPreyOfSomeone", summary.isPreyOfSomeone}, {"isInCompetition", summary.isInCompetition}};
+        j["ecologicalPressure"] = pressure;
+
+        // Chantier G2 : dernier échantillon connu par paire de lignées
+        // (nécessaire pour détecter une tendance à la PROCHAINE vérification
+        // après reprise -- sans lui, un signal de convergence légitime juste
+        // après reprise serait manqué faute de point de comparaison) et
+        // l'historique des signaux déjà détectés (comme speciationEvents_,
+        // un fait mesuré une fois reste un fait).
+        json lastSamples = json::object();
+        for (const auto &[pairKey, sample] : lastConvergenceSample_)
+            lastSamples[pairKey] = {{"generation", sample.generation}, {"traitDistance", sample.traitDistance}, {"geneticDistance", sample.geneticDistance}};
+        j["lastConvergenceSample"] = lastSamples;
+
+        json convergence = json::array();
+        for (const auto &s : convergenceSignals_)
+            convergence.push_back(serializeConvergenceSignal(s));
+        j["convergenceSignals"] = convergence;
+
+        // taxonomy_/constraints_ sont reconstruites à partir de (params,
+        // seed) comme grid_/environments_, mais -- à la différence de
+        // celles-ci -- leur générateur aléatoire interne AVANCE au fil de la
+        // simulation (un nom d'espèce généré, une contrainte validée) :
+        // reconstruire avec la bonne graine de départ ne suffit pas à
+        // reprendre à mi-parcours, il faut restaurer où le flux en était
+        // rendu. Trouvé en vérifiant empiriquement qu'une reprise restait
+        // bit-identique à une simulation jamais interrompue -- elle ne
+        // l'était toujours pas pour le NOM d'une espèce née par spéciation
+        // après reprise, même une fois ecologicalPressure_ corrigé.
+        j["taxonomyRngState"] = taxonomy_.getRngState();
+        json genusCounters = json::object();
+        for (const auto &[genus, count] : taxonomy_.getGenusCounters())
+            genusCounters[genus] = count;
+        j["taxonomyGenusCounters"] = genusCounters;
+        json speciesCounters = json::object();
+        for (const auto &[species, count] : taxonomy_.getSpeciesCounters())
+            speciesCounters[species] = count;
+        j["taxonomySpeciesCounters"] = speciesCounters;
+        j["constraintsRngState"] = constraints_.getRngState();
 
         std::ostringstream rngOss;
         rngOss << rng_;
@@ -302,6 +393,7 @@ namespace Serina::Simulation
             params.maxAttemptsPerConstraintRetry = pj.value("maxAttemptsPerConstraintRetry", params.maxAttemptsPerConstraintRetry);
             params.brainEvolutionInterval = pj.value("brainEvolutionInterval", params.brainEvolutionInterval);
             params.foragingRate = pj.value("foragingRate", params.foragingRate);
+            params.convergenceCheckInterval = pj.value("convergenceCheckInterval", params.convergenceCheckInterval);
         }
 
         uint32_t seed = j.at("seed").get<uint32_t>();
@@ -334,6 +426,62 @@ namespace Serina::Simulation
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))
             sim->speciationEvents_.push_back(speciationEventFromJson(ej));
+
+        // "" / tableaux vides par défaut : rétrocompatibilité avec une
+        // sauvegarde locale antérieure à ces trois champs.
+        sim->ecologicalPressure_.clear();
+        if (j.contains("ecologicalPressure"))
+        {
+            for (const auto &[name, val] : j.at("ecologicalPressure").items())
+            {
+                EcologicalPressureSummary summary;
+                summary.isPreyOfSomeone = val.value("isPreyOfSomeone", false);
+                summary.isInCompetition = val.value("isInCompetition", false);
+                sim->ecologicalPressure_[name] = summary;
+            }
+        }
+
+        sim->lastConvergenceSample_.clear();
+        if (j.contains("lastConvergenceSample"))
+        {
+            for (const auto &[pairKey, val] : j.at("lastConvergenceSample").items())
+            {
+                Ecology::ConvergenceSample sample;
+                sample.generation = val.at("generation").get<uint32_t>();
+                sample.traitDistance = val.at("traitDistance").get<double>();
+                sample.geneticDistance = val.at("geneticDistance").get<double>();
+                sim->lastConvergenceSample_[pairKey] = sample;
+            }
+        }
+
+        sim->convergenceSignals_.clear();
+        if (j.contains("convergenceSignals"))
+        {
+            for (const auto &sj : j.at("convergenceSignals"))
+                sim->convergenceSignals_.push_back(convergenceSignalFromJson(sj));
+        }
+
+        // "" par défaut : rétrocompatibilité avec une sauvegarde locale
+        // antérieure à ces champs (taxonomy_/constraints_ gardent alors
+        // l'état fraîchement construit, pas idéal mais ne plante pas).
+        if (j.contains("taxonomyRngState") && !j.at("taxonomyRngState").get<std::string>().empty())
+            sim->taxonomy_.setRngState(j.at("taxonomyRngState").get<std::string>());
+        if (j.contains("taxonomyGenusCounters"))
+        {
+            std::unordered_map<std::string, uint32_t> counters;
+            for (const auto &[genus, count] : j.at("taxonomyGenusCounters").items())
+                counters[genus] = count.get<uint32_t>();
+            sim->taxonomy_.setGenusCounters(std::move(counters));
+        }
+        if (j.contains("taxonomySpeciesCounters"))
+        {
+            std::unordered_map<std::string, uint32_t> counters;
+            for (const auto &[species, count] : j.at("taxonomySpeciesCounters").items())
+                counters[species] = count.get<uint32_t>();
+            sim->taxonomy_.setSpeciesCounters(std::move(counters));
+        }
+        if (j.contains("constraintsRngState") && !j.at("constraintsRngState").get<std::string>().empty())
+            sim->constraints_.setRngState(j.at("constraintsRngState").get<std::string>());
 
         std::istringstream rngIss(j.at("rngState").get<std::string>());
         rngIss >> sim->rng_;

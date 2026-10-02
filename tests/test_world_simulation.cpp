@@ -402,6 +402,68 @@ TEST_CASE("founder brains have the enriched G1 topology from the start (10 input
     }
 }
 
+TEST_CASE("two independently-constructed simulators with the same seed stay bit-identical through real reproduction and speciation", "[worldsim][determinism]") {
+    // Corrige un vrai bug de reproductibilite trouve en poursuivant le
+    // Chantier G : Genetics::AdvancedGenome::mutate()/crossover() tiraient
+    // auparavant sur un generateur PARTAGE au niveau du fil d'execution
+    // (thread_local, documente comme limite connue depuis le Chantier H),
+    // et Taxonomy::EcosystemTaxonomy/Evolution::SerinaEvolutionaryConstraints
+    // (membres taxonomy_/constraints_ de UnifiedWorldSimulator) se
+    // construisaient avec une graine std::random_device{}() faute d'argument
+    // explicite dans le constructeur -- deux simulateurs construits avec
+    // exactement la meme graine divergeaient donc apres ~25 pas (mutation
+    // genetique) ou au premier evenement de speciation (nom d'espece tire
+    // au hasard). Verifie ici qu'ils restent identiques generation apres
+    // generation, individu par individu (espece/position/energie), a
+    // travers de vraies reproductions ET de vraies speciations.
+    UnifiedWorldSimulator simA({}, 777);
+    simA.seedFounderSpecies(20);
+    UnifiedWorldSimulator simB({}, 777);
+    simB.seedFounderSpecies(20);
+
+    bool sawReproduction = false;
+    bool sawSpeciation = false;
+    size_t initialPopulation = simA.getPopulationCount();
+
+    for (int i = 0; i < 400; ++i) {
+        simA.step();
+        simB.step();
+
+        REQUIRE(simA.getGeneration() == simB.getGeneration());
+
+        auto snapsA = simA.getIndividualSnapshots();
+        auto snapsB = simB.getIndividualSnapshots();
+        REQUIRE(snapsA.size() == snapsB.size());
+        if (snapsA.size() > initialPopulation)
+            sawReproduction = true;
+
+        for (size_t j = 0; j < snapsA.size(); ++j) {
+            INFO("generation " << simA.getGeneration() << ", individu #" << j);
+            REQUIRE(snapsA[j].species == snapsB[j].species);
+            REQUIRE(snapsA[j].x == snapsB[j].x);
+            REQUIRE(snapsA[j].y == snapsB[j].y);
+            REQUIRE(snapsA[j].energy == snapsB[j].energy);
+        }
+
+        if (!simA.getSpeciationEvents().empty())
+            sawSpeciation = true;
+    }
+
+    REQUIRE(sawReproduction);
+    REQUIRE(sawSpeciation);
+    // Les noms d'especes issues de speciation (tires au hasard par
+    // EcosystemTaxonomy) doivent eux aussi etre identiques -- pas seulement
+    // leur nombre.
+    const auto &eventsA = simA.getSpeciationEvents();
+    const auto &eventsB = simB.getSpeciationEvents();
+    REQUIRE(eventsA.size() == eventsB.size());
+    for (size_t i = 0; i < eventsA.size(); ++i) {
+        REQUIRE(eventsA[i].newSpecies == eventsB[i].newSpecies);
+        REQUIRE(eventsA[i].parentSpecies == eventsB[i].parentSpecies);
+        REQUIRE(eventsA[i].geneticDistanceAtSplit == eventsB[i].geneticDistanceAtSplit);
+    }
+}
+
 TEST_CASE("real predation/competition (Chantier F) does not cause a premature ecosystem collapse", "[worldsim][ecology]") {
     // Test de non-régression bloquant explicitement requis par le Chantier F
     // (réalisme écologique par profils de traits, TraitEcology.hpp) : le
