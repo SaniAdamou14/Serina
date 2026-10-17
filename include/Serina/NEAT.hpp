@@ -409,8 +409,17 @@ namespace Serina::NEAT
             uint32_t inInnovation = InnovationCounter::getConnectionInnovation(oldConn.inNode, newNodeId);
             uint32_t outInnovation = InnovationCounter::getConnectionInnovation(newNodeId, oldConn.outNode);
 
-            connectionGenes_.emplace_back(oldConn.inNode, newNodeId, 1.0, inInnovation);
-            connectionGenes_.emplace_back(newNodeId, oldConn.outNode, oldConn.weight, outInnovation);
+            // Copie AVANT tout emplace_back : oldConn est une référence dans
+            // connectionGenes_, que le premier emplace_back peut réallouer --
+            // la relire ensuite lisait de la mémoire libérée (vrai bug :
+            // poids ~1e-311 et nœud de sortie aléatoire selon le contenu du
+            // tas, ce qui rendait la simulation non reproductible).
+            const uint32_t oldInNode = oldConn.inNode;
+            const uint32_t oldOutNode = oldConn.outNode;
+            const double oldWeight = oldConn.weight;
+
+            connectionGenes_.emplace_back(oldInNode, newNodeId, 1.0, inInnovation);
+            connectionGenes_.emplace_back(newNodeId, oldOutNode, oldWeight, outInnovation);
         }
 
         /// @brief Ajoute une nouvelle connexion

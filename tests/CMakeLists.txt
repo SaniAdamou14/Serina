@@ -80,6 +80,15 @@ target_include_directories(test_evolutionary_convergence PRIVATE ${CMAKE_SOURCE_
 target_compile_features(test_evolutionary_convergence PRIVATE cxx_std_20)
 catch_discover_tests(test_evolutionary_convergence)
 
+# Serina/NEAT.hpp seul, dans un binaire dedie : il remplace l'allocateur
+# global pour ecraser la memoire liberee (detection des use-after-free),
+# ce qu'on n'impose pas aux autres binaires de test.
+add_executable(test_neat test_neat.cpp)
+target_link_libraries(test_neat PRIVATE Catch2::Catch2WithMain)
+target_include_directories(test_neat PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_neat PRIVATE cxx_std_20)
+catch_discover_tests(test_neat)
+
 add_executable(test_simulation_serialization test_simulation_serialization.cpp)
 target_link_libraries(test_simulation_serialization PRIVATE
     Catch2::Catch2WithMain
