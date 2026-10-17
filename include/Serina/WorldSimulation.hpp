@@ -295,6 +295,23 @@ namespace Serina::Simulation
         /// croissait exponentiellement sans plafond (534 000 individus à la
         /// génération 9900, sur les trois graines testées).
         double carryingCapacityPerResource = 400.0;
+
+        /// Échelle du déplacement par pas (1 = jusqu'à cellSize × vitesse par
+        /// pas, comportement historique). Mesuré : à 1.0 un individu visite
+        /// 5-9 cases en 50 générations pour une vie de ~1000, donc le monde
+        /// est brassé en continu et aucune structure géographique ne peut se
+        /// former. Dose-réponse sur 12 graines à 6000 générations : 1.0 -> 5.0
+        /// espèces et 11 spéciations ; 0.3 -> 9.3 et 24 ; 0.1 -> 12.4 et 35 ;
+        /// aucune extinction dans les trois cas. C'est la spéciation
+        /// allopatrique : des populations restées localisées divergent.
+        /// Validé à 0.1 sur 12 graines jamais utilisées pour choisir
+        /// (13-24), 20 000 générations : 12/12 survivent, 14.1 espèces en
+        /// moyenne à la fin (2 à 36), population bornée (pic <= 9 215).
+        /// (Une niche climatique testée en parallèle -- coût
+        /// force × (résistance − stress)² -- a été rejetée : elle réduisait
+        /// la richesse à tous les niveaux de déplacement sans jamais produire
+        /// de corrélation résistance/stress.)
+        double movementScale = 0.1;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -708,13 +725,13 @@ namespace Serina::Simulation
                     double moveX = outputs[WorldSimulationParameters::OUTPUT_MOVE_X] * 2.0 - 1.0;
                     double moveY = outputs[WorldSimulationParameters::OUTPUT_MOVE_Y] * 2.0 - 1.0;
                     double speed = organism.getGenome().getTrait(Genetics::TraitType::SPEED);
-                    dx = moveX * params_.cellSize * speed;
-                    dy = moveY * params_.cellSize * speed;
+                    dx = moveX * params_.cellSize * speed * params_.movementScale;
+                    dy = moveY * params_.cellSize * speed * params_.movementScale;
                 }
                 else
                 {
-                    dx = fallback(rng_);
-                    dy = fallback(rng_);
+                    dx = fallback(rng_) * params_.movementScale;
+                    dy = fallback(rng_) * params_.movementScale;
                     // Valeurs neutres/sûres pour un individu sans cerveau :
                     // ni bonus ni pénalité de chasse/évasion/alimentation.
                     latestBrainOutputs_[organism.getId()] = {0.5, 0.5, 1.0, 1.0, 1.0};
