@@ -316,7 +316,8 @@ namespace Serina::Simulation
             {"brainEvolutionInterval", params_.brainEvolutionInterval},
             {"foragingRate", params_.foragingRate},
             {"convergenceCheckInterval", params_.convergenceCheckInterval},
-            {"carryingCapacityPerResource", params_.carryingCapacityPerResource}};
+            {"carryingCapacityPerResource", params_.carryingCapacityPerResource},
+            {"speciationDivergenceMargin", params_.speciationDivergenceMargin}};
 
         json population = json::array();
         for (const auto &org : population_)
@@ -436,6 +437,7 @@ namespace Serina::Simulation
             params.foragingRate = pj.value("foragingRate", params.foragingRate);
             params.convergenceCheckInterval = pj.value("convergenceCheckInterval", params.convergenceCheckInterval);
             params.carryingCapacityPerResource = pj.value("carryingCapacityPerResource", params.carryingCapacityPerResource);
+            params.speciationDivergenceMargin = pj.value("speciationDivergenceMargin", params.speciationDivergenceMargin);
         }
 
         uint32_t seed = j.at("seed").get<uint32_t>();

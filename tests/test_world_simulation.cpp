@@ -253,6 +253,7 @@ TEST_CASE("reproduction respects biological constraints instead of producing arb
 TEST_CASE("speciation emerges from measured genetic divergence and sustained geographic separation", "[worldsim][speciation]") {
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.05; // low threshold: speciation should trigger quickly
+    params.speciationDivergenceMargin = -1.0; // critère absolu historique : garde ce test rapide (le critère relatif par défaut ne se déclenche que sur une vraie divergence)
     params.speciationIsolationGenerations = 3;
 
     UnifiedWorldSimulator sim(params, 2024);
@@ -289,9 +290,58 @@ TEST_CASE("speciation emerges from measured genetic divergence and sustained geo
     REQUIRE(foundNewSpecies);
 }
 
+TEST_CASE("relative divergence criterion does not speciate on the founder pool's own variation", "[worldsim][speciation][divergence]") {
+    // Un run scientifique avait montre que le critere absolu historique
+    // (distance entre sous-groupes >= 0.30) se declenchait des le depart sur
+    // la seule variation interne du pool de fondateurs (alleles tires
+    // uniformement, distance interne ~0.34) : ~38 speciations d'artefact en
+    // 1000 generations, puis plus aucune. Le critere relatif par defaut
+    // (distance ENTRE sous-groupes - distance INTERNE >= marge) ne doit pas
+    // les produire. Meme graine, meme duree : le critere historique en
+    // produit beaucoup, le relatif tres peu.
+    WorldSimulationParameters relative; // defaut : critere relatif
+    WorldSimulationParameters legacy;
+    legacy.speciationDivergenceMargin = -1.0;
+
+    UnifiedWorldSimulator simRelative(relative, 9090);
+    simRelative.seedFounderSpecies(40);
+    UnifiedWorldSimulator simLegacy(legacy, 9090);
+    simLegacy.seedFounderSpecies(40);
+
+    for (int i = 0; i < 150; ++i) {
+        simRelative.step();
+        simLegacy.step();
+    }
+
+    REQUIRE(simLegacy.getSpeciationEvents().size() >= 10);
+    REQUIRE(simRelative.getSpeciationEvents().size() < simLegacy.getSpeciationEvents().size() / 3);
+}
+
+TEST_CASE("relative divergence criterion keeps producing real speciations over a long run", "[worldsim][speciation][divergence]") {
+    // Le critere absolu s'arretait vers la generation 1000 (une seule
+    // speciation de plus en 7000 generations) : la diversite retombait sous
+    // le seuil. Le critere relatif mesure une divergence reelle quel que soit
+    // le niveau de diversite -- sur 24 graines a 8000 generations il en
+    // produit ~12 en moyenne, repartis dans le temps. Ici : au moins une
+    // speciation APRES la generation 1000.
+    UnifiedWorldSimulator sim({}, 2025);
+    sim.seedFounderSpecies(40);
+
+    for (int i = 0; i < 2000; ++i)
+        sim.step();
+
+    REQUIRE(sim.getPopulationCount() > 0);
+    bool speciatedLate = false;
+    for (const auto &event : sim.getSpeciationEvents())
+        if (event.generation > 1000)
+            speciatedLate = true;
+    REQUIRE(speciatedLate);
+}
+
 TEST_CASE("a high speciation threshold prevents spurious splits", "[worldsim][speciation]") {
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.99; // effectively unreachable
+    params.speciationDivergenceMargin = -1.0; // critère absolu historique : garde ce test rapide (le critère relatif par défaut ne se déclenche que sur une vraie divergence)
     params.speciationIsolationGenerations = 3;
 
     UnifiedWorldSimulator sim(params, 2024);
@@ -570,6 +620,7 @@ TEST_CASE("evolutionary convergence detection never crashes and produces well-fo
     // pas qu'un signal apparaisse forcement.
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.08;
+    params.speciationDivergenceMargin = -1.0; // critère absolu historique : garde ce test rapide (le critère relatif par défaut ne se déclenche que sur une vraie divergence)
     params.speciationIsolationGenerations = 5;
     params.convergenceCheckInterval = 50;
 
@@ -601,6 +652,7 @@ TEST_CASE("evolutionary convergence detection never crashes and produces well-fo
 TEST_CASE("a newly speciated lineage inherits a brain instead of starting blank", "[worldsim][neat][speciation]") {
     WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.05; // low threshold: speciation should trigger quickly
+    params.speciationDivergenceMargin = -1.0; // critère absolu historique : garde ce test rapide (le critère relatif par défaut ne se déclenche que sur une vraie divergence)
     params.speciationIsolationGenerations = 3;
 
     UnifiedWorldSimulator sim(params, 2024);

@@ -184,6 +184,28 @@ namespace Serina::Simulation
         /// persistance mesurée de la divergence.
         uint32_t speciationIsolationGenerations = 10;
 
+        /// Si >= 0 : critère de divergence RELATIF (défaut) -- deux
+        /// sous-groupes ne divergent que si leur distance moyenne ENTRE eux
+        /// dépasse leur distance moyenne INTERNE (moyenne des deux) d'au
+        /// moins cette marge. < 0 : critère absolu historique
+        /// (speciationDistanceThreshold).
+        ///
+        /// Pourquoi : la diversité interne du pool de fondateurs (allèles
+        /// tirés uniformément) est déjà ~0.34, au-dessus du seuil absolu
+        /// 0.30, donc n'importe quelle paire de sous-groupes le dépassait au
+        /// départ (~38 spéciations d'artefact en 1000 générations), puis
+        /// plus aucune ne le dépassait quand la diversité retombait à
+        /// 0.05-0.2 (une seule spéciation de plus en 7000 générations).
+        ///
+        /// Calibration mesurée : plancher de bruit d'échantillonnage (deux
+        /// sous-groupes tirés au hasard dans une population SANS
+        /// divergence, 5000 tirages, diversité élevée) : p99 = 0.015, p99.9 =
+        /// 0.020, max = 0.029 ; 0.03 est la plus petite valeur au-dessus. Sur
+        /// 24 graines à 8000 générations : marge 0.02 -> ~25 spéciations,
+        /// 0.03 -> ~12, 0.04 -> ~7, 0.06 -> ~1 ; les spéciations continuent
+        /// au fil du temps au lieu de s'arrêter vers la génération 1000.
+        double speciationDivergenceMargin = 0.03;
+
         uint32_t maxAttemptsPerConstraintRetry = 3;
 
         /// Nombre d'entrées/sorties du cerveau NEAT de chaque lignée (Chantier
@@ -1132,7 +1154,18 @@ namespace Serina::Simulation
 
                 double distance = averageInterGroupDistance(groupA, groupB);
 
-                if (distance >= params_.speciationDistanceThreshold)
+                bool divergent;
+                if (params_.speciationDivergenceMargin >= 0.0)
+                {
+                    double within = 0.5 * (averageWithinGroupDistance(groupA) + averageWithinGroupDistance(groupB));
+                    divergent = (distance - within) >= params_.speciationDivergenceMargin;
+                }
+                else
+                {
+                    divergent = distance >= params_.speciationDistanceThreshold;
+                }
+
+                if (divergent)
                     divergentStreak_[species]++;
                 else
                     divergentStreak_[species] = 0;
@@ -1378,6 +1411,22 @@ namespace Serina::Simulation
                 for (const auto &[species, indices] : bySpecies)
                     result[species][region] = indices;
             return result;
+        }
+
+        double averageWithinGroupDistance(const std::vector<size_t> &group) const
+        {
+            double total = 0.0;
+            size_t comparisons = 0;
+            size_t sample = std::min<size_t>(group.size(), 15);
+            for (size_t i = 0; i < sample; ++i)
+            {
+                for (size_t j = i + 1; j < sample; ++j)
+                {
+                    total += population_[group[i]].getGenome().geneticDistance(population_[group[j]].getGenome());
+                    comparisons++;
+                }
+            }
+            return comparisons > 0 ? total / comparisons : 0.0;
         }
 
         double averageInterGroupDistance(const std::vector<size_t> &groupA, const std::vector<size_t> &groupB) const

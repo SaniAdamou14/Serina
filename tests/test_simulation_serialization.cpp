@@ -155,6 +155,7 @@ TEST_CASE("resuming a many-species ecosystem stays bit-identical across several 
     // d'evolution des cerveaux (brainEvolutionInterval = 8).
     Simulation::WorldSimulationParameters params;
     params.speciationDistanceThreshold = 0.08;
+    params.speciationDivergenceMargin = -1.0; // critère absolu historique : garde ce test rapide (le critère relatif par défaut ne se déclenche que sur une vraie divergence)
     params.speciationIsolationGenerations = 5;
 
     UnifiedWorldSimulator original(params, /*seed=*/4711);
