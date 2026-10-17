@@ -234,6 +234,18 @@ namespace Serina::Simulation
         /// jusqu'à une extinction totale garantie, sans rapport avec les
         /// gènes ou l'environnement.
         double foragingRate = 0.15;
+
+        /// Capacité de charge par case, par unité de ressource primaire du
+        /// biome (primaryProducers, 0..1) : le revenu d'alimentation de
+        /// chaque individu est multiplié par (1 - N/K) où N est le nombre
+        /// RÉEL d'individus vivants (toutes espèces) dans sa case et K =
+        /// ce paramètre × ressources de la case. Corrige un vrai défaut du
+        /// modèle trouvé par un run de 30 000 générations : sans aucune
+        /// régulation par la densité (la compétition du Chantier F ne
+        /// s'applique qu'ENTRE espèces), une lignée seule dans son biome
+        /// croissait exponentiellement sans plafond (534 000 individus à la
+        /// génération 9900, sur les trois graines testées).
+        double carryingCapacityPerResource = 400.0;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -817,6 +829,14 @@ namespace Serina::Simulation
                 double resourceLevel = localEnv ? localEnv->resources.primaryProducers : 0.5;
                 double efficiency = organism.getGenome().getTrait(Genetics::TraitType::ENERGY_EFFICIENCY);
                 double foragingIncome = resourceLevel * efficiency * params_.foragingRate;
+
+                // Régulation par la densité : la case ne peut nourrir qu'un
+                // nombre borné d'individus (voir carryingCapacityPerResource).
+                uint32_t localPopulation = 0;
+                for (const auto &[speciesName, entry] : regionSpecies[region])
+                    localPopulation += entry.profile.population;
+                double capacity = std::max(1.0, params_.carryingCapacityPerResource * resourceLevel);
+                foragingIncome *= std::clamp(1.0 - static_cast<double>(localPopulation) / capacity, 0.0, 1.0);
 
                 // Effort de recherche de nourriture décidé par le cerveau
                 // (Chantier G1) : jamais en dessous du plancher de sécurité

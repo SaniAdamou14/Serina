@@ -464,6 +464,43 @@ TEST_CASE("two independently-constructed simulators with the same seed stay bit-
     }
 }
 
+TEST_CASE("density regulation caps crowded cells: income shrinks with local population", "[worldsim][ecology][density]") {
+    // Un run de 30000 generations avait montre qu'une lignee seule dans son
+    // biome croissait exponentiellement sans aucun plafond (534000
+    // individus a la generation 9900, sur 3 graines) : le revenu
+    // d'alimentation ne dependait jamais de la densite locale. A graine
+    // identique, une simulation avec regulation de densite doit accumuler
+    // nettement MOINS d'energie totale qu'une simulation a capacite
+    // quasi infinie quand beaucoup d'individus sont entasses dans peu de
+    // cases (300 individus par lignee fondatrice = 1500 dans une poignee
+    // de cases).
+    WorldSimulationParameters regulated;
+    WorldSimulationParameters unregulated;
+    unregulated.carryingCapacityPerResource = 1e9;
+
+    UnifiedWorldSimulator simRegulated(regulated, 31337);
+    simRegulated.seedFounderSpecies(300);
+    UnifiedWorldSimulator simUnregulated(unregulated, 31337);
+    simUnregulated.seedFounderSpecies(300);
+
+    for (int i = 0; i < 40; ++i) {
+        simRegulated.step();
+        simUnregulated.step();
+    }
+
+    auto totalEnergy = [](UnifiedWorldSimulator &sim) {
+        double total = 0.0;
+        for (const auto &ind : sim.getIndividualSnapshots())
+            total += ind.energy;
+        return total;
+    };
+    double regulatedPerCapita = totalEnergy(simRegulated) / static_cast<double>(simRegulated.getPopulationCount());
+    double unregulatedPerCapita = totalEnergy(simUnregulated) / static_cast<double>(simUnregulated.getPopulationCount());
+
+    REQUIRE(simRegulated.getPopulationCount() > 0);
+    REQUIRE(regulatedPerCapita < unregulatedPerCapita);
+}
+
 TEST_CASE("real predation/competition (Chantier F) does not cause a premature ecosystem collapse", "[worldsim][ecology]") {
     // Test de non-régression bloquant explicitement requis par le Chantier F
     // (réalisme écologique par profils de traits, TraitEcology.hpp) : le
