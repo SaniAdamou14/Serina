@@ -223,11 +223,16 @@ TEST_CASE("population survives a long run instead of guaranteed total extinction
 
     REQUIRE(sim.getGeneration() == 2000);
     REQUIRE(sim.getPopulationCount() > 0);
-    // The fix should produce a real equilibrium (observed in a scratch run:
-    // population settles around 1.5-1.7x its start and oscillates there for
-    // the full 2000 generations), not just "barely nonzero" -- and not
-    // unbounded growth either now that there's a real energy income.
-    REQUIRE(sim.getPopulationCount() < initialPopulation * 5);
+    // The fix should produce a real equilibrium, not just "barely nonzero"
+    // -- and not unbounded growth either now that there's a real energy
+    // income. The ceiling was recalibrated twice from measurements, not
+    // guessed: 5x when foragingRate was 0.15 (population settled around
+    // 1.5-1.7x its start), then 10x after long scientific runs showed 0.15
+    // left the founders below replacement (4/12 extinctions) and 0.35 fixed
+    // that (0/12), at the price of a higher equilibrium -- bounded by the
+    // per-cell density regulation (carryingCapacityPerResource), not by a
+    // thin energy margin.
+    REQUIRE(sim.getPopulationCount() < initialPopulation * 10);
 }
 
 TEST_CASE("reproduction respects biological constraints instead of producing arbitrary offspring", "[worldsim][constraints]") {

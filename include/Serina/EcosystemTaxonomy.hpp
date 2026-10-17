@@ -381,6 +381,20 @@ namespace Serina::Taxonomy
         void setGenusCounters(std::unordered_map<std::string, uint32_t> counters) { nameGenerator_.setGenusCounters(std::move(counters)); }
         void setSpeciesCounters(std::unordered_map<std::string, uint32_t> counters) { nameGenerator_.setSpeciesCounters(std::move(counters)); }
 
+        /// @brief Registre des espèces déjà nommées, pour sauvegarde/reprise :
+        /// registerNewSpecies() y cherche le genre du parent, donc un
+        /// registre vide après reprise fait suivre un autre chemin de
+        /// nommage à la prochaine spéciation -- trouvé par un test de
+        /// déterminisme post-reprise (le nom d'une espèce née après la
+        /// reprise différait de celui d'une simulation jamais interrompue).
+        const std::unordered_map<BiologicalType, std::vector<std::string>> &getTypeSpecies() const { return typeSpecies_; }
+        void restoreRegistry(std::unordered_map<std::string, TaxonomicInfo> species,
+                             std::unordered_map<BiologicalType, std::vector<std::string>> typeSpecies)
+        {
+            species_ = std::move(species);
+            typeSpecies_ = std::move(typeSpecies);
+        }
+
         /// @brief Enregistre une nouvelle espèce
         std::string registerNewSpecies(BiologicalType type, const std::vector<std::string>& traits = {},
                                      const std::string& environment = "", const std::string& parentSpecies = "")

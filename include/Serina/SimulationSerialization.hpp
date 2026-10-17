@@ -207,6 +207,32 @@ namespace Serina::Simulation
         return genome;
     }
 
+    // === Taxonomy::TaxonomicInfo ===
+
+    inline json taxonomicInfoToJson(const Taxonomy::TaxonomicInfo &t)
+    {
+        return json{{"kingdom", t.kingdom}, {"phylum", t.phylum}, {"class", t.class_}, {"order", t.order},
+                    {"family", t.family}, {"genus", t.genus}, {"species", t.species}, {"subspecies", t.subspecies},
+                    {"commonName", t.commonName}, {"type", static_cast<int>(t.type)}, {"generation", t.generation}};
+    }
+
+    inline Taxonomy::TaxonomicInfo taxonomicInfoFromJson(const json &j)
+    {
+        Taxonomy::TaxonomicInfo t;
+        t.kingdom = j.value("kingdom", std::string{});
+        t.phylum = j.value("phylum", std::string{});
+        t.class_ = j.value("class", std::string{});
+        t.order = j.value("order", std::string{});
+        t.family = j.value("family", std::string{});
+        t.genus = j.value("genus", std::string{});
+        t.species = j.value("species", std::string{});
+        t.subspecies = j.value("subspecies", std::string{});
+        t.commonName = j.value("commonName", std::string{});
+        t.type = static_cast<Taxonomy::BiologicalType>(j.at("type").get<int>());
+        t.generation = j.value("generation", 0u);
+        return t;
+    }
+
     // === LineageBrain / SpeciationEvent ===
 
     inline json lineageBrainToJson(const LineageBrain &lb)
@@ -357,6 +383,14 @@ namespace Serina::Simulation
         // l'était toujours pas pour le NOM d'une espèce née par spéciation
         // après reprise, même une fois ecologicalPressure_ corrigé.
         j["taxonomyRngState"] = taxonomy_.getRngState();
+        json taxSpecies = json::object();
+        for (const auto &[name, info] : taxonomy_.getAllSpecies())
+            taxSpecies[name] = taxonomicInfoToJson(info);
+        j["taxonomySpecies"] = taxSpecies;
+        json taxByType = json::object();
+        for (const auto &[type, names] : taxonomy_.getTypeSpecies())
+            taxByType[std::to_string(static_cast<int>(type))] = names;
+        j["taxonomyTypeSpecies"] = taxByType;
         json genusCounters = json::object();
         for (const auto &[genus, count] : taxonomy_.getGenusCounters())
             genusCounters[genus] = count;
@@ -366,6 +400,12 @@ namespace Serina::Simulation
             speciesCounters[species] = count;
         j["taxonomySpeciesCounters"] = speciesCounters;
         j["constraintsRngState"] = constraints_.getRngState();
+
+        j["lifeEvents"] = {{"births", lifeEvents_.births},
+                           {"starvationDeaths", lifeEvents_.starvationDeaths},
+                           {"oldAgeDeaths", lifeEvents_.oldAgeDeaths},
+                           {"predationTransfers", lifeEvents_.predationTransfers},
+                           {"eligibleWithoutPartner", lifeEvents_.eligibleWithoutPartner}};
 
         std::ostringstream rngOss;
         rngOss << rng_;
@@ -468,6 +508,17 @@ namespace Serina::Simulation
         // l'état fraîchement construit, pas idéal mais ne plante pas).
         if (j.contains("taxonomyRngState") && !j.at("taxonomyRngState").get<std::string>().empty())
             sim->taxonomy_.setRngState(j.at("taxonomyRngState").get<std::string>());
+        if (j.contains("taxonomySpecies"))
+        {
+            std::unordered_map<std::string, Taxonomy::TaxonomicInfo> species;
+            for (const auto &[name, val] : j.at("taxonomySpecies").items())
+                species[name] = taxonomicInfoFromJson(val);
+            std::unordered_map<Taxonomy::BiologicalType, std::vector<std::string>> byType;
+            if (j.contains("taxonomyTypeSpecies"))
+                for (const auto &[typeStr, names] : j.at("taxonomyTypeSpecies").items())
+                    byType[static_cast<Taxonomy::BiologicalType>(std::stoi(typeStr))] = names.get<std::vector<std::string>>();
+            sim->taxonomy_.restoreRegistry(std::move(species), std::move(byType));
+        }
         if (j.contains("taxonomyGenusCounters"))
         {
             std::unordered_map<std::string, uint32_t> counters;
@@ -484,6 +535,19 @@ namespace Serina::Simulation
         }
         if (j.contains("constraintsRngState") && !j.at("constraintsRngState").get<std::string>().empty())
             sim->constraints_.setRngState(j.at("constraintsRngState").get<std::string>());
+
+        // Rétrocompatibilité : une sauvegarde locale antérieure à ces
+        // compteurs repart simplement de zéro.
+        sim->lifeEvents_ = {};
+        if (j.contains("lifeEvents"))
+        {
+            const auto &le = j.at("lifeEvents");
+            sim->lifeEvents_.births = le.value("births", uint64_t{0});
+            sim->lifeEvents_.starvationDeaths = le.value("starvationDeaths", uint64_t{0});
+            sim->lifeEvents_.oldAgeDeaths = le.value("oldAgeDeaths", uint64_t{0});
+            sim->lifeEvents_.predationTransfers = le.value("predationTransfers", uint64_t{0});
+            sim->lifeEvents_.eligibleWithoutPartner = le.value("eligibleWithoutPartner", uint64_t{0});
+        }
 
         std::istringstream rngIss(j.at("rngState").get<std::string>());
         rngIss >> sim->rng_;

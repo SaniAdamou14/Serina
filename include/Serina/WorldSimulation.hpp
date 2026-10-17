@@ -60,6 +60,23 @@ namespace Serina::Simulation
         Genetics::AdvancedTraitValues averageTraits;
     };
 
+    /// @brief Compteurs cumulatifs d'événements de vie réels depuis le début
+    /// de la simulation -- observabilité pour comprendre POURQUOI une
+    /// population évolue comme elle le fait (famine ou vieillesse, naissances,
+    /// individus éligibles à la reproduction mais seuls dans leur case)
+    /// plutôt que de deviner à partir des seules courbes d'effectifs.
+    struct LifeEventCounters
+    {
+        uint64_t births = 0;
+        uint64_t starvationDeaths = 0;
+        uint64_t oldAgeDeaths = 0;
+        uint64_t predationTransfers = 0;
+        /// Individus éligibles à la reproduction (énergie/âge suffisants)
+        /// mais seuls de leur espèce dans leur case cette génération-là :
+        /// la mesure directe d'un effet Allee (pas de partenaire).
+        uint64_t eligibleWithoutPartner = 0;
+    };
+
     struct SpeciationEvent
     {
         std::string parentSpecies;
@@ -233,7 +250,17 @@ namespace Serina::Simulation
         /// organisme ne faisait que perdre de l'énergie au métabolisme
         /// jusqu'à une extinction totale garantie, sans rapport avec les
         /// gènes ou l'environnement.
-        double foragingRate = 0.15;
+        ///
+        /// Calibration mesurée (12 graines, 8000 générations, spéciation
+        /// activée) : à 0.15 les fondateurs, d'efficacité moyenne ~0.65,
+        /// sont SOUS le seuil de remplacement (une reproduction coûte 30
+        /// d'énergie à chaque parent, qui doit ensuite la regagner : ~750
+        /// générations entre deux reproductions pour une vie de ~1200, alors
+        /// qu'il en faut 2 par individu) -- 4 extinctions sur 12 ; 0.25 : 1
+        /// sur 12 ; 0.35 : 0 sur 12 ; 0.50 : 0 sur 12 mais populations plus
+        /// grandes. La régulation par la densité (carryingCapacityPerResource)
+        /// plafonne ensuite la population, pas la marge énergétique.
+        double foragingRate = 0.35;
 
         /// Capacité de charge par case, par unité de ressource primaire du
         /// biome (primaryProducers, 0..1) : le revenu d'alimentation de
@@ -384,6 +411,7 @@ namespace Serina::Simulation
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
         /// ce qu'un signal représente réellement et ne représente pas.
         const std::vector<ConvergenceSignal> &getConvergenceSignals() const { return convergenceSignals_; }
+        const LifeEventCounters &getLifeEventCounters() const { return lifeEvents_; }
 
         /// @brief Un instantané par espèce vivante, calculé depuis les
         /// individus réels (jamais un tirage aléatoire).
@@ -530,6 +558,7 @@ namespace Serina::Simulation
         /// jamais purgé, comme speciationEvents_ : un fait mesuré une fois
         /// reste un fait, même si la paire cesse ensuite de converger.
         std::vector<ConvergenceSignal> convergenceSignals_;
+        LifeEventCounters lifeEvents_;
 
         /// @brief Pression écologique réelle mesurée à la dernière
         /// génération pour chaque espèce (Chantier F) -- rempli une fois
@@ -959,6 +988,7 @@ namespace Serina::Simulation
                         // pourraient déséquilibrer le bilan énergétique
                         // total quand prédateurs et proies sont en nombre
                         // différent).
+                        lifeEvents_.predationTransfers++;
                         population_[predatorIdx].setEnergy(population_[predatorIdx].getEnergy() + Ecology::PREDATION_ENERGY_TRANSFER);
                         population_[preyIdx].setEnergy(population_[preyIdx].getEnergy() - Ecology::PREDATION_ENERGY_TRANSFER);
                     }
@@ -968,6 +998,15 @@ namespace Serina::Simulation
 
         void removeDead()
         {
+            for (const auto &o : population_)
+            {
+                if (o.isAlive())
+                    continue;
+                if (o.getEnergy() <= 0.0)
+                    lifeEvents_.starvationDeaths++;
+                else
+                    lifeEvents_.oldAgeDeaths++;
+            }
             population_.erase(
                 std::remove_if(population_.begin(), population_.end(),
                                 [](const Evolution::Organism &o) { return !o.isAlive(); }),
@@ -996,7 +1035,10 @@ namespace Serina::Simulation
                 for (auto &[species, indices] : bySpecies)
                 {
                     if (indices.size() < 2)
+                    {
+                        lifeEvents_.eligibleWithoutPartner += indices.size();
                         continue;
+                    }
                     std::shuffle(indices.begin(), indices.end(), rng_);
 
                     for (size_t i = 0; i + 1 < indices.size(); i += 2)
@@ -1018,6 +1060,7 @@ namespace Serina::Simulation
                 }
             }
 
+            lifeEvents_.births += offspring.size();
             for (auto &child : offspring)
                 population_.push_back(std::move(child));
         }
@@ -1176,8 +1219,24 @@ namespace Serina::Simulation
 
             std::uniform_real_distribution<double> chance(0.0, 1.0);
 
-            for (auto &[species, lineageBrain] : brains_)
+            // Ordre alphabétique des espèces, jamais l'ordre d'itération de
+            // brains_ : cette boucle consomme rng_ espèce par espèce (jets de
+            // mutation structurelle), et l'ordre d'itération d'une
+            // unordered_map dépend de son HISTOIRE d'insertion -- après une
+            // reprise la map est reconstruite dans l'ordre alphabétique du
+            // JSON, dans une simulation jamais interrompue dans l'ordre
+            // chronologique, donc les mêmes tirages tombaient sur des
+            // espèces différentes. Trouvé par un test de déterminisme
+            // post-reprise qui échouait à ~1e-10 près sur l'énergie.
+            std::vector<std::string> speciesOrder;
+            speciesOrder.reserve(brains_.size());
+            for (const auto &entry : brains_)
+                speciesOrder.push_back(entry.first);
+            std::sort(speciesOrder.begin(), speciesOrder.end());
+
+            for (const auto &species : speciesOrder)
             {
+                auto &lineageBrain = brains_.at(species);
                 auto fitnessIt = fitnessBySpecies.find(species);
                 if (fitnessIt == fitnessBySpecies.end())
                     continue; // espèce sans individus ce tour-ci (rare, entre reproduce() et le prochain step)

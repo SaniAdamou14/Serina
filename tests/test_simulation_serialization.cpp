@@ -140,3 +140,39 @@ TEST_CASE("the two global counters (organism id, NEAT innovation) only ever adva
     for (const auto &snap : restored->getIndividualSnapshots())
         REQUIRE(snap.id < Evolution::Organism::getNextId());
 }
+
+TEST_CASE("resuming a many-species ecosystem stays bit-identical across several brain-evolution cycles", "[serialization]")
+{
+    // Durcit le test precedent apres la decouverte d'un vrai bug latent :
+    // evolveBrains() iterait sur brains_ (unordered_map) en consommant rng_
+    // espece par espece, et l'ordre d'iteration d'une unordered_map depend de
+    // son HISTOIRE d'insertion -- apres une reprise elle est reconstruite
+    // dans l'ordre alphabetique du JSON, dans une simulation jamais
+    // interrompue dans l'ordre chronologique. Le test de base ne le voyait
+    // que par chance (peu d'especes, un seul cycle d'evolution des cerveaux
+    // apres la reprise). Ici : un seuil de speciation bas pour avoir
+    // beaucoup d'especes, une reprise a mi-parcours, puis plus de 10 cycles
+    // d'evolution des cerveaux (brainEvolutionInterval = 8).
+    Simulation::WorldSimulationParameters params;
+    params.speciationDistanceThreshold = 0.08;
+    params.speciationIsolationGenerations = 5;
+
+    UnifiedWorldSimulator original(params, /*seed=*/4711);
+    original.seedFounderSpecies(30);
+    for (int i = 0; i < 200; ++i)
+        original.step();
+    REQUIRE(original.getLineageSnapshots().size() >= 6);
+
+    auto blob = original.toJson();
+    auto restored = UnifiedWorldSimulator::fromJson(blob);
+
+    UnifiedWorldSimulator reference(params, /*seed=*/4711);
+    reference.seedFounderSpecies(30);
+    for (int i = 0; i < 200 + 120; ++i)
+        reference.step();
+
+    for (int i = 0; i < 120; ++i)
+        restored->step();
+
+    requireIdenticalStateIgnoringId(*restored, reference);
+}
