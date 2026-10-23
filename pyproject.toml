@@ -1,0 +1,22 @@
+[build-system]
+requires = ["scikit-build-core>=0.10", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "serina"
+version = "1.0.0"
+description = "Serina evolutionary ecosystem simulator - Python bindings"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = []
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.args = ["-DBUILD_PYTHON_MODULE=ON", "-DBUILD_TESTS=OFF"]
+wheel.packages = []
+wheel.install-dir = "serina"
+
+[tool.scikit-build.cmake.define]
+BUILD_PYTHON_MODULE = "ON"
+BUILD_TESTS = "OFF"
