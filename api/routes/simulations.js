@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { param, validationResult } = require('express-validator');
 const database = require('../services/database');
+const { requireApiKey } = require('../middleware/auth');
 
 // GET /api/simulations - Get all simulations
 router.get('/', async (req, res) => {
@@ -22,7 +23,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/simulations - Create new simulation
-router.post('/', async (req, res) => {
+router.post('/', requireApiKey, async (req, res) => {
   try {
     const { name, config } = req.body;
     
@@ -109,7 +110,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // PUT /api/simulations/:id - Update simulation
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = req.body;
@@ -151,7 +152,7 @@ router.get('/:id/species', async (req, res) => {
 });
 
 // POST /api/simulations/:id/species - Save species data
-router.post('/:id/species', async (req, res) => {
+router.post('/:id/species', requireApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const speciesData = req.body;
@@ -205,7 +206,7 @@ router.get('/:id/history', async (req, res) => {
 });
 
 // POST /api/simulations/:id/history - Save evolution snapshot
-router.post('/:id/history', async (req, res) => {
+router.post('/:id/history', requireApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const { generation, data } = req.body;
@@ -283,7 +284,7 @@ router.get('/:id/trends', async (req, res) => {
 });
 
 // POST /api/simulations/:id/performance - Log performance metrics
-router.post('/:id/performance', async (req, res) => {
+router.post('/:id/performance', requireApiKey, async (req, res) => {
   try {
     const { id } = req.params;
     const metrics = req.body;
