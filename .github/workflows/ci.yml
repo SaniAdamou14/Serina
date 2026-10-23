@@ -23,6 +23,22 @@ jobs:
         working-directory: build
         run: ctest --output-on-failure
 
+  cpp-tests-windows:
+    name: C++ build & tests (Windows, MSVC)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DBUILD_TESTS=ON -DBUILD_PYTHON_MODULE=OFF -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure -C Release
+
   api-web:
     name: Node API & web frontend
     runs-on: ubuntu-latest
