@@ -22,36 +22,49 @@ and left to diversify.
 
 ## What actually works today
 
-**The C++ engine** (`include/Serina/`, `src/`) implements two distinct
-simulation models, both real and both compiled:
+**The C++ engine** (`include/Serina/`, `src/`) implements multiple real
+simulation models:
 
-- `SerinaEcosystemSimulator` — the richer model: named species with
-  per-species population, fitness and genetic-diversity scalars, ecosystem-
-  wide biodiversity/stability/speciation/extinction counters, and real
-  acquired adaptations and evolutionary innovations drawn from a biological
-  constraint system (`EvolutionaryConstraints.hpp`, `EcologicalInteractions.hpp`,
-  `EnvironmentalAdaptation.hpp`). This is the model behind `serina_cli` and
-  the web dashboard.
+- `UnifiedWorldSimulator` (Phases 7–8) — the live backend for the web dashboard:
+  real diploid individuals with `AdvancedGenome`, a spatial grid of `Region`s
+  with per-cell biome/climate/resources/pressures, taxonomic lineages, real
+  genetic-distance-based diversity, constraint-checked mutation, ecological
+  interactions with actual foraging income (energy), and NEAT-driven movement
+  where each lineage evolves its own brain via a (1+1) evolution strategy.
+  Speciation emerges from measured genetic divergence with geographic
+  isolation.
+- `SerinaEcosystemSimulator` — the richer aggregate model: named species with
+  per-species population, fitness and genetic-diversity scalars (computed from
+  real state in this model's loop where possible), ecosystem-wide biodiversity/
+  stability/speciation/extinction counters, and real acquired adaptations and
+  evolutionary innovations drawn from a biological constraint system
+  (`EvolutionaryConstraints.hpp`, `EcologicalInteractions.hpp`,
+  `EnvironmentalAdaptation.hpp`). Still usable via `serina_cli` for scripting.
 - `SimulationAPI` / `Genome` — a simpler, single-genome model (8 numeric
   traits, mutation, crossover, fitness) behind `serina_demo` (an interactive
   console demo) and `serina_runner` (an autonomous runner that logs, snapshots
   and reports over an arbitrary number of generations — verified with a live
-  20-generation run). This is also what the Python bindings expose.
+  20-generation run). Also what the Python bindings expose.
 
 Both are exercised by an automated test suite: 8 Catch2 test cases over the
 C++ layer, 21 pytest cases over the Python bindings — all passing in CI on
 every push (`ctest` and `pytest python/tests`, see badge above).
 
-**The API → dashboard pipeline** is a single real path, verified end to end
-with Playwright screenshots against a live simulation, not just typechecked:
-`web` (React) talks over Socket.IO / REST to `api` (Express), which spawns
-`build/bin/serina_cli` per command and ticks the simulation forward for
-real — the dashboard's generation counter, species list, fitness and genetic-
-diversity numbers are the actual `SerinaEcosystemSimulator` state, not
-placeholder or randomly-generated data. When MySQL is connected, every tick
-is also persisted (`evolution_history`, `species` tables) for the history/
-trends endpoints; without it, the API degrades to live-only mode rather than
-failing. Full request/response contract: [`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md).
+**The API → dashboard pipeline** (Phases 9–10) is a single real path:
+`web` (React + TypeScript, Vite) talks over Socket.IO / REST to `api` (Express),
+which connects to `serina_daemon` (C++) over a persistent local TCP JSON-lines
+connection on port 7331. The daemon keeps one or more `UnifiedWorldSimulator`
+instances alive in memory and advances them on its own scheduler thread; the
+Node layer polls state, persists snapshots to MySQL when connected (for
+history/trends), and streams real-time updates via Socket.IO. The RimWorld-style
+dashboard shows a real terrain grid with biome colors, live individuals on the
+map, clickable inspection, a real phylogenetic tree from `speciationEvents`,
+and speed controls. When MySQL is connected, snapshots are persisted to
+`evolution_history`/`species` tables for the history/trends endpoints; without
+it, the API degrades to live-only mode rather than failing. Protocol:
+[`docs/SERINA_DAEMON_PROTOCOL.md`](docs/SERINA_DAEMON_PROTOCOL.md). The
+`serina_cli` JSON contract remains documented in
+[`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md).
 
 ## Why this project exists
 
@@ -69,29 +82,28 @@ output — and what's still missing once it does.
 ## Architecture
 
 ```
-serina_cli (C++, one process per command)
-  init / run N / status / world / genetics  ->  JSON on stdout
+serina_daemon (C++, persistent)
+  keeps UnifiedWorldSimulator in memory, advances on scheduler thread
+  TCP JSON-lines on 127.0.0.1:7331 (create/play/pause/step/status/regions/individuals/lineages)
         ^
-        | --state-file <id>.json  (state persists between invocations)
+        | persistent TCP (api/services/daemonClient.js)
         |
-api/services/simulationEngine.js (Node)
-  spawns serina_cli, ticks it on an interval, persists snapshots to MySQL
+api/services/simulationEngine.js (Node/Express + Socket.IO)
+  polls daemon, persists snapshots to MySQL when connected, streams to clients
         |
-        | Socket.IO ('simulation-data' ticks) + REST (/api/serina/*, /api/simulations/*)
+        | Socket.IO ('simulation-data') + REST (/api/serina/*, /api/simulations/*)
         v
 web (React + TypeScript + Vite)
-  SimulationContext -> SimulationDashboard -> {PopulationChart, SpeciesPanel,
-  GeneticAnalysis, SpeciesEvolutionTree, EnvironmentView, EngineStatus}
+  SimulationContext -> SimulationDashboard -> {WorldMap, SpeciesPanel,
+  GeneticAnalysis, SpeciesEvolutionTree, EnvironmentView, EngineStatus, HistoryView}
 ```
 
-`serina_cli` is a plain request/response CLI, not a daemon — the Node layer
-spawns a fresh process for every `init`/`run`/`status`/`world`/`genetics`
-call. That only produces a coherent, continuously-evolving simulation
-because state round-trips through a JSON file between calls (one file per
-simulation, named by that simulation's database row id); see
-[`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md) for the exact
-contract and [Engineering decisions](#engineering-decisions-and-why) for why
-it's built this way instead of as a long-running process.
+`serina_daemon` is the live backend (Phase 9): it maintains real
+`UnifiedWorldSimulator` state in memory and advances it independently; the
+Node API is a thin bridge that polls and persists. See
+[`docs/SERINA_DAEMON_PROTOCOL.md`](docs/SERINA_DAEMON_PROTOCOL.md).
+`serina_cli` remains available for scripting against the aggregate ecosystem
+model (see [`docs/SERINA_CLI_SCHEMA.md`](docs/SERINA_CLI_SCHEMA.md)).
 
 ## Engineering decisions, and why
 
@@ -170,44 +182,24 @@ need to be hardcoded on the frontend side.
 
 ## Known limitations, deliberately
 
-**NEAT and the advanced per-trait genetic system exist as real code and are
-not wired into the running simulation.** `include/Serina/NEAT.hpp` (620
-lines: nodes, connections, mutation, speciation distance, crossover) and
-`include/Serina/AdvancedGenetics.hpp` (513 lines: diploid genomes, BLX-α
-crossover, 12 bounded traits) are substantial, not stubs — but
-`SerinaEcosystemSimulator` never instantiates either; the class it would
-need, `AI::NEATEvolution`, doesn't exist, and genetic evolution in the live
-loop is a small Gaussian mutation on three scalar traits instead. This is
-the single largest gap between what the codebase contains and what the
-running simulation actually does.
+**NEAT and advanced genetics are wired in the unified engine, not in the legacy ecosystem model.**
+`UnifiedWorldSimulator` (live dashboard backend) uses real `AdvancedGenome`, NEAT brains
+per lineage evolving via (1+1)-ES, and genetic diversity computed from real genome
+distance. `SerinaEcosystemSimulator` (used by `serina_cli`) still uses a simpler path
+in parts of its loop; treat the daemon/unified engine as the source of truth for the
+web dashboard.
 
-**The "genetic diversity" percentage shown per species is redrawn at random
-every generation, not computed from genome distance.** With the advanced
-genetic system unwired (above), `SerinaEcosystemSimulator::updateSpeciesStats()`
-sets it to `uniform(0.1, 1.0)` each tick (`SerinaSimulator.hpp:594`) rather
-than measuring divergence between individuals. Fitness, extinction risk,
-adaptations and innovations are computed from real simulation state;
-genetic diversity, specifically, is not yet — it's a placeholder for where a
-real distance metric would go once the advanced genetics are wired in.
+**Daemon state is in-memory only.** `serina_daemon` does not persist simulation
+state to disk across restarts (see [`docs/SERINA_DAEMON_PROTOCOL.md`](docs/SERINA_DAEMON_PROTOCOL.md)).
+Use the DB-backed snapshots/history when available, or save via the API as implemented.
 
-**The dashboard shows one environment.** `serina_cli world` reports the
-grassland biome every founder species starts in; `EnvironmentType` supports
-several others internally, but nothing currently drives migration into them
-or surfaces their state.
+**No authentication on the API.** Every route, including destructive ones, is open.
+Acceptable for local development against your own database; not for deploying this
+anywhere reachable by anyone else.
 
-**No spatial or terrain visualization.** An earlier dashboard component drew
-a procedural canvas map with no backing data — literally random shapes
-labeled as Serina's geography. It was deleted rather than kept as
-decoration; there is currently no terrain grid in the live ecosystem model
-for a map to honestly represent.
-
-**No authentication on the API.** Every route, including destructive ones,
-is open. Acceptable for local development against your own database; not
-for deploying this anywhere reachable by anyone else.
-
-**No individual-level tracking in the live pipeline.** The database schema
-still has an `individuals` table (population-count history at the species
-level is real; per-organism records are not currently written by anything).
+**Optional persistence.** MySQL/Postgres persistence is optional; without it the
+API serves live simulation data but some history/trends features depend on DB
+connectivity.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full feature-status table
 and the active roadmap.
