@@ -79,15 +79,13 @@ when the (1+1) evolution strategy actually accepts a structural mutation.
 ## What is deliberately not here yet
 
 - **No persistence across a daemon restart.** State lives in memory only;
-  killing the daemon loses the world, the same way closing an unsaved game
-  does. Save/load-to-disk is future work, not a "half-measure" — it was
-  scoped out explicitly so Phase 9 could focus on making live observation
-  real first.
+  killing the daemon loses the world. Save/load-to-disk is planned (see
+  CONTRIBUTING roadmap).
 - **No authentication.** The daemon binds to loopback only and is meant to
   be reached exclusively by the Node API on the same machine.
 - **No extinction-risk score.** `UnifiedWorldSimulator` does not model one
-  yet (unlike the old `SerinaEcosystemSimulator`); the web UI now shows real
-  population counts instead of fabricating a risk percentage from nothing.
+  yet; the web UI shows real population counts instead of fabricating a risk
+  percentage.
 - **One tick rate per simulation**, set via `play`'s `ticksPerSecond` — no
   per-lineage or per-region pacing.
 
