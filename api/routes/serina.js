@@ -4,6 +4,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { requireApiKey } = require('../middleware/auth');
 
 // Le moteur de simulation sera injecté lors de l'initialisation de server.js
 let simulationEngine = null;
@@ -24,7 +25,7 @@ function setSimulationEngine(engine) {
  *       500:
  *         description: Erreur lors du démarrage
  */
-router.post('/start', async (req, res) => {
+router.post('/start', requireApiKey, async (req, res) => {
   try {
     if (!simulationEngine) {
       return res.status(500).json({ error: 'Simulation engine not initialized' });
@@ -74,7 +75,7 @@ router.post('/start', async (req, res) => {
  *     summary: Met en pause une simulation Serina (l'état est conservé)
  *     tags: [Serina]
  */
-router.post('/pause/:simulationId', async (req, res) => {
+router.post('/pause/:simulationId', requireApiKey, async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
@@ -89,7 +90,7 @@ router.post('/pause/:simulationId', async (req, res) => {
  *     summary: Reprend une simulation Serina mise en pause
  *     tags: [Serina]
  */
-router.post('/resume/:simulationId', async (req, res) => {
+router.post('/resume/:simulationId', requireApiKey, async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
@@ -104,7 +105,7 @@ router.post('/resume/:simulationId', async (req, res) => {
  *     summary: Change le rythme réel d'avancement (ticks/seconde) d'une simulation
  *     tags: [Serina]
  */
-router.post('/speed/:simulationId', async (req, res) => {
+router.post('/speed/:simulationId', requireApiKey, async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
@@ -119,7 +120,7 @@ router.post('/speed/:simulationId', async (req, res) => {
  *     summary: Avance manuellement une simulation de N générations (pause ou lecture)
  *     tags: [Serina]
  */
-router.post('/step/:simulationId', async (req, res) => {
+router.post('/step/:simulationId', requireApiKey, async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
@@ -134,7 +135,7 @@ router.post('/step/:simulationId', async (req, res) => {
  *     summary: Sauvegarde un instantané complet sans arrêter la simulation
  *     tags: [Serina]
  */
-router.post('/save/:simulationId', async (req, res) => {
+router.post('/save/:simulationId', requireApiKey, async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });
   }
@@ -149,7 +150,7 @@ router.post('/save/:simulationId', async (req, res) => {
  *     summary: Reprend une simulation à partir de son dernier instantané sauvegardé (distinct de /resume, qui sort seulement d'une pause)
  *     tags: [Serina]
  */
-router.post('/restore/:simulationId', async (req, res) => {
+router.post('/restore/:simulationId', requireApiKey, async (req, res) => {
   try {
     if (!simulationEngine) {
       return res.status(500).json({ error: 'Simulation engine not initialized' });
@@ -190,7 +191,7 @@ router.post('/restore/:simulationId', async (req, res) => {
  *       404:
  *         description: Simulation non trouvée
  */
-router.post('/stop/:simulationId', async (req, res) => {
+router.post('/stop/:simulationId', requireApiKey, async (req, res) => {
   try {
     if (!simulationEngine) {
       return res.status(500).json({ 
