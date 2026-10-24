@@ -215,3 +215,12 @@ and the active roadmap.
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
+
+
+### Installation Python (bindings)
+
+```bash
+pip install .
+# ou en mode développement
+pip install -e .
+```
