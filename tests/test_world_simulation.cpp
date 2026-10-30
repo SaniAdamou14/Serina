@@ -525,35 +525,42 @@ TEST_CASE("density regulation caps crowded cells: income shrinks with local popu
     // individus a la generation 9900, sur 3 graines) : le revenu
     // d'alimentation ne dependait jamais de la densite locale. A graine
     // identique, une simulation avec regulation de densite doit accumuler
-    // nettement MOINS d'energie totale qu'une simulation a capacite
-    // quasi infinie quand beaucoup d'individus sont entasses dans peu de
-    // cases (300 individus par lignee fondatrice = 1500 dans une poignee
-    // de cases).
-    WorldSimulationParameters regulated;
-    WorldSimulationParameters unregulated;
-    unregulated.carryingCapacityPerResource = 1e9;
+    // MOINS d'energie par individu qu'une simulation a capacite quasi infinie
+    // quand beaucoup d'individus sont entasses dans peu de cases (300
+    // individus par lignee fondatrice = 1500 dans une poignee de cases).
+    //
+    // Reproduction coupee : chaque naissance retire 60 d'energie aux parents
+    // et ajoute un enfant a 40, donc elle fait baisser la moyenne d'autant
+    // plus que le revenu est eleve. Avec elle, le resultat dependait de
+    // l'implementation des distributions std:: (faux sous MSVC).
+    for (uint32_t seed : {31337u, 7u, 2024u}) {
+        WorldSimulationParameters regulated;
+        regulated.crossover.crossoverRate = 0.0;
+        WorldSimulationParameters unregulated = regulated;
+        unregulated.carryingCapacityPerResource = 1e9;
 
-    UnifiedWorldSimulator simRegulated(regulated, 31337);
-    simRegulated.seedFounderSpecies(300);
-    UnifiedWorldSimulator simUnregulated(unregulated, 31337);
-    simUnregulated.seedFounderSpecies(300);
+        UnifiedWorldSimulator simRegulated(regulated, seed);
+        simRegulated.seedFounderSpecies(300);
+        UnifiedWorldSimulator simUnregulated(unregulated, seed);
+        simUnregulated.seedFounderSpecies(300);
 
-    for (int i = 0; i < 40; ++i) {
-        simRegulated.step();
-        simUnregulated.step();
+        for (int i = 0; i < 40; ++i) {
+            simRegulated.step();
+            simUnregulated.step();
+        }
+
+        auto totalEnergy = [](UnifiedWorldSimulator &sim) {
+            double total = 0.0;
+            for (const auto &ind : sim.getIndividualSnapshots())
+                total += ind.energy;
+            return total;
+        };
+        double regulatedPerCapita = totalEnergy(simRegulated) / static_cast<double>(simRegulated.getPopulationCount());
+        double unregulatedPerCapita = totalEnergy(simUnregulated) / static_cast<double>(simUnregulated.getPopulationCount());
+
+        REQUIRE(simRegulated.getPopulationCount() > 0);
+        REQUIRE(regulatedPerCapita < unregulatedPerCapita);
     }
-
-    auto totalEnergy = [](UnifiedWorldSimulator &sim) {
-        double total = 0.0;
-        for (const auto &ind : sim.getIndividualSnapshots())
-            total += ind.energy;
-        return total;
-    };
-    double regulatedPerCapita = totalEnergy(simRegulated) / static_cast<double>(simRegulated.getPopulationCount());
-    double unregulatedPerCapita = totalEnergy(simUnregulated) / static_cast<double>(simUnregulated.getPopulationCount());
-
-    REQUIRE(simRegulated.getPopulationCount() > 0);
-    REQUIRE(regulatedPerCapita < unregulatedPerCapita);
 }
 
 TEST_CASE("real predation/competition (Chantier F) does not cause a premature ecosystem collapse", "[worldsim][ecology]") {

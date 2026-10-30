@@ -44,10 +44,10 @@ namespace Serina::Environment
         double shelter;          ///< Abris disponibles [0-1]
         double nestingSites;     ///< Sites de nidification [0-1]
         
-        ResourceAvailability(double plants = 0.7, double det = 0.5, double small = 0.4,
-                           double large = 0.2, double min = 0.6, double water = 0.8,
+        ResourceAvailability(double plants = 0.7, double det = 0.5, double smallP = 0.4,
+                           double largeP = 0.2, double min = 0.6, double water = 0.8,
                            double shel = 0.6, double nest = 0.5)
-            : primaryProducers(plants), detritus(det), smallPrey(small), largePrey(large),
+            : primaryProducers(plants), detritus(det), smallPrey(smallP), largePrey(largeP),
               minerals(min), waterQuality(water), shelter(shel), nestingSites(nest) {}
     };
 
