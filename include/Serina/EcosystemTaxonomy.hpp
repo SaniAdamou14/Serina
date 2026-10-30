@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include <string>
 #include <vector>
 #include <unordered_map>

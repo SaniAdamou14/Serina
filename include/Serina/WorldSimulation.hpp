@@ -7,6 +7,7 @@
 // ecological interactions and biological constraints applied per
 // individual rather than per aggregate species.
 
+#include "DeterministicRandom.hpp"
 #include "Region.hpp"
 #include "PopulationManager.hpp"
 #include "EcosystemTaxonomy.hpp"
@@ -18,6 +19,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <map>
 #include <string>
 #include <random>
 #include <algorithm>
@@ -378,7 +380,7 @@ namespace Serina::Simulation
                 if (candidateRegions.empty())
                     candidateRegions = {{0, 0}}; // biome absent de cette carte : repli sur l'origine
 
-                std::uniform_int_distribution<size_t> regionPick(0, candidateRegions.size() - 1);
+                Det::UniformInt<size_t> regionPick(0, candidateRegions.size() - 1);
 
                 for (uint32_t i = 0; i < individualsPerFounder; ++i)
                 {
@@ -569,9 +571,9 @@ namespace Serina::Simulation
         Evolution::SerinaEvolutionaryConstraints constraints_;
 
         std::vector<Evolution::Organism> population_;
-        std::unordered_map<std::string, Taxonomy::BiologicalType> biologicalTypeOf_;
-        std::unordered_map<std::string, uint32_t> divergentStreak_; ///< par espèce
-        std::unordered_map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
+        std::map<std::string, Taxonomy::BiologicalType> biologicalTypeOf_;
+        std::map<std::string, uint32_t> divergentStreak_; ///< par espèce
+        std::map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
 
         /// @brief Sorties complètes du cerveau de chaque individu vivant
@@ -592,7 +594,7 @@ namespace Serina::Simulation
         /// à l'autre -- c'est justement la comparaison à la mesure
         /// PRÉCÉDENTE qui permet de détecter une tendance, pas un seul
         /// instantané isolé.
-        std::unordered_map<std::string, Ecology::ConvergenceSample> lastConvergenceSample_;
+        std::map<std::string, Ecology::ConvergenceSample> lastConvergenceSample_;
         /// @brief Historique réel des signaux de convergence détectés --
         /// jamais purgé, comme speciationEvents_ : un fait mesuré une fois
         /// reste un fait, même si la paire cesse ensuite de converger.
@@ -610,7 +612,7 @@ namespace Serina::Simulation
             bool isPreyOfSomeone = false;
             bool isInCompetition = false;
         };
-        std::unordered_map<std::string, EcologicalPressureSummary> ecologicalPressure_;
+        std::map<std::string, EcologicalPressureSummary> ecologicalPressure_;
 
         uint32_t generation_ = 0;
         mutable std::mt19937 rng_;
@@ -637,7 +639,7 @@ namespace Serina::Simulation
 
         void placeInRegion(Evolution::Organism &organism, int gx, int gy)
         {
-            std::uniform_real_distribution<double> jitter(0.0, params_.cellSize);
+            Det::UniformReal jitter(0.0, params_.cellSize);
             organism.setPosition(gx * params_.cellSize + jitter(rng_), gy * params_.cellSize + jitter(rng_));
         }
 
@@ -653,7 +655,7 @@ namespace Serina::Simulation
         /// plutôt que de planter.
         void moveOrganisms()
         {
-            std::uniform_real_distribution<double> fallback(-params_.cellSize * 0.5, params_.cellSize * 0.5);
+            Det::UniformReal fallback(-params_.cellSize * 0.5, params_.cellSize * 0.5);
             latestBrainOutputs_.clear();
 
             // --- Agrégats réels par région pour les nouvelles entrées
@@ -670,8 +672,8 @@ namespace Serina::Simulation
                 uint32_t count = 0;
                 double aggressionSum = 0.0;
             };
-            std::unordered_map<long long, RegionAggregate> regionTotals;
-            std::unordered_map<long long, std::unordered_map<std::string, RegionSpeciesAggregate>> regionSpeciesTotals;
+            std::map<long long, RegionAggregate> regionTotals;
+            std::map<long long, std::map<std::string, RegionSpeciesAggregate>> regionSpeciesTotals;
 
             for (const auto &organism : population_)
             {
@@ -804,7 +806,7 @@ namespace Serina::Simulation
         void applySurvivalAndInteractions()
         {
             // --- Passe 1 : profil de traits réel moyen par (région, espèce) ---
-            std::unordered_map<long long, std::unordered_map<std::string, RegionSpeciesEntry>> regionSpecies;
+            std::map<long long, std::map<std::string, RegionSpeciesEntry>> regionSpecies;
             for (size_t i = 0; i < population_.size(); ++i)
             {
                 const auto &organism = population_[i];
@@ -842,8 +844,8 @@ namespace Serina::Simulation
                 std::string speciesB;
                 Ecology::RelationClassification classification;
             };
-            std::unordered_map<long long, std::vector<RegionRelation>> regionRelations;
-            std::unordered_map<std::string, EcologicalPressureSummary> pressureThisGeneration;
+            std::map<long long, std::vector<RegionRelation>> regionRelations;
+            std::map<std::string, EcologicalPressureSummary> pressureThisGeneration;
 
             for (auto &[region, bySpecies] : regionSpecies)
             {
@@ -950,8 +952,8 @@ namespace Serina::Simulation
             // personnel décidé par son propre cerveau -- jamais un second
             // canal indépendant, seulement une modulation bornée de ce qui
             // existe déjà. ---
-            std::uniform_real_distribution<double> huntRoll(0.0, 1.0);
-            std::uniform_real_distribution<double> evasionRoll(0.0, 1.0);
+            Det::UniformReal huntRoll(0.0, 1.0);
+            Det::UniformReal evasionRoll(0.0, 1.0);
             for (auto &[region, relations] : regionRelations)
             {
                 const auto &speciesHere = regionSpecies[region];
@@ -986,7 +988,7 @@ namespace Serina::Simulation
                     if (probability <= 0.0)
                         continue;
 
-                    std::uniform_int_distribution<size_t> preyPick(0, preyIndices.size() - 1);
+                    Det::UniformInt<size_t> preyPick(0, preyIndices.size() - 1);
                     for (size_t predatorIdx : predatorIt->second.individualIndices)
                     {
                         if (!population_[predatorIdx].isAlive())
@@ -1057,7 +1059,7 @@ namespace Serina::Simulation
             // Regroupe les reproducteurs potentiels par (région, espèce) :
             // seuls des individus de la même espèce, dans la même région,
             // se reproduisent ensemble.
-            std::unordered_map<long long, std::unordered_map<std::string, std::vector<size_t>>> candidates;
+            std::map<long long, std::map<std::string, std::vector<size_t>>> candidates;
             for (size_t i = 0; i < population_.size(); ++i)
             {
                 if (!population_[i].canReproduce())
@@ -1067,7 +1069,7 @@ namespace Serina::Simulation
             }
 
             std::vector<Evolution::Organism> offspring;
-            std::uniform_real_distribution<double> crossoverChance(0.0, 1.0);
+            Det::UniformReal crossoverChance(0.0, 1.0);
 
             for (auto &[key, bySpecies] : candidates)
             {
@@ -1078,7 +1080,7 @@ namespace Serina::Simulation
                         lifeEvents_.eligibleWithoutPartner += indices.size();
                         continue;
                     }
-                    std::shuffle(indices.begin(), indices.end(), rng_);
+                    Det::shuffle(indices.begin(), indices.end(), rng_);
 
                     for (size_t i = 0; i + 1 < indices.size(); i += 2)
                     {
@@ -1159,7 +1161,13 @@ namespace Serina::Simulation
                 // Les deux plus grands sous-groupes régionaux.
                 std::vector<std::pair<long long, std::vector<size_t>>> sorted(regionGroups.begin(), regionGroups.end());
                 std::sort(sorted.begin(), sorted.end(),
-                          [](const auto &a, const auto &b) { return a.second.size() > b.second.size(); });
+                          [](const auto &a, const auto &b) {
+                              // À taille égale, la clé de région départage : le résultat
+                              // de std::sort sur des égalités dépend du compilateur.
+                              if (a.second.size() != b.second.size())
+                                  return a.second.size() > b.second.size();
+                              return a.first < b.first;
+                          });
 
                 const auto &groupA = sorted[0].second;
                 const auto &groupB = sorted[1].second;
@@ -1263,11 +1271,11 @@ namespace Serina::Simulation
         void evolveBrains()
         {
             auto snapshots = buildSnapshots();
-            std::unordered_map<std::string, double> fitnessBySpecies;
+            std::map<std::string, double> fitnessBySpecies;
             for (const auto &snap : snapshots)
                 fitnessBySpecies[snap.speciesName] = snap.averageFitness;
 
-            std::uniform_real_distribution<double> chance(0.0, 1.0);
+            Det::UniformReal chance(0.0, 1.0);
 
             // Ordre alphabétique des espèces, jamais l'ordre d'itération de
             // brains_ : cette boucle consomme rng_ espèce par espèce (jets de
@@ -1329,8 +1337,8 @@ namespace Serina::Simulation
         /// génération.
         void checkConvergence()
         {
-            std::unordered_map<std::string, std::vector<size_t>> bySpecies;
-            std::unordered_map<std::string, std::set<Ecosystem::EnvironmentType>> biomesBySpecies;
+            std::map<std::string, std::vector<size_t>> bySpecies;
+            std::map<std::string, std::set<Ecosystem::EnvironmentType>> biomesBySpecies;
             for (size_t i = 0; i < population_.size(); ++i)
             {
                 if (!population_[i].isAlive())
@@ -1347,7 +1355,7 @@ namespace Serina::Simulation
             // Réutilise les traits moyens déjà calculés par buildSnapshots()
             // plutôt que de les recalculer une seconde fois.
             auto snapshots = buildSnapshots();
-            std::unordered_map<std::string, const LineageSnapshot *> snapshotByName;
+            std::map<std::string, const LineageSnapshot *> snapshotByName;
             for (const auto &snap : snapshots)
                 snapshotByName[snap.speciesName] = &snap;
 
@@ -1409,9 +1417,9 @@ namespace Serina::Simulation
 
         long long regionKey(int gx, int gy) const { return static_cast<long long>(gx) * 100000 + gy; }
 
-        std::unordered_map<long long, std::unordered_map<std::string, std::vector<size_t>>> groupByRegionAndSpecies() const
+        std::map<long long, std::map<std::string, std::vector<size_t>>> groupByRegionAndSpecies() const
         {
-            std::unordered_map<long long, std::unordered_map<std::string, std::vector<size_t>>> result;
+            std::map<long long, std::map<std::string, std::vector<size_t>>> result;
             for (size_t i = 0; i < population_.size(); ++i)
             {
                 auto [gx, gy] = regionOf(population_[i]);
@@ -1420,10 +1428,10 @@ namespace Serina::Simulation
             return result;
         }
 
-        std::unordered_map<std::string, std::unordered_map<long long, std::vector<size_t>>>
-        bySpeciesRegionIndex(const std::unordered_map<long long, std::unordered_map<std::string, std::vector<size_t>>> &byRegion) const
+        std::map<std::string, std::map<long long, std::vector<size_t>>>
+        bySpeciesRegionIndex(const std::map<long long, std::map<std::string, std::vector<size_t>>> &byRegion) const
         {
-            std::unordered_map<std::string, std::unordered_map<long long, std::vector<size_t>>> result;
+            std::map<std::string, std::map<long long, std::vector<size_t>>> result;
             for (const auto &[region, bySpecies] : byRegion)
                 for (const auto &[species, indices] : bySpecies)
                     result[species][region] = indices;
@@ -1464,17 +1472,17 @@ namespace Serina::Simulation
             return comparisons > 0 ? total / comparisons : 0.0;
         }
 
-        std::unordered_map<std::string, uint32_t> populationCountsBySpecies() const
+        std::map<std::string, uint32_t> populationCountsBySpecies() const
         {
-            std::unordered_map<std::string, uint32_t> counts;
+            std::map<std::string, uint32_t> counts;
             for (const auto &organism : population_)
                 counts[organism.getSpecies()]++;
             return counts;
         }
 
-        std::unordered_map<long long, uint32_t> populationCountsByRegion() const
+        std::map<long long, uint32_t> populationCountsByRegion() const
         {
-            std::unordered_map<long long, uint32_t> counts;
+            std::map<long long, uint32_t> counts;
             for (const auto &organism : population_)
             {
                 if (!organism.isAlive())
@@ -1487,7 +1495,7 @@ namespace Serina::Simulation
 
         std::vector<LineageSnapshot> buildSnapshots() const
         {
-            std::unordered_map<std::string, std::vector<size_t>> bySpecies;
+            std::map<std::string, std::vector<size_t>> bySpecies;
             for (size_t i = 0; i < population_.size(); ++i)
                 bySpecies[population_[i].getSpecies()].push_back(i);
 
@@ -1522,7 +1530,7 @@ namespace Serina::Simulation
                 }
                 snap.geneticDiversity = comparisons > 0 ? distanceSum / comparisons : 0.0;
 
-                std::unordered_map<long long, bool> regions;
+                std::map<long long, bool> regions;
                 for (size_t idx : indices)
                 {
                     auto [gx, gy] = regionOf(population_[idx]);

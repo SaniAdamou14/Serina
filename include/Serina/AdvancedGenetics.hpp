@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include <vector>
 #include <string>
 #include <sstream>
@@ -251,8 +252,8 @@ namespace Serina::Genetics
             traits_.reserve(static_cast<size_t>(TraitType::TRAIT_COUNT));
 
             auto &rng = rng_;
-            std::uniform_real_distribution<double> valueDist(0.0, 1.0);
-            std::uniform_real_distribution<double> dominanceDist(0.0, 1.0);
+            Det::UniformReal valueDist(0.0, 1.0);
+            Det::UniformReal dominanceDist(0.0, 1.0);
 
             for (size_t i = 0; i < static_cast<size_t>(TraitType::TRAIT_COUNT); ++i)
             {
@@ -276,7 +277,7 @@ namespace Serina::Genetics
             }
 
             auto &rng = rng_;
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
+            Det::UniformReal dist(0.0, 1.0);
 
             for (size_t i = 0; i < present.size(); ++i)
             {
@@ -298,7 +299,7 @@ namespace Serina::Genetics
         void generateLineageId()
         {
             auto &rng = rng_;
-            std::uniform_int_distribution<uint32_t> dist(0, 0xFFFFFFFF);
+            Det::UniformInt<uint32_t> dist(0, 0xFFFFFFFF);
 
             std::stringstream ss;
             ss << std::hex << dist(rng) << "_G" << generation_;
@@ -343,8 +344,8 @@ namespace Serina::Genetics
         void mutate(const MutationConfig &config)
         {
             auto &rng = rng_;
-            std::uniform_real_distribution<double> probDist(0.0, 1.0);
-            std::normal_distribution<double> gaussianDist(0.0, config.gaussianStdDev);
+            Det::UniformReal probDist(0.0, 1.0);
+            Det::Normal gaussianDist(0.0, config.gaussianStdDev);
 
             bool mutated = false;
 
@@ -396,8 +397,8 @@ namespace Serina::Genetics
         {
             AdvancedTraitValues mutatedTraits = originalTraits;
             auto &rng = rng_;
-            std::uniform_real_distribution<double> probDist(0.0, 1.0);
-            std::normal_distribution<double> gaussianDist(0.0, 0.1); // 10% de déviation standard
+            Det::UniformReal probDist(0.0, 1.0);
+            Det::Normal gaussianDist(0.0, 0.1); // 10% de déviation standard
 
             // Muter chaque trait avec la probabilité donnée
             if (probDist(rng) < mutationRate) mutatedTraits.size += gaussianDist(rng);
@@ -475,7 +476,7 @@ namespace Serina::Genetics
             offspringTraits.reserve(traits_.size());
 
             auto &rng = rng_;
-            std::uniform_real_distribution<double> uniform(0.0, 1.0);
+            Det::UniformReal uniform(0.0, 1.0);
 
             for (size_t i = 0; i < traits_.size(); ++i)
             {

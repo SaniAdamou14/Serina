@@ -86,3 +86,10 @@ target_link_libraries(test_simulation_serialization PRIVATE
 target_include_directories(test_simulation_serialization PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_features(test_simulation_serialization PRIVATE cxx_std_20)
 catch_discover_tests(test_simulation_serialization)
+
+# Graine identique = monde identique sur tous les compilateurs.
+add_executable(test_determinism test_determinism.cpp)
+target_link_libraries(test_determinism PRIVATE Catch2::Catch2WithMain nlohmann_json::nlohmann_json)
+target_include_directories(test_determinism PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_determinism PRIVATE cxx_std_20)
+catch_discover_tests(test_determinism)

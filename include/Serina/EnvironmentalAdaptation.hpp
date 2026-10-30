@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "SerinaEcosystem.hpp"
 #include "EcologicalInteractions.hpp"
 #include "AdvancedGenetics.hpp"
@@ -497,7 +498,7 @@ namespace Serina::Environment
             // Facteurs climatiques
             double tempOptimum = getSpeciesTemperatureOptimum(characteristics);
             double tempStress = std::abs(env.climate.temperature - tempOptimum) / 30.0;
-            fitness *= std::exp(-tempStress);
+            fitness *= Det::exp(-tempStress);
 
             // Disponibilité des ressources selon le régime alimentaire
             double resourceFitness = getResourceFitness(characteristics.diet, env.resources);
@@ -532,14 +533,14 @@ namespace Serina::Environment
             // Changements climatiques graduels
             for (auto& [envType, env] : environments_)
             {
-                std::uniform_real_distribution<double> changeDist(-0.01, 0.01);
+                Det::UniformReal changeDist(-0.01, 0.01);
                 
                 // Dérive climatique lente
                 env.climate.temperature += changeDist(rng_) * years;
                 env.climate.precipitation *= (1.0 + changeDist(rng_) * years * 0.1);
                 
                 // Événements stochastiques
-                std::uniform_real_distribution<double> eventDist(0.0, 1.0);
+                Det::UniformReal eventDist(0.0, 1.0);
                 if (eventDist(rng_) < env.stochasticEvents * years * 0.01)
                 {
                     // Événement majeur (sécheresse, inondation, etc.)
@@ -608,7 +609,7 @@ namespace Serina::Environment
 
         void simulateStochasticEvent(EnvironmentDefinition& env)
         {
-            std::uniform_int_distribution<int> eventType(0, 3);
+            Det::UniformInt<int> eventType(0, 3);
             
             switch (eventType(rng_))
             {

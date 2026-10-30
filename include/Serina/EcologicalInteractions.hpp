@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "SerinaEcosystem.hpp"
 #include <memory>
 #include <vector>
@@ -346,7 +347,7 @@ namespace Serina::Ecology
                     newInteraction.speciesA = descendantSpecies;
                     
                     // Modifier légèrement les paramètres pour refléter l'évolution
-                    std::uniform_real_distribution<double> evolutionDist(-0.1, 0.1);
+                    Det::UniformReal evolutionDist(-0.1, 0.1);
                     newInteraction.strength.effectOnSpeciesA += evolutionDist(rng_);
                     newInteraction.huntingEfficiency = std::clamp(newInteraction.huntingEfficiency + evolutionDist(rng_), 0.0, 1.0);
                     newInteraction.escapeAbility = std::clamp(newInteraction.escapeAbility + evolutionDist(rng_), 0.0, 1.0);
@@ -358,7 +359,7 @@ namespace Serina::Ecology
                     EcologicalInteraction newInteraction = interaction;
                     newInteraction.speciesB = descendantSpecies;
                     
-                    std::uniform_real_distribution<double> evolutionDist(-0.1, 0.1);
+                    Det::UniformReal evolutionDist(-0.1, 0.1);
                     newInteraction.strength.effectOnSpeciesB += evolutionDist(rng_);
                     newInteraction.escapeAbility = std::clamp(newInteraction.escapeAbility + evolutionDist(rng_), 0.0, 1.0);
                     
@@ -430,7 +431,7 @@ namespace Serina::Ecology
                 
             case InteractionType::MUTUALISM:
                 // Effet positif renforcé par les populations
-                intensity *= std::log(1 + populationA) * std::log(1 + populationB) / 100.0;
+                intensity *= Det::log(1.0 + populationA) * Det::log(1.0 + populationB) / 100.0;
                 break;
                 
             case InteractionType::PARASITISM:
