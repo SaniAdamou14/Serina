@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { Map as MapIcon, ChevronUp, ChevronDown, Pin, PinOff, Columns3, Maximize2 } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
@@ -54,6 +54,7 @@ interface ViewBox {
 const MIN_VIEW_FRACTION = 0.06;
 const MAX_VIEW_FRACTION = 1.3;
 const INITIAL_VIEW_FRACTION = 0.6;
+const PAN_STEP_FRACTION = 0.15;
 const DETAIL_ZOOM_THRESHOLD = 1.2; // en "zoom equivalent" (worldWidth / viewBox.w)
 
 function clampViewBox(vb: ViewBox, worldWidth: number, worldHeight: number): ViewBox {
@@ -88,7 +89,7 @@ export function WorldMap() {
   const [legendCollapsed, setLegendCollapsed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
-  const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number } | null>(null);
+  const cursorReadoutRef = useRef<HTMLDivElement>(null);
   const [showIndividuals, setShowIndividuals] = useState(true);
   const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -117,82 +118,6 @@ export function WorldMap() {
     setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
   }, [worldWidth, worldHeight]);
 
-  // Raccourcis clavier pour naviguer sur la carte (façon RimWorld/RTS)
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!viewBox) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-
-      const panStep = viewBox.w * 0.15;
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, x: v.x - panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, x: v.x + panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, y: v.y - panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, y: v.y + panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        zoomByFactor(1 / 1.25);
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
-        zoomByFactor(1.25);
-      } else if (e.key === '0' || e.key === 'Home') {
-        e.preventDefault();
-        resetView();
-      } else if (e.key === 'i' || e.key === 'I') {
-        e.preventDefault();
-        setShowIndividuals((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [viewBox, worldWidth, worldHeight]);
-
-  // Raccourcis clavier pour naviguer sur la carte (façon RimWorld/RTS)
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (!viewBox) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
-
-      const panStep = viewBox.w * 0.15;
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, x: v.x - panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, x: v.x + panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, y: v.y - panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setViewBox((v) => v ? clampViewBox({ ...v, y: v.y + panStep }, worldWidth, worldHeight) : v);
-      } else if (e.key === '+' || e.key === '=') {
-        e.preventDefault();
-        zoomByFactor(1 / 1.25);
-      } else if (e.key === '-' || e.key === '_') {
-        e.preventDefault();
-        zoomByFactor(1.25);
-      } else if (e.key === '0' || e.key === 'Home') {
-        e.preventDefault();
-        resetView();
-      } else if (e.key === 'i' || e.key === 'I') {
-        e.preventDefault();
-        setShowIndividuals((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [viewBox, worldWidth, worldHeight]);
-
   const lineages = simulationData?.status.lineages;
   const speciationEvents = simulationData?.lineages.speciationEvents;
   const lineageHues = useMemo(() => {
@@ -200,7 +125,7 @@ export function WorldMap() {
     return computeLineageHues(speciationEvents ?? [], names);
   }, [lineages, speciationEvents]);
 
-  const zoomByFactor = (factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
+  const zoomByFactor = useCallback((factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
     setViewBox((current) => {
       if (!current) return current;
       const worldX = current.x + anchorXFrac * current.w;
@@ -216,7 +141,7 @@ export function WorldMap() {
         worldHeight
       );
     });
-  };
+  }, [worldWidth, worldHeight]);
 
   const handleWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -257,7 +182,12 @@ export function WorldMap() {
     const rect = containerRef.current.getBoundingClientRect();
     const worldX = viewBox.x + (e.clientX - rect.left) / rect.width * viewBox.w;
     const worldY = viewBox.y + (e.clientY - rect.top) / rect.height * viewBox.h;
-    setCursorWorld({ x: worldX, y: worldY });
+    // Écrit directement dans le DOM : un setState ici redessinerait tout le
+    // SVG (un élément par individu) à chaque mouvement de souris.
+    if (cursorReadoutRef.current) {
+      cursorReadoutRef.current.textContent = `x: ${Math.round(worldX)} y: ${Math.round(worldY)}`;
+      cursorReadoutRef.current.style.display = 'block';
+    }
   };
 
   const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -273,12 +203,62 @@ export function WorldMap() {
     });
   };
 
-  const resetView = () => {
+  const resetView = useCallback(() => {
     if (worldWidth <= 0 || worldHeight <= 0) return;
     const w = worldWidth * INITIAL_VIEW_FRACTION;
     const h = worldHeight * INITIAL_VIEW_FRACTION;
     setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
+  }, [worldWidth, worldHeight]);
+
+  const fitWorld = () => {
+    if (worldWidth <= 0 || worldHeight <= 0) return;
+    setViewBox({ x: 0, y: 0, w: worldWidth, h: worldHeight });
   };
+
+  // Raccourcis clavier pour naviguer sur la carte (façon RimWorld/RTS)
+  useEffect(() => {
+    const pan = (dxFrac: number, dyFrac: number) =>
+      setViewBox((v) => (v ? clampViewBox({ ...v, x: v.x + v.w * dxFrac, y: v.y + v.w * dyFrac }, worldWidth, worldHeight) : v));
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+
+      const actions: Record<string, () => void> = {
+        ArrowLeft: () => pan(-PAN_STEP_FRACTION, 0),
+        ArrowRight: () => pan(PAN_STEP_FRACTION, 0),
+        ArrowUp: () => pan(0, -PAN_STEP_FRACTION),
+        ArrowDown: () => pan(0, PAN_STEP_FRACTION),
+        '+': () => zoomByFactor(1 / 1.25),
+        '=': () => zoomByFactor(1 / 1.25),
+        '-': () => zoomByFactor(1.25),
+        _: () => zoomByFactor(1.25),
+        '0': resetView,
+        Home: resetView,
+        i: () => setShowIndividuals((v) => !v),
+        I: () => setShowIndividuals((v) => !v),
+      };
+      const action = actions[e.key];
+      if (!action) return;
+      e.preventDefault();
+      action();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [worldWidth, worldHeight, zoomByFactor, resetView]);
+
+  const regionList = simulationData?.regions.regions;
+  const biomeStats = useMemo(() => {
+    const stats = new Map<string, { regions: number; individuals: number }>();
+    for (const region of regionList ?? []) {
+      const name = region.environmentName || 'Inconnu';
+      const entry = stats.get(name) || { regions: 0, individuals: 0 };
+      entry.regions += 1;
+      entry.individuals += region.population || 0;
+      stats.set(name, entry);
+    }
+    return stats;
+  }, [regionList]);
 
   const navigateFromMinimap = (worldX: number, worldY: number) => {
     setViewBox((current) => {
@@ -300,18 +280,6 @@ export function WorldMap() {
   const distinctBiomes = Array.from(new Set(regions.map((r) => r.environmentName))).filter(Boolean);
   const currentZoom = worldWidth / viewBox.w;
   const detailed = currentZoom >= DETAIL_ZOOM_THRESHOLD;
-
-  const biomeStats = useMemo(() => {
-    const stats = new Map<string, { regions: number; individuals: number }>();
-    for (const region of regions) {
-      const name = region.environmentName || 'Inconnu';
-      const entry = stats.get(name) || { regions: 0, individuals: 0 };
-      entry.regions += 1;
-      entry.individuals += region.population || 0;
-      stats.set(name, entry);
-    }
-    return stats;
-  }, [regions]);
 
   const overlayMetric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
   const overlayRange = overlayMetric
@@ -354,7 +322,7 @@ export function WorldMap() {
         onMouseDown={handleMouseDown}
         onMouseMove={(e) => { handleMouseMove(e); handleMouseMoveWorld(e); }}
         onMouseUp={stopDragging}
-        onMouseLeave={() => { stopDragging(); setCursorWorld(null); }}
+        onMouseLeave={() => { stopDragging(); if (cursorReadoutRef.current) cursorReadoutRef.current.style.display = 'none'; }}
         onDoubleClick={handleDoubleClick}
       >
         <svg viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`} style={{ width: '100%', height: '100%' }}>
@@ -438,11 +406,11 @@ export function WorldMap() {
         </div>
         <div className="flex flex-col items-end gap-2 pointer-events-auto">
           <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg">
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1 / 1.25)} title="Zoom arrière (-)">−</button>
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1.25)} title="Zoom arrière (-)">−</button>
             <span className="text-slate-300 text-xs w-12 text-center">{Math.round(currentZoom * 100)}%</span>
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1.25)} title="Zoom avant (+)">+</button>
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1 / 1.25)} title="Zoom avant (+)">+</button>
             <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-xs ml-1" onClick={resetView} title="Recentrer (0/Home)">Recentrer</button>
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-1.5 py-1" onClick={resetView} title="Ajuster à la vue d'ensemble">
+            <button className="text-slate-200 hover:bg-slate-700 rounded px-1.5 py-1" onClick={fitWorld} title="Ajuster à la vue d'ensemble">
               <Maximize2 className="w-3.5 h-3.5" />
             </button>
             <button className={showIndividuals ? "text-primary-400 hover:bg-slate-700 rounded px-2 py-1 text-xs" : "text-slate-400 hover:bg-slate-700 rounded px-2 py-1 text-xs"} onClick={() => setShowIndividuals((v) => !v)} title="Afficher/Masquer individus (I)">
@@ -479,11 +447,11 @@ export function WorldMap() {
         </div>
       )}
 
-      {cursorWorld && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-slate-400 rounded px-2 py-1 text-[10px] pointer-events-none shadow-lg">
-          x: {Math.round(cursorWorld.x)} y: {Math.round(cursorWorld.y)}
-        </div>
-      )}
+      <div
+        ref={cursorReadoutRef}
+        className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-slate-400 rounded px-2 py-1 text-[10px] pointer-events-none shadow-lg"
+        style={{ display: 'none' }}
+      />
 
       {/* Légendes flottantes en bas à gauche -- hauteur bornée et repliable :
           la liste d'espèces grandit avec les spéciations réelles et finissait
