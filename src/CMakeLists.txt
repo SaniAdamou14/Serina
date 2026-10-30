@@ -1,8 +1,3 @@
-add_subdirectory(core)
-add_subdirectory(viewmodel)
-add_subdirectory(utils)
-
-# Find nlohmann/json for CLI tool
 find_package(nlohmann_json QUIET)
 if(NOT nlohmann_json_FOUND)
     message(STATUS "nlohmann/json not found, downloading...")
@@ -14,40 +9,10 @@ if(NOT nlohmann_json_FOUND)
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-# Build main demo executable
-add_executable(serina_demo main.cpp)
-target_link_libraries(serina_demo PRIVATE 
-    serina_core 
-    serina_viewmodel 
-    serina_utils
-)
-target_include_directories(serina_demo PRIVATE ../include)
-
-# Build CLI executable for web backend integration
-add_executable(serina_cli serina_cli.cpp)
-target_link_libraries(serina_cli PRIVATE 
-    serina_core 
-    serina_viewmodel 
-    serina_utils
-    nlohmann_json::nlohmann_json
-)
-target_include_directories(serina_cli PRIVATE ../include)
-
-# Build autonomous evolution runner
-add_executable(serina_runner serina_runner.cpp)
-target_link_libraries(serina_runner PRIVATE
-    serina_core
-    serina_viewmodel
-    serina_utils
-)
-target_include_directories(serina_runner PRIVATE ../include)
-target_compile_features(serina_runner PRIVATE cxx_std_20)
-
 # Live backend for the web API: keeps real UnifiedWorldSimulator instances in
-# memory and serves them over a local TCP JSON-lines protocol instead of
-# reloading full state from disk on every command (see Phase 9,
+# memory and serves them over a local TCP JSON-lines protocol (see
 # docs/SERINA_DAEMON_PROTOCOL.md). Header-only simulation code + nlohmann/json
-# + sockets/threads, no dependency on serina_core.
+# + sockets/threads.
 find_package(Threads REQUIRED)
 add_executable(serina_daemon serina_daemon.cpp)
 target_link_libraries(serina_daemon PRIVATE
@@ -60,7 +25,6 @@ if(WIN32)
     target_link_libraries(serina_daemon PRIVATE ws2_32)
 endif()
 
-# Set output directories
-set_target_properties(serina_demo serina_cli serina_runner serina_daemon PROPERTIES
+set_target_properties(serina_daemon PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

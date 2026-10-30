@@ -1,6 +1,4 @@
-// Backend live du monde unifié : contrairement à serina_cli (un process par
-// commande, état rechargé depuis un fichier JSON à chaque appel — adapté au
-// moteur d'agrégats SerinaEcosystemSimulator qu'il pilote), serina_daemon
+// Backend live du monde unifié : serina_daemon
 // garde un ou plusieurs UnifiedWorldSimulator réels en mémoire, les fait
 // avancer en continu sur un fil d'exécution dédié, et répond aux requêtes
 // JSON-lines de l'API Node sur une connexion TCP locale persistante — pas de
