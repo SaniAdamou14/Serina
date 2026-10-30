@@ -2,10 +2,7 @@
 
 `serina_daemon` (`src/serina_daemon.cpp`, protocol logic in
 `include/Serina/DaemonProtocol.hpp`) is the real backend behind the web API
-as of Phase 9. It replaces `serina_cli` for that role: instead of
-respawning a process per command and reloading state from a JSON file
-(the pattern `serina_cli` still uses — see
-[`SERINA_CLI_SCHEMA.md`](SERINA_CLI_SCHEMA.md)), the daemon keeps one or
+as of Phase 9. The daemon keeps one or
 more real `Simulation::UnifiedWorldSimulator` instances alive in memory and
 advances them on its own scheduler thread, independent of whether any
 client is currently asking for data. This is what makes continuous,

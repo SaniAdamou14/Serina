@@ -1,103 +1,55 @@
 # Contribuer à Serina
 
-Merci de votre intérêt ! Ce projet vise à construire un simulateur évolutif modulaire et fiable. Cette version contient encore des écarts entre la vision documentée et l’implémentation actuelle — ce fichier clarifie où contribuer utilement.
+Merci de votre intérêt ! Le cap du projet et le jalon en cours sont dans
+[`docs/ROADMAP.md`](docs/ROADMAP.md) : commencez par là.
 
-## Table État des Fonctionnalités
+## Principes
 
-| Fonctionnalité | Implémenté | Notes |
-|----------------|------------|-------|
-| Génome de base (8 traits, `SimulationAPI`) | ✅ | `Genome` + mutation/crossover simples |
-| Génome avancé / PopulationManager | ✅ (isolé) | Intégré partiellement via `enableAdvancedPopulation()` |
-| Écosystème nommé (`SerinaEcosystemSimulator`) | ✅ (legacy) | Espèces réelles, mais n'est plus le backend du dashboard web depuis la Phase 9 — voir `UnifiedWorldSimulator`/`serina_daemon` ci-dessous. Toujours utilisable via `serina_cli` pour du scripting ponctuel |
-| Moteur unifié (`UnifiedWorldSimulator`) | ✅ | Individus réels, grille de régions réelle, spéciation par divergence génétique mesurée — voir Phase 7 |
-| `serina_daemon` : backend live du dashboard web | ✅ | Garde `UnifiedWorldSimulator` en mémoire, avance en continu sur un fil dédié, répond en JSON-lines sur TCP local — voir Phase 9, `docs/SERINA_DAEMON_PROTOCOL.md`. Remplace le pont `serina_cli` process-par-commande pour l'API Node |
-| Diversité génétique (mode avancé/`PopulationManager`, mode unifié) | ✅ | Calcul réel de distance génétique |
-| Diversité génétique (mode écosystème legacy) | ❌ | Re-tirée aléatoirement chaque génération (`SerinaSimulator.hpp:594`), pas calculée — dépassé par le moteur unifié, toujours vrai pour qui utilise `serina_cli` directement |
-| Interactions écologiques complexes | ✅ | `simulateEcologicalInteractions()` (legacy) et `applySurvivalAndInteractions()` (unifié) appelées à chaque génération réelle |
-| Adaptations / innovations évolutives | ✅ | Réellement acquises et persistées (vu en production : `lateral_line_enhancement`) |
-| Physique (collisions simples) | ✅ | Pas encore d'optimisation SIMD/partition spatiale (code existe dans `PerformanceOptimizations.hpp`, non branché) |
-| Spéciation / Extinction réelles | ✅ | Legacy : `simulateSpeciation()`/`simulateExtinction()` comptées par génération. Unifié : spéciation par divergence génétique mesurée et soutenue (Phase 7), extinction par disparition réelle de population |
-| NEAT / IA comportementale | ✅ | Un cerveau NEAT réel par lignée (`WorldSimulation.hpp`), pilote le mouvement, évolue par (1+1)-ES sur la fitness réellement mesurée (Phase 8), exposé au dashboard web via `serina_daemon` depuis la Phase 9 |
-| API Node intégrée au core C++ | ✅ | `simulationEngine.js` parle à `serina_daemon` (TCP JSON-lines, un process persistant) plutôt qu'à relancer un process par commande |
-| Export / Import complet état simulation | Partiel | `World::toJson()` (mode simple) ; état écosystème legacy persisté via `--state-file` JSON. `serina_daemon` n'a pas encore de sauvegarde sur disque : l'état vit en mémoire tant qu'il tourne (voir `docs/SERINA_DAEMON_PROTOCOL.md`, "ce qui manque encore") |
-| Tests unitaires structurés (framework) | ✅ | Catch2 v3, intégré à CTest (`ctest` depuis `build/`) |
-| Bindings Python testés | ✅ | `pytest python/tests` (a trouvé et corrigé un vrai bug de binding sur `PhysicsEngine.update()`) |
-| CI (build + tests) | ✅ | GitHub Actions : build+ctest (Linux/GCC), lint+typecheck+build web, sanity-check API |
-| Packaging Python (wheel) | ❌ | Pas de `pyproject.toml` encore |
-
-## Principes de Contribution
-
-1. Favoriser d’abord l’intégration cohérente avant d’ajouter de nouvelles features.
-2. Garder l’API publique stable (`SimulationAPI`, bindings Python) – proposer un préfixe EXPERIMENTAL_ si nécessaire.
-3. Ajouter des tests pour chaque ajout (C++ ou Python). Prévoir au moins : happy path + edge case.
-4. Préférer des PRs petites et thématiques.
+1. Mesurer plutôt que raconter : un changement du modèle s'accompagne d'une mesure
+   sur plusieurs graines, pas d'une seule exécution qui semble correcte.
+2. Faire avancer le jalon en cours avant d'ajouter du contenu.
+3. Ajouter des tests à chaque changement : au moins le cas normal et un cas limite.
+4. Préférer des PR petites et thématiques.
 5. Documenter toute nouvelle structure JSON dans `docs/`.
 
-## Guide Rapide de Build
-
+## Avant d'ouvrir une PR
 
 ```bash
-cmake -S . -B build -DBUILD_PYTHON_MODULE=ON -DBUILD_TESTS=ON
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
-```
- 
-Module Python attendu : `build/serina_py.*.pyd` (générateurs single-config, ex. MinGW Makefiles/Ninja) ou `build/Release/serina_py.*.pyd` (générateurs multi-config, ex. Visual Studio). `python/tests/conftest.py` cherche les deux automatiquement.
+ctest --test-dir build --output-on-failure -C Release
 
-### Option Pybind11
-
-Vous pouvez spécifier manuellement un chemin pybind11 si `find_package` échoue :
-
-```bash
-cmake -S . -B build -DPYBIND11_ROOT="C:/path/vers/pybind11"
+cd web
+npm run type-check
+npm run lint
+npm run build
 ```
 
-## Ajout d’une Statistique
+La CI lance ces vérifications, avec le C++ sous Linux (GCC) et Windows (MSVC).
 
-Selon le moteur concerné (voir README §Architecture pour la distinction) :
+## Déterminisme
 
-**Mode simple (`SimulationAPI`) :**
-1. Étendre `PopulationStats` ou `SimulationStatistics`.
-2. Ajuster `SimulationAPI::getStatistics()`.
-3. Exposer côté Python dans `bindings.cpp`.
-4. Mettre à jour `docs/STATISTICS_SCHEMA.md`.
+Une graine doit produire le même monde sur tous les compilateurs :
 
-**Mode écosystème (`SerinaEcosystemSimulator`, backend du CLI/dashboard) :**
-1. Étendre `SpeciesSimulationStats` ou les compteurs globaux dans `SerinaSimulator.hpp`.
-2. Exposer le champ dans `serina_cli.cpp` (`getEcosystemStatus`/`getWorldData`/`getGeneticData`).
-3. Mettre à jour `docs/SERINA_CLI_SCHEMA.md` et le type TypeScript correspondant dans `web/src/types/index.ts`.
-4. Consommer le champ dans le composant React concerné (`web/src/components/`).
+- Utiliser `Det::` (`include/Serina/DeterministicRandom.hpp`) à la place des
+  distributions `std::`, de `std::shuffle`, `std::exp`, `std::log` et `std::tanh`.
+- Ne pas faire dépendre un résultat de l'ordre de parcours d'un `unordered_map`,
+  ni d'un `std::sort` sur des éléments égaux.
+- Si le modèle change volontairement, mettre à jour l'empreinte de référence de
+  `tests/test_determinism.cpp` dans le même commit, et vérifier qu'elle est identique
+  sous Linux et Windows.
 
-## Qualité / Style
+## Style
 
-- C++: C++20, éviter new/delete directs (smart pointers) sauf allocations contrôlées.
-- Pas de dépendance ajoutée sans discussion (ouvrir issue).
-- Utiliser `const &` et `noexcept` quand pertinent.
+- C++20, sans `new`/`delete` directs.
+- Pas de nouvelle dépendance sans discussion préalable dans une issue.
+- Utiliser `const &` et `noexcept` quand c'est pertinent.
 
-## Roadmap Immédiate (Suggestions)
+## Processus de PR
 
-- [x] Phase 7 — Moteur unifié (fondation) : `include/Serina/WorldSimulation.hpp` fusionne individus à génome diploïde réel (`PopulationManager.hpp`), grille spatiale procédurale (`Region.hpp`), taxonomie, interactions écologiques et contraintes biologiques par individu. Diversité génétique calculée depuis `AdvancedGenome::geneticDistance()` (plus de tirage aléatoire), spéciation qui émerge d'une divergence génétique mesurée et soutenue géographiquement. 17 tests Catch2. Voir `docs/UNIFIED_ENGINE_DESIGN.md`. **Pas encore branché sur `serina_cli`/l'API/le frontend — voir phases suivantes.**
-- [x] Phase 8 — Mouvement piloté par NEAT : `include/Serina/WorldSimulation.hpp` donne à chaque lignée vivante un vrai génome NEAT (`NEAT.hpp`, un réseau par espèce, pas par individu), évalué à chaque tick contre 7 entrées sensorielles réelles (énergie, ressources locale + 4 voisines, pression de prédation). Le cerveau évolue par ES (1+1) sur la fitness réellement mesurée de la lignée, hérité (muté, pas random) à la spéciation. Run de vérification (30 fondateurs, 80 générations) : population 150→182, 17 espèces émergentes, complexité de cerveau qui augmente réellement pour plusieurs lignées (23→26→29) via mutations structurelles acceptées. 4 nouveaux tests Catch2 (13 au total, 185 assertions). Voir `docs/UNIFIED_ENGINE_DESIGN.md`. **Toujours pas branché sur `serina_cli`/le frontend — Phase 9.**
-- [x] Phase 9 — Backend live + nouveau contrat API : `serina_daemon` (`src/serina_daemon.cpp`, protocole dans `include/Serina/DaemonProtocol.hpp`) garde un ou plusieurs `UnifiedWorldSimulator` réels en mémoire et les avance en continu sur un fil planificateur, au lieu de relancer un process par commande. Protocole JSON-lines sur TCP local (`docs/SERINA_DAEMON_PROTOCOL.md`) exposant régions (grille réelle, une entrée par case avec climat/ressources/pressions réels et le compte réel d'individus dedans), individus (position/énergie/âge réels par organisme vivant) et lignées (fitness/diversité génétique/complexité de cerveau NEAT réels + historique complet des spéciations). `api/services/simulationEngine.js` et `daemonClient.js` réécrits pour parler au daemon via une connexion TCP persistante plutôt que de spawn un process par commande ; interface publique (`startSimulation`/`pauseSimulation`/.../événements EventEmitter) inchangée, donc `routes/serina.js` et `websocket.js` n'ont pas eu besoin de changer. Vérifié de bout en bout : un process `serina_daemon` séparé avance réellement en arrière-plan (15 générations en ~2s à 10 ticks/s), `pause` arrête réellement la progression, et l'API REST relaie ces données réelles (spéciation observée en vol, biomes multiples, complexité de cerveau croissante) à travers toute la pile. 13 tests Catch2 pour le protocole (dont un round-trip réel sur une vraie socket TCP), frontend retypé et re-vérifié (`tsc`, `eslint`, `vite build`) contre le nouveau schéma sans données inventées (le score de risque d'extinction de l'ancien moteur, qui n'existe pas dans `UnifiedWorldSimulator`, a été retiré plutôt que simulé). **Pas de sauvegarde sur disque pour l'instant — l'état du daemon vit en mémoire (voir le protocole, section "ce qui manque encore") ; `serina_cli` reste utilisable tel quel pour du scripting contre l'ancien moteur.**
-- [x] Phase 10 — Interface façon RimWorld : `web/src/components/WorldMap.tsx` dessine la vraie grille de régions (`regions`, une couleur réelle par biome — voir la table des couleurs indexée par nom exact d'environnement) avec les individus vivants réels superposés (`individuals`, positionnés via `cellSize` × coordonnées continues réelles), zoom/pan à la souris, et des panneaux d'inspection cliquables (climat/ressources/pressions réels d'une région, ou espèce/énergie/âge réels d'un individu). `SpeciesEvolutionTree` reconstruit désormais le vrai arbre phylogénétique depuis `speciationEvents` (parent → enfant, génération et distance génétique réelles à chaque scission) au lieu de deviner la filiation par mot-clé dans le nom. `SimulationControl` expose de vrais paramètres avant de démarrer (nombre d'individus par lignée fondatrice, graine optionnelle, vitesse initiale) et un contrôle de vitesse en direct (`POST /api/serina/speed/:id`, nouvelle commande `play` réémise côté daemon avec le nouveau `ticksPerSecond`). En cours de route : trois biomes que `Region.hpp` pouvait générer depuis la Phase 7 (DÉSERT, ARCTIQUE, TROPICAL) n'avaient jamais de vraie `EnvironmentDefinition` dans `EnvironmentalAdaptation.hpp` — une case tombant dessus aurait un climat/ressources/pressions à zéro et un nom vide sur la nouvelle carte. Comblé avec le même niveau de détail que les six autres biomes plutôt que masqué. Vérifié en direct : une simulation réelle (seed fixe) affiche les 7 biomes présents sur sa carte avec des valeurs climatiques cohérentes (ex. -15°C en région arctique), positions d'individus correctement bornées au monde réel.
-- [x] Fix post-Phase-10 — Extinction totale garantie découverte en usage réel : après avoir lancé une vraie simulation à vitesse x20 pendant ~2000 générations, plus aucune espèce vivante. Cause réelle : `applySurvivalAndInteractions()` ne faisait que drainer l'énergie (métabolisme) sans jamais en fournir — le seul chemin de revenu positif passait par des interactions écologiques qui ne pouvaient jamais se déclencher pour les cinq fondateurs (noms ne correspondant pas au catalogue historique, partenaires référencés inexistants dans ce moteur). Corrigé par un vrai revenu d'alimentation (`WorldSimulationParameters::foragingRate` × ressources primaires réelles de la région × `ENERGY_EFFICIENCY` réel de l'organisme) : la sélection naturelle s'exerce maintenant vraiment (mauvaise efficacité ou biome pauvre = déclin réel), sans extinction garantie par construction. Test de régression (2000 générations, la population doit rester vivante) confirmé pour échouer sans le correctif puis passer avec. Vérifié par simulation de contrôle : population stable en équilibre réel (~150-170 individus, oscillant) sur 2000 générations, pas d'explosion non plus.
-- [ ] Étendre la CI à Windows/MSVC (actuellement Linux/GCC uniquement)
-- [ ] Historique de tendances réel côté frontend (le backend expose déjà `/api/simulations/:id/trends`, non consommé par `web/`)
-- [ ] Packaging Python (scikit-build-core)
-- [ ] Authentification sur les routes API destructrices (aucune actuellement)
+1. Faire un fork et une branche `feature/...` ou `fix/...`.
+2. Lancer les vérifications ci-dessus.
+3. Décrire clairement le changement et son impact sur l'API.
 
-## Process Pull Request
-
-1. Fork + branche nommée `feature/...` ou `fix/...`.
-2. Lancer tests locaux.
-3. PR avec description claire + mention des impacts API.
-4. Révision : cohérence, clarté, documentation.
-
-## Communication
-
-Ouvrir une issue pour :
-
-- Clarification de design
-- Proposition d’architecture
-- Refactor potentiellement disruptif
-
-Merci de contribuer à faire évoluer Serina !
+Ouvrez une issue pour clarifier un point de conception, proposer une architecture ou
+préparer un refactor important.
