@@ -19,6 +19,7 @@ option(BUILD_TESTS "Build test executables" ON)
 include_directories(include)
 
 add_subdirectory(src)
+add_subdirectory(tools)
 
 if(BUILD_TESTS)
     enable_testing()
