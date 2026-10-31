@@ -144,6 +144,8 @@ export interface IndividualInfo {
   ornamentTier: number
   sensoryProminence: number
   patternTier: number
+  /** Real INSULATION gene [0,1], drawn as down or bristles on the map. */
+  insulation: number
 }
 
 export interface IndividualsResult {

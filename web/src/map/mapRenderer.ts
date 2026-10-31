@@ -1,4 +1,4 @@
-import { ATLAS_COLUMNS, ATLAS_ROWS, buildCreatureAtlas, creatureFrame, RING_FRAME, SHADOW_FRAME } from './creatureAtlas';
+import { ATLAS_COLUMNS, ATLAS_ROWS, buildCreatureAtlas, creatureFrame, furFrame, hasFur, RING_FRAME, SHADOW_FRAME } from './creatureAtlas';
 import { CREATURE_FRAGMENT, CREATURE_VERTEX, TERRAIN_FRAGMENT, TERRAIN_VERTEX } from './shaders';
 import type { ViewBox } from '../utils/mapCamera';
 
@@ -23,6 +23,7 @@ export interface MapCreature {
   elongation: number;
   ornamentTier: number;
   patternTier: number;
+  insulation: number;
   color: [number, number, number];
 }
 
@@ -487,15 +488,17 @@ export class MapRenderer {
       data[i] = x;
       data[i + 1] = y;
       data[i + 2] = half * (1 + (c.elongation - 0.5) * 0.4) * this.facing[n];
-      data[i + 3] = half * (1 - (c.elongation - 0.5) * 0.25);
+      const furry = hasFur(c.biologicalType);
+      // Sans poils, l'isolation se voit à l'embonpoint : graisse d'un poisson, manteau d'un mollusque.
+      data[i + 3] = half * (1 - (c.elongation - 0.5) * 0.25) * (furry ? 1 : 1 + c.insulation * 0.22);
       data[i + 4] = c.color[0];
       data[i + 5] = c.color[1];
       data[i + 6] = c.color[2];
       data[i + 7] = creatureFrame(c.biologicalType, c.ornamentTier, c.patternTier);
       data[i + 8] = c.id * 0.37;
       data[i + 9] = moving;
-      data[i + 10] = 0;
-      data[i + 11] = 0;
+      data[i + 10] = furFrame(c.biologicalType);
+      data[i + 11] = furry ? Math.min(1, Math.max(0, (c.insulation - 0.1) / 0.6)) : 0;
       if (c.id === this.selectedId) ringIndex = count;
       count++;
     }
@@ -539,11 +542,18 @@ export class MapRenderer {
     gl.uniform1f(gl.getUniformLocation(p, 'uShadowFrame'), SHADOW_FRAME);
 
     // Les ombres d'abord, pour qu'elles restent sous toutes les créatures.
+    gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 0);
     if (count <= SHADOW_MAX_COUNT || pixelsPerUnit >= SHADOW_MIN_PIXELS_PER_UNIT) {
       gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 1);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
     }
     gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 0);
+    // Les poils sous le corps ; invisibles de loin, donc pas dessinés.
+    if (pixelsPerUnit >= SHADOW_MIN_PIXELS_PER_UNIT) {
+      gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 1);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, count);
+    }
+    gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 0);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, withRing);
     gl.bindVertexArray(null);
   }

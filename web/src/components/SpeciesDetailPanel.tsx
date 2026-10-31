@@ -72,6 +72,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: { speciesName: stri
               biologicalType={lineage.biologicalType}
               ornamentTier={visual.ornamentTier}
               patternTier={visual.patternTier}
+              insulation={lineage.averageTraits.insulation}
               color={color}
               size={120}
             />

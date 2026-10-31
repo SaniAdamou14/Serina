@@ -279,15 +279,18 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
 - **I4, la nature vivante** : plantes, débris, cadavres, feux et météo, simulés puis dessinés.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
-- **I6, les créatures issues de leur génome (en cours)** : premier gène en place, l'isolation
-  thermique. Écart moyen à l'idéal de 0,25 sans sélection, 0,12 avec, sur 12 graines inédites à
-  10 000 ticks. Un pigment a été essayé et retiré : aucun effet mesurable, car éviter une perte
-  d'énergie pèse trop peu tant que la prédation ne tue pas. But de l'étape : de nouveaux gènes héritables de forme et
-  d'apparence (longueur du corps et des membres, tégument, pigment, motif), chacun avec un coût
-  ou un effet réel sur la survie selon le climat et les prédateurs. Le dessin est généré à partir
-  de ces gènes pour chaque lignée. Une apparence adaptée doit donc résulter de la sélection, sans
-  règle du type « froid = fourrure ». Remplace le mélange de couleur avec le biome qui simule
-  aujourd'hui le camouflage. Dépend du climat de M1.
+- **I6, les créatures issues de leur génome (en cours)** :
+  - Fait : gène d'isolation thermique (écart moyen à l'idéal de 0,25 sans sélection, 0,12 à 0,14
+    avec), visible sous forme de poils ou d'embonpoint. Taille et déplacement ont un coût : la
+    taille moyenne normalisée passe de 0,43 à 0,30. Couleur due à la lignée seule : le faux
+    camouflage, mélangé à la couleur du biome sans calcul derrière, est retiré.
+  - Essayé et écarté : le pigment (aucun effet aux deux essais, car la prédation est trop rare
+    pour le sélectionner) et la prédation mortelle (poissons vivants dans 6 mondes sur 10, sans
+    gain mesuré ; le code reste en place pour la chaîne alimentaire).
+  - Reste à faire : d'autres gènes de forme (longueur du corps et des membres, tégument), et une
+    silhouette générée pour chaque lignée à partir de ces gènes, à la place des quatre gabarits.
+    Un gène n'est gardé que si le banc montre qu'il répond à la sélection.
+  - Limite : aucune adaptation locale mesurable à l'intérieur d'une espèce.
 
 **Critère :** une personne qui connaît RimWorld s'y retrouve sans explication ; 60
 images/s avec 10 000 individus affichés.
@@ -305,6 +308,8 @@ L'objectif : une partie peut tourner des jours sans perte. Chaque point est test
 - **Interface** : une erreur dans une fenêtre ne fait jamais tomber la carte ; tests de
   bout en bout dans un vrai navigateur, lancés en CI.
 - **Longue durée** : test d'endurance sans fuite de mémoire ni ralentissement anormal.
+- **Parties oubliées** : fermer l'onglet laisse la partie tourner dans le daemon, et plusieurs
+  parties ralentissent la machine. Prévoir une limite ou une mise en pause automatique.
 
 **Critère :** tuer le daemon ou l'API en pleine partie ne perd pas plus que l'intervalle
 de sauvegarde ; 24 h d'endurance sans erreur ni croissance anormale de la mémoire.

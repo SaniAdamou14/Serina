@@ -71,7 +71,8 @@ namespace Serina::Daemon
             {"camouflage", ind.camouflage},
             {"ornamentTier", ind.ornamentTier},
             {"sensoryProminence", ind.sensoryProminence},
-            {"patternTier", ind.patternTier}};
+            {"patternTier", ind.patternTier},
+                    {"insulation", ind.insulation}};
     }
 
     inline json lineageToJson(const Simulation::LineageSnapshot &l, const Simulation::UnifiedWorldSimulator &sim)

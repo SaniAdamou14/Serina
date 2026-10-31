@@ -19,6 +19,18 @@ const LAST_ROW = (ATLAS_ROWS - 1) * ATLAS_COLUMNS;
 /** Anneau de sélection et ombre au sol, sur la dernière ligne. */
 export const RING_FRAME = LAST_ROW;
 export const SHADOW_FRAME = LAST_ROW + 1;
+/** Duvet ou soies de chaque groupe, deux images de marche côte à côte. */
+const FUR_FRAME = LAST_ROW + 2;
+
+export function furFrame(biologicalType: number): number {
+  const group = biologicalType >= 0 && biologicalType < GROUPS ? biologicalType : 2;
+  return FUR_FRAME + group * WALK_FRAMES;
+}
+
+/** Oiseaux et arthropodes se couvrent de poils ; poissons et mollusques s'épaississent. */
+export function hasFur(biologicalType: number): boolean {
+  return biologicalType === 0 || biologicalType === 2;
+}
 
 /** Première image de marche ; la seconde est juste en dessous (voir le vertex shader). */
 export function creatureFrame(biologicalType: number, ornamentTier: number, patternTier: number): number {
@@ -350,6 +362,35 @@ function drawMollusc(ctx: Ctx, ornament: number, pattern: number, walk: number) 
 
 const DRAWERS = [drawBird, drawFish, drawArthropod, drawMollusc];
 
+/** Poils tracés vers l'extérieur depuis le contour d'une silhouette déjà dessinée. */
+function drawFur(ctx: Ctx, source: HTMLCanvasElement) {
+  const size = source.width;
+  const alpha = source.getContext('2d')?.getImageData(0, 0, size, size).data;
+  if (!alpha) return;
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < size && y < size && alpha[(y * size + x) * 4 + 3] > 120;
+
+  ctx.lineCap = 'round';
+  // Pas fixe et sans aléatoire : le dessin reste le même à chaque chargement.
+  for (let y = 2; y < size - 2; y += 3) {
+    for (let x = 2; x < size - 2; x += 3) {
+      if (!solid(x, y)) continue;
+      const edge = !solid(x - 3, y) || !solid(x + 3, y) || !solid(x, y - 3) || !solid(x, y + 3);
+      if (!edge) continue;
+      const px = (x / size) * 2 - 1;
+      const py = (y / size) * 2 - 1;
+      const norm = Math.hypot(px, py) || 1;
+      const swing = Math.sin(x * 12.9 + y * 78.2) * 0.5;
+      const length = 0.075 + Math.abs(Math.sin(x * 3.1 + y * 5.7)) * 0.07;
+      ctx.beginPath();
+      ctx.moveTo(px * 1.01, py * 1.01);
+      ctx.lineTo(px + ((px / norm) + swing * (-py / norm)) * length, py + ((py / norm) + swing * (px / norm)) * length);
+      ctx.strokeStyle = gray(120 + (Math.floor(x + y) % 5) * 22);
+      ctx.lineWidth = 0.03;
+      ctx.stroke();
+    }
+  }
+}
+
 export function buildCreatureAtlas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = ATLAS_COLUMNS * CELL_PX;
@@ -373,6 +414,19 @@ export function buildCreatureAtlas(): HTMLCanvasElement {
           inCell(frame + walk * ATLAS_COLUMNS, () => DRAWERS[group](ctx, ornament, pattern, walk));
         }
       }
+    }
+  }
+
+  for (let group = 0; group < GROUPS; group++) {
+    for (let walk = 0; walk < WALK_FRAMES; walk++) {
+      const silhouette = document.createElement('canvas');
+      silhouette.width = silhouette.height = CELL_PX;
+      const body = silhouette.getContext('2d', { willReadFrequently: true });
+      if (!body) continue;
+      body.translate(CELL_PX / 2, CELL_PX / 2);
+      body.scale(CELL_PX / 2.04, CELL_PX / 2.04);
+      DRAWERS[group](body, 0, 0, walk);
+      inCell(FUR_FRAME + group * WALK_FRAMES + walk, () => drawFur(ctx, silhouette));
     }
   }
 

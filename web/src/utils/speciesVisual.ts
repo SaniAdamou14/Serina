@@ -18,9 +18,10 @@ export function averageVisual(individuals: IndividualInfo[]): Omit<IndividualInf
       camouflage: acc.camouflage + ind.camouflage,
       ornamentTier: acc.ornamentTier + ind.ornamentTier,
       sensoryProminence: acc.sensoryProminence + ind.sensoryProminence,
-      patternTier: acc.patternTier + ind.patternTier
+      patternTier: acc.patternTier + ind.patternTier,
+      insulation: acc.insulation + ind.insulation
     }),
-    { biologicalType: individuals[0].biologicalType, sizeScale: 0, elongation: 0, camouflage: 0, ornamentTier: 0, sensoryProminence: 0, patternTier: 0 }
+    { biologicalType: individuals[0].biologicalType, sizeScale: 0, elongation: 0, camouflage: 0, ornamentTier: 0, sensoryProminence: 0, patternTier: 0, insulation: 0 }
   )
   return {
     biologicalType: sum.biologicalType,
@@ -29,6 +30,7 @@ export function averageVisual(individuals: IndividualInfo[]): Omit<IndividualInf
     camouflage: sum.camouflage / n,
     ornamentTier: Math.round(sum.ornamentTier / n),
     sensoryProminence: sum.sensoryProminence / n,
-    patternTier: Math.round(sum.patternTier / n)
+    patternTier: Math.round(sum.patternTier / n),
+    insulation: sum.insulation / n
   }
 }

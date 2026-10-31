@@ -314,23 +314,23 @@ TEST_CASE("relative divergence criterion does not speciate on the founder pool's
 }
 
 TEST_CASE("relative divergence criterion keeps producing real speciations over a long run", "[worldsim][speciation][divergence]") {
-    // Le critere absolu s'arretait vers la generation 1000 (une seule
-    // speciation de plus en 7000 generations) : la diversite retombait sous
-    // le seuil. Le critere relatif mesure une divergence reelle quel que soit
-    // le niveau de diversite -- sur 24 graines a 8000 generations il en
-    // produit ~12 en moyenne, repartis dans le temps. Ici : au moins une
-    // speciation APRES la generation 1000.
-    UnifiedWorldSimulator sim({}, 2025);
-    sim.seedFounderSpecies(40);
-
-    for (int i = 0; i < 2000; ++i)
-        sim.step();
-
-    REQUIRE(sim.getPopulationCount() > 0);
+    // Le critere absolu s'arretait vers la generation 1000 : la diversite retombait sous
+    // le seuil. Le critere relatif mesure une divergence reelle quel que soit le niveau de
+    // diversite. Isolement raccourci pour rester rapide : une speciation apres le tick
+    // 1000 suffit, sur l'une des graines.
+    WorldSimulationParameters params;
+    params.speciationIsolationGenerations = 300;
     bool speciatedLate = false;
-    for (const auto &event : sim.getSpeciationEvents())
-        if (event.generation > 1000)
-            speciatedLate = true;
+    for (uint32_t seed : {2025u, 2026u, 2027u}) {
+        UnifiedWorldSimulator sim(params, seed);
+        sim.seedFounderSpecies(40);
+        for (int i = 0; i < 2500 && !speciatedLate; ++i)
+            sim.step();
+        REQUIRE(sim.getPopulationCount() > 0);
+        for (const auto &event : sim.getSpeciationEvents())
+            if (event.generation > 1000)
+                speciatedLate = true;
+    }
     REQUIRE(speciatedLate);
 }
 

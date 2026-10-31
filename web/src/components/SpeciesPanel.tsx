@@ -53,6 +53,7 @@ export function SpeciesPanel() {
                 biologicalType={l.biologicalType}
                 ornamentTier={visual.ornamentTier}
                 patternTier={visual.patternTier}
+                insulation={l.averageTraits.insulation}
                 color={creatureColor(hues.get(l.speciesName) ?? 0, 0, '#373835')}
                 size={26}
               />

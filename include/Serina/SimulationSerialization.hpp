@@ -324,6 +324,8 @@ namespace Serina::Simulation
             {"reflectAtBorders", params_.reflectAtBorders},
             {"climateCostRate", params_.climateCostRate},
             {"thermalCostRate", params_.thermalCostRate},
+            {"predationKillChance", params_.predationKillChance},
+            {"sizeCostRate", params_.sizeCostRate},
             {"speciationMinCellPopulation", params_.speciationMinCellPopulation},
             {"speciationMinPopulation", params_.speciationMinPopulation}};
 
@@ -473,6 +475,8 @@ namespace Serina::Simulation
             params.reflectAtBorders = pj.value("reflectAtBorders", params.reflectAtBorders);
             params.climateCostRate = pj.value("climateCostRate", params.climateCostRate);
             params.thermalCostRate = pj.value("thermalCostRate", params.thermalCostRate);
+            params.predationKillChance = pj.value("predationKillChance", params.predationKillChance);
+            params.sizeCostRate = pj.value("sizeCostRate", params.sizeCostRate);
             params.speciationMinCellPopulation = pj.value("speciationMinCellPopulation", params.speciationMinCellPopulation);
             params.speciationMinPopulation = pj.value("speciationMinPopulation", params.speciationMinPopulation);
         }
