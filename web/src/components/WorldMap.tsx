@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { centerCamera, clampCamera, fitCamera, ViewBox, WorldSize, zoomCamera, zoomLevel } from '../utils/mapCamera';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
 import { ChevronUp, ChevronDown, Pin, PinOff, Columns3 } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
@@ -37,41 +38,12 @@ const BIOME_COLORS: Record<string, string> = {
 };
 const FALLBACK_BIOME_COLOR = '#9ca3af';
 
-interface ViewBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
 
-/** Fraction de la largeur du monde visible au zoom maximal (le plus proche)
- * et minimal (le plus loin) -- borne la caméra pour qu'elle ne puisse
- * jamais dériver dans un état absurde, contrairement à un empilement de
- * transformations CSS translate+scale où le pan se fait recalculer par
- * chaque changement de zoom (la cause réelle du comportement "n'importe
- * quoi" signalé). Le viewBox SVG est la seule source de vérité de la
- * caméra ; aucune transformation CSS n'est appliquée par-dessus. */
-const MIN_VIEW_FRACTION = 0.06;
-const MAX_VIEW_FRACTION = 1.3;
-const INITIAL_VIEW_FRACTION = 1;
 const PAN_STEP_FRACTION = 0.15;
 const DETAIL_ZOOM_THRESHOLD = 1.2; // en "zoom equivalent" (worldWidth / viewBox.w)
 
-function clampViewBox(vb: ViewBox, worldWidth: number, worldHeight: number): ViewBox {
-  const minW = worldWidth * MIN_VIEW_FRACTION;
-  const maxW = worldWidth * MAX_VIEW_FRACTION;
-  const w = Math.min(maxW, Math.max(minW, vb.w));
-  const h = w * (vb.h / vb.w || 1);
-
-  // Le centre du viewBox ne peut jamais s'éloigner de plus d'une marge du
-  // monde réel -- empêche la caméra de dériver à l'infini en dehors de la
-  // carte plutôt que de la laisser "partir dans tous les sens".
-  const margin = Math.min(worldWidth, worldHeight) * 0.2;
-  const cx = Math.min(worldWidth + margin, Math.max(-margin, vb.x + vb.w / 2));
-  const cy = Math.min(worldHeight + margin, Math.max(-margin, vb.y + vb.h / 2));
-
-  return { x: cx - w / 2, y: cy - h / 2, w, h };
-}
+/** Distance en pixels à partir de laquelle un appui devient un glisser, pas un clic. */
+const DRAG_THRESHOLD_PX = 4;
 
 /**
  * Carte plein écran façon RimWorld : le viewBox SVG est la seule source de
@@ -87,13 +59,15 @@ export function WorldMap() {
   const { selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
   const [legendCollapsed, setLegendCollapsed] = useState(true);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
+  const [aspect, setAspect] = useState(0);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const cursorReadoutRef = useRef<HTMLDivElement>(null);
   const [showIndividuals, setShowIndividuals] = useState(true);
-  const dragState = useRef<{ startX: number; startY: number; vbX: number; vbY: number } | null>(null);
+  const dragState = useRef<{ startX: number; startY: number; view: ViewBox; moved: boolean } | null>(null);
+  const justDragged = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
-  const lastWorldSize = useRef<{ w: number; h: number } | null>(null);
+  const lastWorld = useRef<WorldSize | null>(null);
   // Position précédente et cap réel par individu, pour orienter sa
   // silhouette dans le sens de son vrai déplacement entre deux instantanés
   // plutôt que de la laisser fixe ou orientée au hasard. Mise à jour
@@ -106,17 +80,29 @@ export function WorldMap() {
   const worldWidth = regionsData ? regionsData.gridWidth * regionsData.cellSize : 0;
   const worldHeight = regionsData ? regionsData.gridHeight * regionsData.cellSize : 0;
 
-  // (Ré)initialise la caméra centrée dès que la taille réelle du monde est
-  // connue, ou change (nouvelle simulation avec une autre grille).
+  const world = useMemo<WorldSize>(() => ({ width: worldWidth, height: worldHeight }), [worldWidth, worldHeight]);
+
+  // Le format de la caméra suit toujours celui de l'écran.
   useEffect(() => {
-    if (worldWidth <= 0 || worldHeight <= 0) return;
-    const changed = !lastWorldSize.current || lastWorldSize.current.w !== worldWidth || lastWorldSize.current.h !== worldHeight;
-    if (!changed) return;
-    lastWorldSize.current = { w: worldWidth, h: worldHeight };
-    const w = worldWidth * INITIAL_VIEW_FRACTION;
-    const h = worldHeight * INITIAL_VIEW_FRACTION;
-    setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
-  }, [worldWidth, worldHeight]);
+    if (!container) return;
+    const measure = () => {
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) setAspect(rect.width / rect.height);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [container]);
+
+  // Vue d'ensemble centrée dès qu'un monde est connu ; ensuite, un changement de
+  // taille de fenêtre garde le zoom et reste dans le monde.
+  useEffect(() => {
+    if (worldWidth <= 0 || worldHeight <= 0 || aspect <= 0) return;
+    const newWorld = !lastWorld.current || lastWorld.current.width !== worldWidth || lastWorld.current.height !== worldHeight;
+    lastWorld.current = world;
+    setViewBox((current) => (newWorld || !current ? fitCamera(world, aspect) : clampCamera(current, world, aspect)));
+  }, [world, worldWidth, worldHeight, aspect]);
 
   const lineages = simulationData?.status.lineages;
   const speciationEvents = simulationData?.lineages.speciationEvents;
@@ -126,60 +112,58 @@ export function WorldMap() {
   }, [lineages, speciationEvents]);
 
   const zoomByFactor = useCallback((factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
-    setViewBox((current) => {
-      if (!current) return current;
-      const worldX = current.x + anchorXFrac * current.w;
-      const worldY = current.y + anchorYFrac * current.h;
-      const minW = worldWidth * MIN_VIEW_FRACTION;
-      const maxW = worldWidth * MAX_VIEW_FRACTION;
-      const newW = Math.min(maxW, Math.max(minW, current.w * factor));
-      const applied = newW / current.w;
-      const newH = current.h * applied;
-      return clampViewBox(
-        { x: worldX - anchorXFrac * newW, y: worldY - anchorYFrac * newH, w: newW, h: newH },
-        worldWidth,
-        worldHeight
-      );
-    });
-  }, [worldWidth, worldHeight]);
+    setViewBox((current) => (current ? zoomCamera(current, factor, anchorXFrac, anchorYFrac, world, aspect) : current));
+  }, [world, aspect]);
 
   const handleWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const anchorXFrac = (e.clientX - rect.left) / rect.width;
-    const anchorYFrac = (e.clientY - rect.top) / rect.height;
-    zoomByFactor(e.deltaY > 0 ? 1.12 : 1 / 1.12, anchorXFrac, anchorYFrac);
+    if (!container) return;
+    const rect = container.getBoundingClientRect();
+    zoomByFactor(e.deltaY > 0 ? 1.12 : 1 / 1.12, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
   };
 
   const handleMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!viewBox) return;
-    dragState.current = { startX: e.clientX, startY: e.clientY, vbX: viewBox.x, vbY: viewBox.y };
-    setIsDragging(true);
+    justDragged.current = false;
+    dragState.current = { startX: e.clientX, startY: e.clientY, view: viewBox, moved: false };
   };
 
   const handleMouseMove = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!dragState.current || !viewBox || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const dxWorld = ((e.clientX - dragState.current.startX) / rect.width) * viewBox.w;
-    const dyWorld = ((e.clientY - dragState.current.startY) / rect.height) * viewBox.h;
+    const drag = dragState.current;
+    if (!drag || !container) return;
+    const dxPx = e.clientX - drag.startX;
+    const dyPx = e.clientY - drag.startY;
+    if (!drag.moved) {
+      if (Math.hypot(dxPx, dyPx) < DRAG_THRESHOLD_PX) return;
+      drag.moved = true;
+      setIsDragging(true);
+    }
+    const rect = container.getBoundingClientRect();
     setViewBox(
-      clampViewBox(
-        { ...viewBox, x: dragState.current.vbX - dxWorld, y: dragState.current.vbY - dyWorld },
-        worldWidth,
-        worldHeight
+      clampCamera(
+        { ...drag.view, x: drag.view.x - (dxPx / rect.width) * drag.view.w, y: drag.view.y - (dyPx / rect.height) * drag.view.h },
+        world,
+        aspect
       )
     );
   };
 
   const stopDragging = () => {
+    if (dragState.current?.moved) justDragged.current = true;
     dragState.current = null;
     setIsDragging(false);
   };
 
+  // Un glisser relâché sur la carte ne doit pas aussi sélectionner ce qui est dessous.
+  const handleClickCapture = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!justDragged.current) return;
+    justDragged.current = false;
+    e.stopPropagation();
+  };
+
   const handleMouseMoveWorld = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !viewBox) return;
-    const rect = containerRef.current.getBoundingClientRect();
+    if (!container || !viewBox) return;
+    const rect = container.getBoundingClientRect();
     const worldX = viewBox.x + (e.clientX - rect.left) / rect.width * viewBox.w;
     const worldY = viewBox.y + (e.clientY - rect.top) / rect.height * viewBox.h;
     // Écrit directement dans le DOM : un setState ici redessinerait tout le
@@ -191,29 +175,22 @@ export function WorldMap() {
   };
 
   const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || !viewBox) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const anchorXFrac = (e.clientX - rect.left) / rect.width;
-    const anchorYFrac = (e.clientY - rect.top) / rect.height;
-    const worldX = viewBox.x + anchorXFrac * viewBox.w;
-    const worldY = viewBox.y + anchorYFrac * viewBox.h;
-    setViewBox((current) => {
-      if (!current) return current;
-      return clampViewBox({ x: worldX - current.w / 2, y: worldY - current.h / 2, w: current.w, h: current.h }, worldWidth, worldHeight);
-    });
+    if (!container || !viewBox) return;
+    const rect = container.getBoundingClientRect();
+    const worldX = viewBox.x + ((e.clientX - rect.left) / rect.width) * viewBox.w;
+    const worldY = viewBox.y + ((e.clientY - rect.top) / rect.height) * viewBox.h;
+    setViewBox((current) => (current ? centerCamera(current, worldX, worldY, world, aspect) : current));
   };
 
   const resetView = useCallback(() => {
-    if (worldWidth <= 0 || worldHeight <= 0) return;
-    const w = worldWidth * INITIAL_VIEW_FRACTION;
-    const h = worldHeight * INITIAL_VIEW_FRACTION;
-    setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
-  }, [worldWidth, worldHeight]);
+    if (worldWidth <= 0 || worldHeight <= 0 || aspect <= 0) return;
+    setViewBox(fitCamera(world, aspect));
+  }, [world, worldWidth, worldHeight, aspect]);
 
   // Raccourcis clavier pour naviguer sur la carte (façon RimWorld/RTS)
   useEffect(() => {
     const pan = (dxFrac: number, dyFrac: number) =>
-      setViewBox((v) => (v ? clampViewBox({ ...v, x: v.x + v.w * dxFrac, y: v.y + v.w * dyFrac }, worldWidth, worldHeight) : v));
+      setViewBox((v) => (v ? clampCamera({ ...v, x: v.x + v.w * dxFrac, y: v.y + v.w * dyFrac }, world, aspect) : v));
 
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -240,7 +217,7 @@ export function WorldMap() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [worldWidth, worldHeight, zoomByFactor, resetView]);
+  }, [world, aspect, zoomByFactor, resetView]);
 
   const regionList = simulationData?.regions.regions;
   const biomeStats = useMemo(() => {
@@ -256,15 +233,12 @@ export function WorldMap() {
   }, [regionList]);
 
   const navigateFromMinimap = (worldX: number, worldY: number) => {
-    setViewBox((current) => {
-      if (!current) return current;
-      return clampViewBox({ x: worldX - current.w / 2, y: worldY - current.h / 2, w: current.w, h: current.h }, worldWidth, worldHeight);
-    });
+    setViewBox((current) => (current ? centerCamera(current, worldX, worldY, world, aspect) : current));
   };
 
   if (!simulationData || !viewBox) {
     return (
-      <div className="h-full w-full flex items-center justify-center bg-slate-900 text-slate-400 text-sm">
+      <div ref={setContainer} className="h-full w-full flex items-center justify-center bg-slate-900 text-slate-400 text-sm">
         En attente d'une simulation active...
       </div>
     );
@@ -273,8 +247,8 @@ export function WorldMap() {
   const { regions, gridWidth, gridHeight, cellSize } = simulationData.regions;
   const individuals = simulationData.individuals.individuals;
   const distinctBiomes = Array.from(new Set(regions.map((r) => r.environmentName))).filter(Boolean);
-  const currentZoom = worldWidth / viewBox.w;
-  const detailed = currentZoom >= DETAIL_ZOOM_THRESHOLD;
+  const currentZoom = zoomLevel(viewBox, world, aspect);
+  const detailed = worldWidth / viewBox.w >= DETAIL_ZOOM_THRESHOLD;
 
   const overlayMetric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
   const overlayRange = overlayMetric
@@ -310,7 +284,7 @@ export function WorldMap() {
   return (
     <div className="relative h-full w-full bg-slate-950 overflow-hidden">
       <div
-        ref={containerRef}
+        ref={setContainer}
         className="absolute inset-0"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         onWheel={handleWheel}
@@ -319,6 +293,7 @@ export function WorldMap() {
         onMouseUp={stopDragging}
         onMouseLeave={() => { stopDragging(); if (cursorReadoutRef.current) cursorReadoutRef.current.style.display = 'none'; }}
         onDoubleClick={handleDoubleClick}
+        onClickCapture={handleClickCapture}
       >
         <svg viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`} style={{ width: '100%', height: '100%' }}>
           <BiomeTextureDefs cellSize={cellSize} />

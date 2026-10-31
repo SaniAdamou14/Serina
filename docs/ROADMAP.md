@@ -226,13 +226,42 @@ Ce qu'on reprend de RimWorld :
 - **Style visuel** : panneaux sombres à angles droits et bordure fine, texte compact,
   aucune carte arrondie, une icône claire par action.
 
+**Deux niveaux de carte, comme RimWorld :**
+
+- **La planète** : la vraie Terre en 3D, qu'on fait tourner et qu'on zoome jusqu'à un certain
+  niveau, avec une carte 2D du même monde. On y lit climat, biomes et populations, et on y
+  choisit une case. Rendu : celui de M2 (globe et cartes 2D).
+- **La carte locale** : une case de la planète vue au sol, sur une grille de tuiles, avec des
+  textures réelles d'arbres, d'herbe, de roche et d'eau, des animaux, des branches au sol, des
+  cadavres qui se décomposent, des feux, de la pluie, de la neige, des éclairs. Rendu : PixiJS.
+
+**Règle : rien de décoratif.** Chaque chose visible correspond à quelque chose de simulé,
+comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
+
+| Ce qu'on voit | Ce qu'il faut simuler |
+|---|---|
+| Arbres et herbe | Plantes individuelles : pousse, broutage, mort |
+| Branches, bois mort | Débris produits par les plantes, et leur décomposition |
+| Cadavres qui se décomposent | Un corps à chaque mort, mangé ou décomposé, qui rend ses nutriments au sol |
+| Feux | Combustion et propagation selon le combustible, le vent et l'humidité |
+| Pluie, neige, éclairs | Météo locale tirée du climat réel de la case |
+| Animaux | Individus du moteur actuel, dessinés selon leur génome et leur plan corporel |
+
+**Textures :** aucune image de RimWorld, qui est protégée. Utiliser des images sous licence
+libre, créer les nôtres, ou les générer. Choix à faire avant I2.
+
 Étapes :
 
 - **I1, la coquille (fait)** : carte plein écran, barre du bas, temps, inspecteur, fenêtres
   déplaçables, raccourcis clavier, alertes et lettres, thème sombre à angles droits, erreurs
-  contenues par zone. Vérifié par un parcours automatique dans le navigateur.
-- **I2, le rendu** : carte en WebGL (PixiJS) à la place du SVG, créatures dessinées.
+  contenues par zone. Caméra testée : toujours au format de l'écran, jamais hors du monde,
+  recentrée d'elle-même au dézoom. Vérifié par des parcours automatiques dans le navigateur.
+- **I2, le rendu** : carte locale en WebGL (PixiJS) à la place du SVG, sur une grille de
+  tuiles avec textures, créatures dessinées.
 - **I3, les informations** : alertes, lettres, infobulles, calques complets.
+- **I4, la nature vivante** : plantes, débris, cadavres, feux et météo, simulés puis dessinés.
+- **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
+  carte locale. S'appuie sur M2.
 
 **Critère :** une personne qui connaît RimWorld s'y retrouve sans explication ; 60
 images/s avec 10 000 individus affichés.
