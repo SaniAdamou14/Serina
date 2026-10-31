@@ -1,160 +1,128 @@
 import { useMemo } from 'react'
-import { Sprout, Rocket } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
-import { computeLineageHues, creatureColor } from '../utils/lineageColor'
+import { BIOLOGICAL_GROUP_LABELS, LineageStatus } from '../types'
+import { useLineageHues } from '../hooks/useLineageHues'
+import { creatureColor } from '../utils/lineageColor'
 import { averageVisual } from '../utils/speciesVisual'
-import { CreatureIcon } from './CreatureIcon'
+import { CreaturePortrait } from './CreaturePortrait'
+import { GameColumn, GameTable } from './GameTable'
 
-/** UnifiedWorldSimulator ne modélise pas encore un score de risque
- * d'extinction (voir CONTRIBUTING.md) -- ce seuil de population est un fait
- * directement observé, pas une prédiction calculée. */
-const CRITICAL_POPULATION_THRESHOLD = 5
+/** Seuils sur des effectifs observés : un fait, pas une prédiction d'extinction. */
+const CRITICAL_POPULATION = 5
+const LOW_POPULATION = 15
 
-function getPopulationStatusColor(population: number) {
-  if (population <= CRITICAL_POPULATION_THRESHOLD) return 'text-red-300 bg-red-950'
-  if (population <= CRITICAL_POPULATION_THRESHOLD * 3) return 'text-amber-300 bg-amber-950'
-  return 'text-emerald-300 bg-emerald-950'
+function populationState(population: number): { label: string; className: string } {
+  if (population <= CRITICAL_POPULATION) return { label: 'Critique', className: 'text-red-300' }
+  if (population <= LOW_POPULATION) return { label: 'Faible', className: 'text-amber-300' }
+  return { label: 'Stable', className: 'text-slate-300' }
 }
 
-function getPopulationStatusLabel(population: number) {
-  if (population <= CRITICAL_POPULATION_THRESHOLD) return 'Population critique'
-  if (population <= CRITICAL_POPULATION_THRESHOLD * 3) return 'Population faible'
-  return 'Prospère'
-}
-
+/** Onglet Espèces : toutes les lignées vivantes, dans un tableau triable. */
 export function SpeciesPanel() {
   const { simulationData } = useSimulation()
   const { showSpeciesDetail } = useSelection()
+  const hues = useLineageHues()
 
-  const speciationEvents = simulationData?.lineages.speciationEvents
-  const allLineages = simulationData?.status.lineages
-  const lineageHues = useMemo(
-    () => computeLineageHues(speciationEvents ?? [], (allLineages ?? []).map((l) => l.speciesName)),
-    [speciationEvents, allLineages]
-  )
+  const individuals = simulationData?.individuals.individuals
+  const visuals = useMemo(() => {
+    const members = new Map<string, NonNullable<typeof individuals>>()
+    for (const ind of individuals ?? []) {
+      const list = members.get(ind.species)
+      if (list) list.push(ind)
+      else members.set(ind.species, [ind])
+    }
+    return new Map([...members].map(([name, list]) => [name, averageVisual(list)]))
+  }, [individuals])
 
-  if (!simulationData) {
-    return (
-      <div className="card">
-        <div className="animate-pulse">
-          <div className="h-4 bg-slate-700 rounded w-1/4 mb-4"></div>
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-20 bg-slate-700 rounded"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
+  if (!simulationData) return null
   const { status } = simulationData
-  const lineages = status.lineages
+  const total = status.population || 1
+
+  const columns: GameColumn<LineageStatus>[] = [
+    {
+      key: 'name',
+      label: 'Espèce',
+      value: (l) => l.speciesName,
+      render: (l) => {
+        const visual = visuals.get(l.speciesName)
+        return (
+          <span className="inline-flex items-center gap-2">
+            {visual && (
+              <CreaturePortrait
+                biologicalType={l.biologicalType}
+                ornamentTier={visual.ornamentTier}
+                patternTier={visual.patternTier}
+                color={creatureColor(hues.get(l.speciesName) ?? 0, 0, '#373835')}
+                size={26}
+              />
+            )}
+            <span className="italic font-semibold">{l.speciesName}</span>
+          </span>
+        )
+      }
+    },
+    { key: 'group', label: 'Groupe', value: (l) => BIOLOGICAL_GROUP_LABELS[l.biologicalType] ?? 'Inconnu' },
+    { key: 'population', label: 'Population', align: 'right', value: (l) => l.population, render: (l) => l.population.toLocaleString() },
+    {
+      key: 'share',
+      label: 'Part',
+      title: 'Part de la population totale du monde',
+      align: 'right',
+      value: (l) => l.population / total,
+      render: (l) => `${((l.population / total) * 100).toFixed(1)} %`
+    },
+    {
+      key: 'regions',
+      label: 'Cases',
+      title: 'Nombre de cases de la carte où cette espèce est présente',
+      align: 'right',
+      value: (l) => l.regionsOccupied
+    },
+    {
+      key: 'fitness',
+      label: 'Forme',
+      title: "Fitness moyenne : énergie, âge et potentiel de reproduction",
+      align: 'right',
+      value: (l) => l.averageFitness,
+      render: (l) => `${(l.averageFitness * 100).toFixed(0)} %`
+    },
+    {
+      key: 'diversity',
+      label: 'Diversité',
+      title: 'Distance génétique moyenne entre individus de cette espèce',
+      align: 'right',
+      value: (l) => l.geneticDiversity,
+      render: (l) => l.geneticDiversity.toFixed(3)
+    },
+    {
+      key: 'brain',
+      label: 'Cerveau',
+      title: 'Nombre de neurones et de connexions du réseau NEAT de la lignée',
+      align: 'right',
+      value: (l) => (l.hasBrain ? l.brainComplexity : 0),
+      render: (l) => (l.hasBrain ? l.brainComplexity : '-')
+    },
+    {
+      key: 'state',
+      label: 'État',
+      title: `Critique : ${CRITICAL_POPULATION} individus ou moins. Faible : ${LOW_POPULATION} ou moins.`,
+      value: (l) => l.population,
+      render: (l) => {
+        const state = populationState(l.population)
+        return <span className={state.className}>{state.label}</span>
+      }
+    }
+  ]
 
   return (
-    <div className="card">
-      <div className="border-b border-slate-700 pb-4 mb-6">
-        <h3 className="text-lg font-semibold text-slate-100">Espèces de Serina</h3>
-        <p className="text-sm text-slate-400">Surveillance des populations et des lignées évolutives, cliquez une carte pour la fiche complète</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-primary-400">{lineages.length}</div>
-          <div className="text-sm text-slate-400">Lignées actives</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-emerald-400">
-            {lineages.filter((l) => l.population > CRITICAL_POPULATION_THRESHOLD * 3).length}
-          </div>
-          <div className="text-sm text-slate-400">Prospères</div>
-        </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-red-400">
-            {lineages.filter((l) => l.population <= CRITICAL_POPULATION_THRESHOLD).length}
-          </div>
-          <div className="text-sm text-slate-400">En danger</div>
-        </div>
-      </div>
-
-      {/* Species Cards */}
-      <div className="space-y-4">
-        {lineages.map((lineage) => {
-          const share = status.population > 0 ? (lineage.population / status.population) * 100 : 0
-          const members = simulationData.individuals.individuals.filter((i) => i.species === lineage.speciesName)
-          const visual = averageVisual(members)
-          const hue = lineageHues.get(lineage.speciesName) ?? 0
-          const portraitColor = creatureColor(hue, visual?.camouflage ?? 0, '#334155')
-
-          return (
-            <button
-              key={lineage.speciesName}
-              onClick={() => showSpeciesDetail(lineage.speciesName)}
-              className="w-full text-left border border-slate-700 bg-slate-800/40 rounded-lg p-4 hover:border-primary-600 hover:bg-slate-800/70 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden">
-                    {visual ? (
-                      <svg viewBox="-1.2 -1.2 2.4 2.4" className="w-9 h-9">
-                        <CreatureIcon
-                          individual={{ id: 0, species: lineage.speciesName, x: 0, y: 0, energy: 0, age: 0, ...visual }}
-                          color={portraitColor}
-                          detailed
-                        />
-                      </svg>
-                    ) : (
-                      <span className="text-white font-bold">{lineage.speciesName.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-slate-100">{lineage.speciesName}</h4>
-                    <p className="text-sm text-slate-400">Fitness : {(lineage.averageFitness * 100).toFixed(0)}%</p>
-                  </div>
-                </div>
-                <div className={`status-indicator ${getPopulationStatusColor(lineage.population)}`}>
-                  {getPopulationStatusLabel(lineage.population)}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="font-bold text-lg text-slate-100">{lineage.population}</div>
-                  <div className="text-slate-400">Population</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-lg text-slate-100">{(lineage.geneticDiversity * 100).toFixed(0)}%</div>
-                  <div className="text-slate-400">Diversité</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-lg text-slate-100">{lineage.hasBrain ? lineage.brainComplexity : '-'}</div>
-                  <div className="text-slate-400">Cerveau NEAT</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold text-lg text-slate-100">{share.toFixed(1)}%</div>
-                  <div className="text-slate-400">Part</div>
-                </div>
-              </div>
-
-              {(lineage.adaptations.length > 0 || lineage.innovations.length > 0) && (
-                <div className="mt-4 pt-4 border-t border-slate-700 flex flex-wrap gap-2">
-                  {lineage.adaptations.map((a) => (
-                    <span key={a} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-emerald-950 text-emerald-300">
-                      <Sprout className="w-3 h-3" /> {a}
-                    </span>
-                  ))}
-                  {lineage.innovations.map((i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-genetic-950 text-genetic-300">
-                      <Rocket className="w-3 h-3" /> {i}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </button>
-          )
-        })}
-      </div>
-    </div>
+    <GameTable
+      columns={columns}
+      rows={status.lineages}
+      rowKey={(l) => l.speciesName}
+      onRowClick={(l) => showSpeciesDetail(l.speciesName)}
+      defaultSort={{ key: 'population', descending: true }}
+      emptyMessage="Aucune espèce vivante."
+    />
   )
 }

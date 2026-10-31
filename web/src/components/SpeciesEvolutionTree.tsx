@@ -1,338 +1,137 @@
-import { useSimulation } from '@services/SimulationContext';
-import { useState, useEffect, useRef } from 'react';
-import { GitBranch, Dna, BarChart3, TrendingUp, Zap, AlertTriangle, CheckCircle2, Globe2, Shuffle } from 'lucide-react';
-import { LineageStatus, SpeciationEventInfo } from '../types';
+import { useMemo } from 'react'
+import { useSimulation } from '@services/SimulationContext'
+import { useSelection } from '@services/SelectionContext'
+import { useGameLog } from '@services/GameLogContext'
+import { useLineageHues } from '../hooks/useLineageHues'
+import { creatureColor } from '../utils/lineageColor'
 
-/** Population en dessous de laquelle une lignée est affichée comme
- * critique -- un fait directement observé (le compte réel d'individus
- * vivants), pas un score de risque calculé : UnifiedWorldSimulator ne
- * modélise pas encore de risque d'extinction (voir CONTRIBUTING.md). */
-const CRITICAL_POPULATION_THRESHOLD = 5;
-
-interface TreeNode {
-  name: string;
-  population: number;
-  fitness: number;
-  extinct: boolean;
-  isRoot: boolean;
-  /** Distance génétique réelle mesurée au moment de la scission (absente pour une racine fondatrice). */
-  splitGeneration?: number;
-  splitDistance?: number;
-  children: TreeNode[];
+interface Branch {
+  name: string
+  start: number
+  end: number
+  alive: boolean
+  population: number
+  row: number
+  parentRow: number | null
+  distance: number | null
 }
 
-const FOUNDER_STORIES: Record<string, string> = {
-  'Serinus canaria': 'Les canaris, seuls oiseaux de Serina, ont évolué pour occuper toutes les niches écologiques aviaires.',
-  'Xiphophorus hellerii': 'Porte-épées et guppys, diversifiés dans les eaux douces et salées de Serina.',
-  'Gryllus seriensis': 'Grillons adaptés aux environnements terrestres, base de nombreuses chaînes alimentaires.',
-  'Solenopsis invicta': 'Fourmis de feu développant des sociétés complexes et colonisant tous les habitats.',
-  'Achatina fulica': 'Escargots géants évoluant vers des formes terrestres et aquatiques variées.'
-};
+const ROW_HEIGHT = 24
+const MARGIN = { top: 26, right: 190, bottom: 8, left: 12 }
+const WIDTH = 930
 
 /**
- * Construit le vrai arbre phylogénétique depuis l'historique réel des
- * spéciations (`speciationEvents` : parentSpecies -> newSpecies, avec la
- * génération et la distance génétique mesurée à la scission) au lieu de
- * deviner la filiation par correspondance de préfixe de nom. Les racines
- * sont les espèces qui n'apparaissent jamais comme `newSpecies` -- les
- * cinq fondatrices, sans les coder en dur.
+ * Onglet Évolution : l'arbre réel des espèces, le temps de gauche à droite. Chaque ligne
+ * est une espèce, de son apparition à aujourd'hui ou à son extinction. Construit depuis
+ * les spéciations mesurées par le moteur.
  */
-function buildRealTree(lineages: LineageStatus[], events: SpeciationEventInfo[]): TreeNode[] {
-  const byName = new Map<string, LineageStatus>(lineages.map((l) => [l.speciesName, l]));
-  const childrenOf = new Map<string, SpeciationEventInfo[]>();
-  const hasParent = new Set<string>();
-
-  events.forEach((event) => {
-    if (!childrenOf.has(event.parentSpecies)) childrenOf.set(event.parentSpecies, []);
-    childrenOf.get(event.parentSpecies)!.push(event);
-    hasParent.add(event.newSpecies);
-  });
-
-  const toNode = (name: string, splitEvent?: SpeciationEventInfo): TreeNode => {
-    const lineage = byName.get(name);
-    const children = (childrenOf.get(name) ?? []).map((event) => toNode(event.newSpecies, event));
-    return {
-      name,
-      population: lineage?.population ?? 0,
-      fitness: lineage?.averageFitness ?? 0,
-      extinct: lineage ? lineage.population <= CRITICAL_POPULATION_THRESHOLD : true,
-      isRoot: !splitEvent,
-      splitGeneration: splitEvent?.generation,
-      splitDistance: splitEvent?.geneticDistanceAtSplit,
-      children
-    };
-  };
-
-  // Racines : toute espèce vivante ou ayant existé (apparaît côté parent ou
-  // encore vivante) qui n'a jamais été le résultat d'une scission.
-  const allKnownNames = new Set<string>([...byName.keys(), ...events.map((e) => e.parentSpecies)]);
-  const roots = Array.from(allKnownNames).filter((name) => !hasParent.has(name));
-  return roots.map((name) => toNode(name));
-}
-
-function countDescendants(node: TreeNode): number {
-  return node.children.reduce((sum, child) => sum + 1 + countDescendants(child), 0);
-}
-
-function countCritical(node: TreeNode): number {
-  const self = node.isRoot ? 0 : node.extinct ? 1 : 0;
-  return node.children.reduce((sum, child) => sum + countCritical(child), self);
-}
-
 export function SpeciesEvolutionTree() {
-  const { simulationData } = useSimulation();
-  const svgRef = useRef<SVGSVGElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null);
-  const [treeData, setTreeData] = useState<TreeNode[]>([]);
+  const { simulationData } = useSimulation()
+  const { showSpeciesDetail } = useSelection()
+  const { chronicle } = useGameLog()
+  const hues = useLineageHues()
 
-  useEffect(() => {
-    if (!simulationData?.status.lineages || !simulationData.lineages.speciationEvents) return;
-    const tree = buildRealTree(simulationData.status.lineages, simulationData.lineages.speciationEvents);
-    setTreeData(tree);
-    drawTree(tree);
+  const lineages = simulationData?.status.lineages
+  const events = simulationData?.lineages.speciationEvents
+  const now = simulationData?.status.generation ?? 0
 
-    // Redessine si le conteneur change de taille (redimensionnement de
-    // fenêtre, repli du rail latéral...) -- évite un arbre figé à la largeur
-    // du tout premier rendu.
-    const container = containerRef.current;
-    if (!container) return;
-    const observer = new ResizeObserver(() => drawTree(tree));
-    observer.observe(container);
-    return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [simulationData]);
-
-  const drawTree = (tree: TreeNode[]) => {
-    const svg = svgRef.current;
-    if (!svg) return;
-
-    svg.innerHTML = '';
-
-    // Largeur proportionnelle au nombre de feuilles de chaque racine, pour
-    // que des arbres réellement plus ramifiés prennent plus de place --
-    // mais jamais moins que la largeur réelle disponible à l'écran, pour
-    // qu'un petit arbre remplisse quand même tout l'espace plutôt que de
-    // laisser une bande vide. Rendu à l'échelle 1:1 (largeur/hauteur SVG en
-    // pixels, pas en pourcentage) dans un conteneur défilant horizontalement
-    // -- jamais de redimensionnement implicite qui écraserait ou couperait
-    // les nœuds (bug réel signalé : arbre trop étroit, dépasse par moments).
-    const availableWidth = containerRef.current?.clientWidth ?? 800;
-    const leafCounts = tree.map((root) => Math.max(1, countDescendants(root)));
-    const totalLeaves = leafCounts.reduce((a, b) => a + b, 0) || 1;
-    const width = Math.max(availableWidth - 4, totalLeaves * 65);
-    const levelHeight = 100;
-    const nodeRadius = 18;
-
-    // Profondeur maximale réelle, pour dimensionner la hauteur du SVG plutôt
-    // que de couper un arbre à plusieurs niveaux de spéciations imbriquées.
-    const depthOf = (node: TreeNode): number =>
-      node.children.length ? 1 + Math.max(...node.children.map(depthOf)) : 0;
-    const maxDepth = Math.max(0, ...tree.map(depthOf));
-    const height = 100 + (maxDepth + 1) * levelHeight;
-
-    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    svg.setAttribute('width', String(width));
-    svg.setAttribute('height', String(height));
-
-    let cursor = 0;
-    const layout = (node: TreeNode, depth: number): number => {
-      const leaves = Math.max(1, countDescendants(node) || 1);
-      const slotWidth = (leaves / totalLeaves) * width;
-      const x = cursor + slotWidth / 2;
-      cursor += slotWidth;
-      const y = 60 + depth * levelHeight;
-
-      node.children.forEach((child) => {
-        const childX = layout(child, depth + 1);
-        drawConnection(svg, x, y + nodeRadius, childX, y + levelHeight - nodeRadius);
-      });
-
-      drawNode(svg, node, x, y, nodeRadius);
-      return x;
-    };
-
-    tree.forEach((root) => layout(root, 0));
-  };
-
-  const drawNode = (svg: SVGSVGElement, node: TreeNode, x: number, y: number, nodeRadius: number) => {
-    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    group.style.cursor = 'pointer';
-
-    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    circle.setAttribute('cx', x.toString());
-    circle.setAttribute('cy', y.toString());
-    circle.setAttribute('r', (node.isRoot ? nodeRadius * 1.2 : nodeRadius).toString());
-    circle.setAttribute('fill', node.extinct ? '#f87171' : node.isRoot ? '#38bdf8' : '#34d399');
-    circle.setAttribute('stroke', '#0f172a');
-    circle.setAttribute('stroke-width', '2');
-
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    text.setAttribute('x', x.toString());
-    text.setAttribute('y', (y + nodeRadius + 14).toString());
-    text.setAttribute('text-anchor', 'middle');
-    text.setAttribute('font-size', '10');
-    text.setAttribute('font-family', 'Arial');
-    text.setAttribute('fill', '#e2e8f0');
-    text.textContent = node.name.split(' ')[0];
-
-    group.appendChild(circle);
-    group.appendChild(text);
-
-    if (!node.isRoot) {
-      const popText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      popText.setAttribute('x', x.toString());
-      popText.setAttribute('y', (y + nodeRadius + 26).toString());
-      popText.setAttribute('text-anchor', 'middle');
-      popText.setAttribute('font-size', '8');
-      popText.setAttribute('font-family', 'Arial');
-      popText.setAttribute('fill', '#94a3b8');
-      popText.textContent = `Pop: ${node.population.toLocaleString()}`;
-      group.appendChild(popText);
+  const branches = useMemo<Branch[]>(() => {
+    if (!lineages || !events) return []
+    const populationOf = new Map(lineages.map((l) => [l.speciesName, l.population]))
+    const childrenOf = new Map<string, typeof events>()
+    const hasParent = new Set<string>()
+    for (const e of events) {
+      if (!childrenOf.has(e.parentSpecies)) childrenOf.set(e.parentSpecies, [])
+      childrenOf.get(e.parentSpecies)!.push(e)
+      hasParent.add(e.newSpecies)
     }
 
-    group.addEventListener('click', () => setSelectedNode(node));
-    svg.appendChild(group);
-  };
+    const extinctionTick = new Map<string, number>()
+    for (const c of chronicle) {
+      if (c.type !== 'extinction') continue
+      const name = c.message.match(/« (.+?) »/)?.[1]
+      if (name) extinctionTick.set(name, c.generation)
+    }
 
-  const drawConnection = (svg: SVGSVGElement, x1: number, y1: number, x2: number, y2: number) => {
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', x1.toString());
-    line.setAttribute('y1', y1.toString());
-    line.setAttribute('x2', x2.toString());
-    line.setAttribute('y2', y2.toString());
-    line.setAttribute('stroke', '#475569');
-    line.setAttribute('stroke-width', '2');
-    svg.appendChild(line);
-  };
+    const result: Branch[] = []
+    const visit = (name: string, start: number, parentRow: number | null, distance: number | null) => {
+      const row = result.length
+      const alive = populationOf.has(name)
+      const children = [...(childrenOf.get(name) ?? [])].sort((a, b) => a.generation - b.generation)
+      const lastChild = children.length ? children[children.length - 1].generation : start
+      result.push({
+        name,
+        start,
+        end: alive ? now : extinctionTick.get(name) ?? Math.max(start, lastChild),
+        alive,
+        population: populationOf.get(name) ?? 0,
+        row,
+        parentRow,
+        distance
+      })
+      for (const child of children) visit(child.newSpecies, child.generation, row, child.geneticDistanceAtSplit)
+    }
 
-  const getEvolutionaryStory = (node: TreeNode): string => {
-    if (node.isRoot) return FOUNDER_STORIES[node.name] ?? 'Lignée fondatrice de Serina.';
-    return `Scission réelle observée à la génération ${node.splitGeneration} ` +
-      `(distance génétique mesurée : ${node.splitDistance?.toFixed(3)}). ` +
-      `Cette lignée a développé des adaptations spécialisées pour sa niche écologique.`;
-  };
+    const known = new Set([...lineages.map((l) => l.speciesName), ...events.map((e) => e.parentSpecies)])
+    for (const root of [...known].filter((n) => !hasParent.has(n)).sort()) visit(root, 0, null, null)
+    return result
+  }, [lineages, events, chronicle, now])
 
-  const status = simulationData?.status;
-  const regions = simulationData?.regions.regions ?? [];
-  const avgPredationPressure = regions.length
-    ? regions.reduce((sum, r) => sum + r.predationPressure, 0) / regions.length
-    : 0;
-  const avgTemperature = regions.length
-    ? regions.reduce((sum, r) => sum + r.temperature, 0) / regions.length
-    : 0;
+  if (!simulationData) return null
+
+  const span = Math.max(1, now)
+  const plotWidth = WIDTH - MARGIN.left - MARGIN.right
+  const x = (tick: number) => MARGIN.left + (tick / span) * plotWidth
+  const y = (row: number) => MARGIN.top + row * ROW_HEIGHT + ROW_HEIGHT / 2
+  const height = MARGIN.top + branches.length * ROW_HEIGHT + MARGIN.bottom
+  const alive = branches.filter((b) => b.alive).length
 
   return (
-    <div className="card">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2"><GitBranch className="w-5 h-5" /> Arbre Évolutif de Serina</h3>
-        <div className="text-sm text-slate-400">
-          Génération actuelle : {status?.generation ?? 0}
-        </div>
-      </div>
+    <>
+      <p className="text-xs text-slate-300">
+        {alive} espèce(s) vivante(s), {branches.length - alive} éteinte(s), {events?.length ?? 0} spéciation(s) depuis le début.
+        Le temps va de gauche à droite. Cliquez une espèce pour ouvrir sa fiche.
+      </p>
+      <svg viewBox={`0 0 ${WIDTH} ${height}`} className="w-full h-auto" role="img" aria-label="Arbre des espèces">
+        {[0, 0.5, 1].map((f) => (
+          <g key={f}>
+            <line x1={x(span * f)} x2={x(span * f)} y1={MARGIN.top - 6} y2={height - MARGIN.bottom} stroke="#464743" strokeWidth={1} />
+            <text x={x(span * f)} y={14} textAnchor={f === 0 ? 'start' : 'middle'} fontSize={11} fill="#bcbbb3">
+              Tick {Math.round(span * f).toLocaleString()}
+            </text>
+          </g>
+        ))}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 border border-slate-700 rounded-lg bg-slate-950 overflow-x-auto" ref={containerRef}>
-          <svg ref={svgRef} style={{ maxHeight: '500px', display: 'block' }}></svg>
-        </div>
-
-        <div className="space-y-4">
-          <div className="bg-blue-950 p-3 rounded-lg">
-            <h4 className="font-semibold text-blue-200 mb-2 flex items-center gap-1.5"><Dna className="w-4 h-4" /> Lignées Fondatrices</h4>
-            <div className="space-y-2 text-sm text-slate-300">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-sky-400 rounded-full"></div>
-                <span>Espèces ancestrales</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-emerald-400 rounded-full"></div>
-                <span>Descendants actuels</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-red-400 rounded-full"></div>
-                <span>Espèces en danger critique</span>
-              </div>
-            </div>
-          </div>
-
-          {selectedNode && (
-            <div className="bg-amber-950 p-3 rounded-lg border border-amber-800">
-              <h4 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><BarChart3 className="w-4 h-4" /> {selectedNode.name}</h4>
-              <div className="space-y-1 text-sm text-amber-300">
-                {!selectedNode.isRoot && (
-                  <>
-                    <div><strong>Population :</strong> {selectedNode.population.toLocaleString()}</div>
-                    <div><strong>Fitness :</strong> {(selectedNode.fitness * 100).toFixed(0)}%</div>
-                  </>
-                )}
-                <div className="flex items-center gap-1.5">
-                  <strong>Statut :</strong>
-                  {selectedNode.extinct
-                    ? <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Population critique (≤ {CRITICAL_POPULATION_THRESHOLD})</span>
-                    : <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> Active</span>}
-                </div>
-              </div>
-              <p className="text-xs text-amber-400 mt-2">{getEvolutionaryStory(selectedNode)}</p>
-            </div>
-          )}
-
-          <div className="ecosystem-stat">
-            <h4 className="font-semibold text-ecosystem-200 mb-2 flex items-center gap-1.5"><TrendingUp className="w-4 h-4" /> Statistiques Évolutives</h4>
-            <div className="space-y-1 text-sm text-ecosystem-300">
-              <div>Lignées fondatrices : {treeData.length}</div>
-              <div>Espèces issues de spéciation : {treeData.reduce((sum, t) => sum + countDescendants(t), 0)}</div>
-              <div>Espèces en population critique : {treeData.reduce((sum, t) => sum + countCritical(t), 0)}</div>
-              <div>Diversité génétique moyenne : {status && status.lineages.length
-                ? (status.lineages.reduce((sum, l) => sum + l.geneticDiversity, 0) / status.lineages.length).toFixed(2)
-                : 'N/A'}</div>
-              <div>Spéciations totales : {status?.speciationEventCount ?? 'N/A'}</div>
-            </div>
-          </div>
-
-          <div className="bg-amber-950 p-3 rounded-lg">
-            <h4 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><Zap className="w-4 h-4" /> Pressions Sélectives (moyenne sur toutes les régions)</h4>
-            <div className="space-y-1 text-sm text-amber-300">
-              <div>Prédation : {(avgPredationPressure * 100).toFixed(0)}%</div>
-              <div>Température : {avgTemperature.toFixed(1)}°C</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {(simulationData?.lineages.convergenceSignals?.length ?? 0) > 0 && (
-        <div className="mt-6 p-4 bg-purple-950 border border-purple-800 rounded-lg">
-          <h5 className="font-semibold text-purple-200 mb-1 flex items-center gap-1.5">
-            <Shuffle className="w-4 h-4" /> Signaux de convergence évolutive (motifs observés)
-          </h5>
-          <p className="text-xs text-purple-400 mb-3">
-            Deux lignées génétiquement distinctes dont les traits mesurés se sont rapprochés alors que leur
-            distance génétique a continué de croître -- un motif candidat détecté sur des mesures réelles,
-            jamais une preuve ni un phénomène mis en scène.
-          </p>
-          <div className="space-y-1.5 text-sm text-purple-300 max-h-40 overflow-y-auto">
-            {simulationData!.lineages.convergenceSignals.map((s, i) => (
-              <div key={`${s.speciesA}-${s.speciesB}-${s.generation}-${i}`} className="text-xs">
-                <span className="italic">{s.speciesA}</span> et <span className="italic">{s.speciesB}</span>
-                {' '}(génération {s.generation}), distance de traits : {s.traitDistance.toFixed(3)}
-                {' '}({s.traitDistanceDelta.toFixed(3)}), distance génétique : {s.geneticDistance.toFixed(3)}
-                {' '}(+{s.geneticDistanceDelta.toFixed(3)})
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="mt-6 p-4 bg-genetic-950 border border-genetic-800 rounded-lg">
-        <h5 className="font-semibold text-genetic-200 mb-2 flex items-center gap-1.5"><Globe2 className="w-4 h-4" /> L'Histoire Évolutive de Serina</h5>
-        <p className="text-sm text-genetic-300">
-          Il y a des millions d'années, cinq espèces terrestres ont été introduites sur Serina :
-          des canaris, des poissons tropicaux (guppys et porte-épées), des grillons, des fourmis de feu,
-          et des escargots géants d'Afrique. Ces lignées fondatrices ont évolué pour remplir
-          tous les rôles écologiques d'un écosystème complet. Chaque branche de l'arbre ci-dessus
-          correspond à un événement de spéciation réellement survenu pendant cette simulation, pas
-          à une histoire écrite à l'avance.
-        </p>
-      </div>
-    </div>
-  );
+        {branches.map((b) => {
+          const color = b.alive ? creatureColor(hues.get(b.name) ?? 0, 0, '#2a2b29') : '#767570'
+          return (
+            <g key={b.name} className="cursor-pointer" onClick={() => showSpeciesDetail(b.name)}>
+              <title>
+                {`${b.name}\n${b.alive ? `${b.population.toLocaleString()} individu(s)` : 'Éteinte'}\nApparue au tick ${b.start.toLocaleString()}${b.distance !== null ? `, distance génétique ${b.distance.toFixed(3)}` : ''}`}
+              </title>
+              {b.parentRow !== null && (
+                <line x1={x(b.start)} x2={x(b.start)} y1={y(b.parentRow)} y2={y(b.row)} stroke={color} strokeWidth={1.5} />
+              )}
+              <line
+                x1={x(b.start)}
+                x2={x(b.end)}
+                y1={y(b.row)}
+                y2={y(b.row)}
+                stroke={color}
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeDasharray={b.alive ? undefined : '5 4'}
+              />
+              <text x={x(b.end) + 8} y={y(b.row) + 4} fontSize={12} fontStyle="italic" fill={b.alive ? '#e6e5e0' : '#98978f'}>
+                {b.name}
+                <tspan fontStyle="normal" fill="#98978f"> {b.alive ? b.population.toLocaleString() : 'éteinte'}</tspan>
+              </text>
+              {/* Zone de clic plus large que le trait. */}
+              <rect x={MARGIN.left} y={y(b.row) - ROW_HEIGHT / 2} width={WIDTH - MARGIN.left} height={ROW_HEIGHT} fill="transparent" />
+            </g>
+          )
+        })}
+      </svg>
+    </>
+  )
 }

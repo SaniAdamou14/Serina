@@ -3,17 +3,16 @@ import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
 import { SimulationCommand } from '../types'
 import { AlertStack } from './AlertStack'
-import { EnvironmentView } from './EnvironmentView'
+import { ChroniclesPage } from './ChroniclesPage'
 import { ErrorBoundary } from './ErrorBoundary'
 import { GameWindow } from './GameWindow'
 import { GeneticAnalysis } from './GeneticAnalysis'
-import { HistoryView } from './HistoryView'
+import { GraphsPage } from './GraphsPage'
 import { InspectorPanel } from './InspectorPanel'
 import { LineageBar } from './LineageBar'
 import { MAIN_TABS, MainTab, SPEED_TIERS } from './gameConstants'
 import { MainTabBar } from './MainTabBar'
 import { EngineStatus } from './PerformanceMetrics'
-import { PopulationChart } from './PopulationChart'
 import { ResourceReadout } from './ResourceReadout'
 import { SimulationControl } from './SimulationControl'
 import { SpeciesComparisonPanel } from './SpeciesComparisonPanel'
@@ -22,6 +21,7 @@ import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
 import { SpeciesPanel } from './SpeciesPanel'
 import { TimeControls } from './TimeControls'
 import { WorldMap } from './WorldMap'
+import { WorldPage } from './WorldPage'
 
 function tabContent(tab: MainTab) {
   switch (tab) {
@@ -32,17 +32,18 @@ function tabContent(tab: MainTab) {
     case 'genetics':
       return <GeneticAnalysis />
     case 'world':
+      return <WorldPage />
+    case 'graphs':
+      return <GraphsPage />
+    case 'chronicles':
+      return <ChroniclesPage />
+    case 'menu':
       return (
         <>
-          <PopulationChart />
+          <SimulationControl />
           <EngineStatus />
-          <EnvironmentView showDetails />
         </>
       )
-    case 'history':
-      return <HistoryView />
-    case 'menu':
-      return <SimulationControl />
   }
 }
 

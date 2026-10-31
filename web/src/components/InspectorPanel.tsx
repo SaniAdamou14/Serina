@@ -1,6 +1,7 @@
 import { ClipboardList, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useSelection } from '@services/SelectionContext'
+import { useSimulation } from '@services/SimulationContext'
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -16,14 +17,24 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
  * un individu est sélectionné.
  */
 export function InspectorPanel() {
-  const { selectedRegion, selectedIndividual, showSpeciesDetail, clearSelection } = useSelection()
-  if (!selectedRegion && !selectedIndividual) return null
+  const { selectedRegion: clickedRegion, selectedIndividual: clickedIndividual, showSpeciesDetail, clearSelection } = useSelection()
+  const { simulationData } = useSimulation()
+  if (!clickedRegion && !clickedIndividual) return null
+
+  // La sélection garde les valeurs du clic : l'inspecteur suit l'état courant.
+  const selectedRegion = clickedRegion
+    ? simulationData?.regions.regions.find((r) => r.gridX === clickedRegion.gridX && r.gridY === clickedRegion.gridY) ?? clickedRegion
+    : null
+  const selectedIndividual = clickedIndividual
+    ? simulationData?.individuals.individuals.find((i) => i.id === clickedIndividual.id) ?? null
+    : null
+  const individualDied = !!clickedIndividual && !selectedIndividual
 
   return (
     <aside className="game-panel absolute left-2 bottom-11 z-20 w-80 text-xs">
       <div className="flex items-center justify-between px-2 h-7 border-b border-slate-600 bg-slate-800">
         <h3 className="text-sm font-bold truncate">
-          {selectedRegion ? selectedRegion.environmentName || 'Biome inconnu' : selectedIndividual?.species}
+          {selectedRegion ? selectedRegion.environmentName || 'Biome inconnu' : clickedIndividual?.species}
         </h3>
         <button className="opacity-70 hover:opacity-100" onClick={clearSelection} aria-label="Fermer l'inspecteur" title="Fermer (Échap)">
           <X className="w-3.5 h-3.5" />
@@ -41,6 +52,8 @@ export function InspectorPanel() {
           <Row label="Stress climatique" value={`${(selectedRegion.climaticStress * 100).toFixed(0)} %`} />
         </div>
       )}
+
+      {individualDied && <p className="p-2 text-slate-400">Cet individu est mort.</p>}
 
       {selectedIndividual && (
         <div className="p-2 space-y-0.5">

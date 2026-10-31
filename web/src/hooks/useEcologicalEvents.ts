@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { SimulationTick } from '../types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { SimulationTick, SpeciationEventInfo } from '../types'
 
 export interface EcoEvent {
   id: string
@@ -15,7 +15,18 @@ const EVENT_LIFETIME_MS = 12000
  * déborderait de l'écran. Le vrai historique complet reste consultable
  * dans l'onglet Historique/Évolution ; ceci n'est qu'une notification
  * éphémère, jamais la seule source de vérité. */
-const MAX_STACKED_EVENTS = 6
+const MAX_STACKED_EVENTS = 4
+const MAX_CHRONICLE_EVENTS = 5000
+
+function speciationEntry(e: SpeciationEventInfo): EcoEvent {
+  const key = `${e.parentSpecies}>${e.newSpecies}@${e.generation}`
+  return {
+    id: `speciation:${key}`,
+    type: 'speciation',
+    generation: e.generation,
+    message: `« ${e.newSpecies} » a divergé de « ${e.parentSpecies} » (distance génétique : ${e.geneticDistanceAtSplit.toFixed(3)}).`
+  }
+}
 
 /**
  * Détecte deux catégories d'événements réels, jamais un texte narratif
@@ -38,14 +49,16 @@ export function useEcologicalEvents(
 ): {
   events: EcoEvent[]
   dismiss: (id: string) => void
+  chronicle: EcoEvent[]
 } {
   const [events, setEvents] = useState<EcoEvent[]>([])
+  const [chronicle, setChronicle] = useState<EcoEvent[]>([])
   const seenSpeciationKeys = useRef<Set<string> | null>(null)
   const previousSpeciesNames = useRef<Set<string> | null>(null)
   const previousPopulations = useRef<Map<string, number>>(new Map())
   const observedSimulationId = useRef<string | number | null>(null)
 
-  const dismiss = (id: string) => setEvents((current) => current.filter((e) => e.id !== id))
+  const dismiss = useCallback((id: string) => setEvents((current) => current.filter((e) => e.id !== id)), [])
 
   // Changer de simulation (nouvelle, ou reprise d'une autre) doit repartir
   // de zéro : comparer les lignées de deux simulations différentes
@@ -58,6 +71,7 @@ export function useEcologicalEvents(
       previousSpeciesNames.current = null
       previousPopulations.current = new Map()
       setEvents([])
+      setChronicle([])
     }
   }, [simulationId])
 
@@ -73,6 +87,7 @@ export function useEcologicalEvents(
       seenSpeciationKeys.current = new Set(speciationEvents.map((e) => `${e.parentSpecies}>${e.newSpecies}@${e.generation}`))
       previousSpeciesNames.current = currentNames
       previousPopulations.current = new Map(lineages.map((l) => [l.speciesName, l.population]))
+      setChronicle(speciationEvents.map(speciationEntry))
       return
     }
 
@@ -82,12 +97,7 @@ export function useEcologicalEvents(
       const key = `${e.parentSpecies}>${e.newSpecies}@${e.generation}`
       if (seenSpeciationKeys.current!.has(key)) continue
       seenSpeciationKeys.current!.add(key)
-      newEvents.push({
-        id: `speciation:${key}`,
-        type: 'speciation',
-        generation: e.generation,
-        message: `« ${e.newSpecies} » a divergé de « ${e.parentSpecies} » (distance génétique : ${e.geneticDistanceAtSplit.toFixed(3)}).`
-      })
+      newEvents.push(speciationEntry(e))
     }
 
     for (const name of previousSpeciesNames.current!) {
@@ -104,6 +114,7 @@ export function useEcologicalEvents(
 
     if (newEvents.length > 0) {
       setEvents((current) => [...current, ...newEvents].slice(-MAX_STACKED_EVENTS))
+      setChronicle((current) => [...current, ...newEvents].slice(-MAX_CHRONICLE_EVENTS))
       for (const e of newEvents) {
         setTimeout(() => dismiss(e.id), EVENT_LIFETIME_MS)
       }
@@ -111,7 +122,7 @@ export function useEcologicalEvents(
 
     previousSpeciesNames.current = currentNames
     previousPopulations.current = new Map(lineages.map((l) => [l.speciesName, l.population]))
-  }, [tick])
+  }, [tick, dismiss])
 
-  return { events, dismiss }
+  return { events, dismiss, chronicle }
 }

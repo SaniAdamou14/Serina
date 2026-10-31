@@ -22,6 +22,9 @@ export const BIOLOGICAL_TYPE_NAMES = [
   'CRUSTACEAN'
 ] as const
 
+/** Noms affichés des groupes, dans le même ordre que BIOLOGICAL_TYPE_NAMES. */
+export const BIOLOGICAL_GROUP_LABELS = ['Oiseau', 'Poisson', 'Arthropode', 'Mollusque', 'Cnidaire', 'Annélide', 'Plante', 'Crustacé'] as const
+
 // === status command -> latestData.status ===
 
 /** Real average of the 12 diploid trait values (Genetics::TraitType) across
