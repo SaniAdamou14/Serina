@@ -233,7 +233,7 @@ Ce qu'on reprend de RimWorld :
   choisit une case. Rendu : celui de M2 (globe et cartes 2D).
 - **La carte locale** : une case de la planète vue au sol, sur une grille de tuiles, avec des
   textures réelles d'arbres, d'herbe, de roche et d'eau, des animaux, des branches au sol, des
-  cadavres qui se décomposent, des feux, de la pluie, de la neige, des éclairs. Rendu : PixiJS.
+  cadavres qui se décomposent, des feux, de la pluie, de la neige, des éclairs. Rendu : WebGL2.
 
 **Règle : rien de décoratif.** Chaque chose visible correspond à quelque chose de simulé,
 comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
@@ -247,8 +247,8 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
 | Pluie, neige, éclairs | Météo locale tirée du climat réel de la case |
 | Animaux | Individus du moteur actuel, dessinés selon leur génome et leur plan corporel |
 
-**Textures :** aucune image de RimWorld, qui est protégée. Utiliser des images sous licence
-libre, créer les nôtres, ou les générer. Choix à faire avant I2.
+**Images :** aucune image ni carte de RimWorld, qui sont protégées. Sols en CC0 (voir
+`web/public/textures/CREDITS.md`), créatures dessinées par notre code.
 
 Étapes :
 
@@ -256,12 +256,21 @@ libre, créer les nôtres, ou les générer. Choix à faire avant I2.
   déplaçables, raccourcis clavier, alertes et lettres, thème sombre à angles droits, erreurs
   contenues par zone. Caméra testée : toujours au format de l'écran, jamais hors du monde,
   recentrée d'elle-même au dézoom. Vérifié par des parcours automatiques dans le navigateur.
-- **I2, le rendu** : carte locale en WebGL (PixiJS) à la place du SVG, sur une grille de
-  tuiles avec textures, créatures dessinées.
+- **I2, le rendu (fait)** : carte en WebGL2 à la place du SVG, sol texturé et éclairé, biomes
+  fondus, côtes arrondies, eau animée, créatures de profil avec marche et ombre, minicarte du
+  vrai terrain. Sur la Radeon intégrée de référence : 60 images/s en population réelle, 57 à
+  10 000 créatures, 25 à 50 000. Reste une limite : les bords dessinés ondulent autour des
+  cases du moteur, donc un clic près d'une frontière peut inspecter la case voisine.
 - **I3, les informations** : alertes, lettres, infobulles, calques complets.
 - **I4, la nature vivante** : plantes, débris, cadavres, feux et météo, simulés puis dessinés.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
+- **I6, les créatures issues de leur génome** : de nouveaux gènes héritables de forme et
+  d'apparence (longueur du corps et des membres, tégument, pigment, motif), chacun avec un coût
+  ou un effet réel sur la survie selon le climat et les prédateurs. Le dessin est généré à partir
+  de ces gènes pour chaque lignée. Une apparence adaptée doit donc résulter de la sélection, sans
+  règle du type « froid = fourrure ». Remplace le mélange de couleur avec le biome qui simule
+  aujourd'hui le camouflage. Dépend du climat de M1.
 
 **Critère :** une personne qui connaît RimWorld s'y retrouve sans explication ; 60
 images/s avec 10 000 individus affichés.

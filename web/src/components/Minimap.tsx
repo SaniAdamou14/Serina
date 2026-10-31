@@ -1,44 +1,27 @@
 import { useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import { RegionInfo } from '../types';
-
-interface ViewBox {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-const FALLBACK_BIOME_COLOR = '#9ca3af';
+import type { ViewBox } from '../utils/mapCamera';
 
 interface MinimapProps {
-  regions: RegionInfo[];
-  cellSize: number;
+  /** Image du monde produite par le rendu de la carte : le vrai terrain, pas un schéma. */
+  image: string | null;
   worldWidth: number;
   worldHeight: number;
   viewBox: ViewBox;
-  biomeColors: Record<string, string>;
   /** Centre la caméra principale sur ce point du monde (coordonnées réelles, pas des fractions). */
   onNavigate: (worldX: number, worldY: number) => void;
 }
 
 const MINIMAP_WIDTH_PX = 176;
 
-/**
- * Minicarte façon RimWorld : réutilise les mêmes régions/couleurs de biome
- * que WorldMap (jamais une seconde source de vérité), rendues en aplat
- * simple -- pas de texture/jitter ici, invisible à cette échelle et coûteux
- * pour rien. Le rectangle affiché est le viewBox RÉEL de la caméra
- * principale (même unités monde), jamais une approximation recalculée.
- */
-export function Minimap({ regions, cellSize, worldWidth, worldHeight, viewBox, biomeColors, onNavigate }: MinimapProps) {
+/** Minicarte : le rectangle affiché est la vue réelle de la caméra principale. */
+export function Minimap({ image, worldWidth, worldHeight, viewBox, onNavigate }: MinimapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   if (worldWidth <= 0 || worldHeight <= 0) return null;
 
-  const aspect = worldHeight / worldWidth;
-  const heightPx = MINIMAP_WIDTH_PX * aspect;
+  const heightPx = MINIMAP_WIDTH_PX * (worldHeight / worldWidth);
 
   const navigateFromEvent = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
@@ -48,12 +31,18 @@ export function Minimap({ regions, cellSize, worldWidth, worldHeight, viewBox, b
     onNavigate(fracX * worldWidth, fracY * worldHeight);
   };
 
+  // En vue d'ensemble, la vue déborde du monde : le cadre s'arrête à ses limites.
+  const x = Math.max(0, viewBox.x);
+  const y = Math.max(0, viewBox.y);
+  const width = Math.min(worldWidth, viewBox.x + viewBox.w) - x;
+  const height = Math.min(worldHeight, viewBox.y + viewBox.h) - y;
+
   return (
     <div className="game-panel p-1 pointer-events-auto">
       <div
         ref={containerRef}
         data-testid="minimap"
-        className="relative overflow-hidden rounded"
+        className="relative overflow-hidden bg-slate-950"
         style={{ width: MINIMAP_WIDTH_PX, height: heightPx, cursor: isDragging ? 'grabbing' : 'pointer' }}
         onMouseDown={(e) => {
           setIsDragging(true);
@@ -65,25 +54,16 @@ export function Minimap({ regions, cellSize, worldWidth, worldHeight, viewBox, b
         onMouseUp={() => setIsDragging(false)}
         onMouseLeave={() => setIsDragging(false)}
       >
-        <svg viewBox={`0 0 ${worldWidth} ${worldHeight}`} width="100%" height="100%">
-          {regions.map((region) => (
-            <rect
-              key={`${region.gridX}-${region.gridY}`}
-              x={region.gridX * cellSize}
-              y={region.gridY * cellSize}
-              width={cellSize}
-              height={cellSize}
-              fill={biomeColors[region.environmentName] ?? FALLBACK_BIOME_COLOR}
-            />
-          ))}
+        {image && <img src={image} alt="" draggable={false} className="absolute inset-0 w-full h-full select-none" />}
+        <svg viewBox={`0 0 ${worldWidth} ${worldHeight}`} width="100%" height="100%" className="absolute inset-0">
           <rect
-            x={viewBox.x}
-            y={viewBox.y}
-            width={viewBox.w}
-            height={viewBox.h}
-            fill="#e6d09222"
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            fill="none"
             stroke="#e6d092"
-            strokeWidth={Math.max(worldWidth, worldHeight) * 0.006}
+            strokeWidth={Math.max(worldWidth, worldHeight) * 0.008}
           />
         </svg>
       </div>
