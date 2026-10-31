@@ -104,7 +104,8 @@ namespace Serina::Daemon
                                 {"visionRange", t.visionRange},
                                 {"hearingAcuity", t.hearingAcuity},
                                 {"camouflage", t.camouflage},
-                                {"socialBehavior", t.socialBehavior}}}};
+                                {"socialBehavior", t.socialBehavior},
+                                {"insulation", t.insulation}}}};
     }
 
     inline json speciationEventToJson(const Simulation::SpeciationEvent &e)

@@ -73,6 +73,7 @@ namespace Serina::Ecology
             {Genetics::TraitType::HEARING_ACUITY, {a.hearingAcuity, b.hearingAcuity}},
             {Genetics::TraitType::CAMOUFLAGE, {a.camouflage, b.camouflage}},
             {Genetics::TraitType::SOCIAL_BEHAVIOR, {a.socialBehavior, b.socialBehavior}},
+            {Genetics::TraitType::INSULATION, {a.insulation, b.insulation}},
         };
 
         double sumSquares = 0.0;
@@ -83,7 +84,7 @@ namespace Serina::Ecology
             double diff = na - nb;
             sumSquares += diff * diff;
         }
-        return std::sqrt(sumSquares / 12.0);
+        return std::sqrt(sumSquares / 13.0);
     }
 
     /// @brief Compare deux échantillons successifs de la même paire de

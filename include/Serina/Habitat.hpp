@@ -72,4 +72,12 @@ namespace Serina::Habitat
         }
     }
 
+    /// @brief Isolation thermique idéale [0,1] pour une température en °C : aucune à
+    /// 28 °C et au-dessus, complète à -12 °C et au-dessous.
+    inline double idealInsulation(double temperature)
+    {
+        const double ideal = (28.0 - temperature) / 40.0;
+        return ideal < 0.0 ? 0.0 : (ideal > 1.0 ? 1.0 : ideal);
+    }
+
 } // namespace Serina::Habitat

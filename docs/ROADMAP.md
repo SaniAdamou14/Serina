@@ -128,14 +128,19 @@ Fait (mesuré sur 16 graines, 4 000 ticks) :
 - Coût énergétique du climat (`climateCostRate`) : effet de dose mesuré, mais encore faible.
 - Spéciation par isolement réel : deux populations sans contact pendant 1 000 ticks et
   divergentes. 2 spéciations en 6 000 ticks contre 84, 5 espèces contre 24.
+- Dispersion réduite (`movementScale` 0,01) : à 10 000 ticks sur 12 graines inédites, poissons
+  vivants dans 12 mondes, arthropodes dans 11, mollusques dans 12 (2, 3 et 4 sur 6 à 0,03). En
+  contrepartie, 71 cases occupées sur 108 au lieu de 103.
 - Défense des proies : la meilleure de la vitesse et de la résistance, au lieu de leur moyenne.
   Mollusques vivants dans 12 mondes sur 12 contre 7 : la prédation les éliminait.
 
 Reste à faire :
 
-- Adaptation au climat encore modeste : corrélation résistance/climat de 0,12 à 0,16 sur des
-  graines inédites à 6 000 ticks. Un seul trait est trop grossier : voir I6.
-- Peu d'espèces (5 ou 6) : une carte de 12 cases sur 9 offre peu de vraies barrières.
+- Pas d'adaptation locale mesurable à l'intérieur d'une espèce : chacune occupe une étroite bande
+  de climats (étendue 0,02), donc rien à différencier. La corrélation résistance/climat de 0,12 à
+  0,23 annoncée plus tôt reflétait surtout quel groupe vit où : à l'intérieur d'une espèce, elle
+  est de 0,05 avec ou sans sélection.
+- 8 ou 9 espèces à 10 000 ticks : une carte de 12 cases sur 9 reste petite.
 - Introduire le coût du déplacement et de la taille ; donner un effet ou retirer
   chacun des 5 traits inertes.
 - Ajouter l'habitat selon le groupe biologique (poissons dans l'eau, jusqu'à ce
@@ -274,7 +279,10 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
 - **I4, la nature vivante** : plantes, débris, cadavres, feux et météo, simulés puis dessinés.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
-- **I6, les créatures issues de leur génome** : de nouveaux gènes héritables de forme et
+- **I6, les créatures issues de leur génome (en cours)** : premier gène en place, l'isolation
+  thermique. Écart moyen à l'idéal de 0,25 sans sélection, 0,12 avec, sur 12 graines inédites à
+  10 000 ticks. Un pigment a été essayé et retiré : aucun effet mesurable, car éviter une perte
+  d'énergie pèse trop peu tant que la prédation ne tue pas. But de l'étape : de nouveaux gènes héritables de forme et
   d'apparence (longueur du corps et des membres, tégument, pigment, motif), chacun avec un coût
   ou un effet réel sur la survie selon le climat et les prédateurs. Le dessin est généré à partir
   de ces gènes pour chaque lignée. Une apparence adaptée doit donc résulter de la sélection, sans

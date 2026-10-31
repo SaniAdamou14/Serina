@@ -26,6 +26,8 @@ async function main() {
   for (let s = from; s <= (to ?? from); s++) queue.push(s);
 
   const rows = [];
+  const total = queue.length;
+  const started = Date.now();
   const worker = async () => {
     while (queue.length) {
       const seed = queue.shift();
@@ -33,6 +35,7 @@ async function main() {
         execFile(opts.bin, [seed, opts.ticks, ...opts.params], (err, stdout) => (err ? reject(err) : resolve(stdout)))
       );
       rows.push(JSON.parse(out));
+      console.error(`  ${rows.length}/${total} graines (graine ${seed}, ${Math.round((Date.now() - started) / 1000)} s)`);
     }
   };
   await Promise.all(Array.from({ length: Number(opts.jobs) }, worker));
@@ -47,7 +50,11 @@ async function main() {
   );
   console.log(
     `  au mur ${med('wallPct')}% | en bordure ${med('borderPct')}% (35% des cases) | ` +
-      `hors habitat ${med('forbiddenPct')}% | corrélation résistance/climat ${med('climateCorrelation')} | âge moyen ${med('meanAge')}`
+      `hors habitat ${med('forbiddenPct')}% | âge moyen ${med('meanAge')}`
+  );
+  console.log(
+    `  dans chaque espèce : résistance/climat ${med('resistanceWithin')} | isolation/température ${med('insulationWithin')}\n` +
+      `  isolation : écart à l'idéal ${med('insulationGap')} | avantage local ${med('localAdvantage')} | étendue climatique ${med('climateSpread')}`
   );
   console.log(
     `  groupes vivants /${n} : oiseaux ${alive('bird')}, poissons ${alive('fish')}, ` +

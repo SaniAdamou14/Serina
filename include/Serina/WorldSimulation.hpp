@@ -166,6 +166,7 @@ namespace Serina::Simulation
         double sensoryProminence = 0.0; ///< moyenne normalisée de VISION_RANGE et HEARING_ACUITY, [0,1]
         uint8_t patternTier = 0;        ///< SOCIAL_BEHAVIOR quantifiée en 5 paliers [0,4]
         double resistance = 0.0;        ///< RESISTANCE normalisée [0,1]
+        double insulation = 0.5;        ///< INSULATION [0,1]
     };
 
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
@@ -321,10 +322,10 @@ namespace Serina::Simulation
         double carryingCapacityPerResource = 400.0;
 
         /// Échelle du déplacement par pas (1 = jusqu'à cellSize × vitesse par pas).
-        /// Mesuré sur 16 graines à 4000 ticks, après correction de la dérive vers les
-        /// bords : 0.1 -> 7 espèces, 108 cases occupées ; 0.03 -> 26 espèces, 103 cases.
-        /// Plus le déplacement est lent, plus des populations locales restent isolées.
-        double movementScale = 0.03;
+        /// Mesuré sur 6 graines à 10000 ticks, avec le coût thermique : à 0.03, poissons
+        /// vivants dans 2 mondes sur 6 et arthropodes dans 3 ; à 0.01, 6 et 5, avec 77 cases
+        /// occupées sur 108 ; à 0.005, 6 et 6, mais 46 cases seulement.
+        double movementScale = 0.01;
 
         /// Part aléatoire du déplacement [0,1] (0 = cerveau seul).
         double movementNoise = 0.5;
@@ -339,6 +340,11 @@ namespace Serina::Simulation
         /// population médiane) : 0 -> 0.04, 8859 ; 0.03 -> 0.03, 9059 ; 0.08 -> 0.12, 6228 ;
         /// 0.2 -> 0.16, 4515. Au-delà de 0.08, la carte se vide plus vite que l'adaptation ne gagne.
         double climateCostRate = 0.08;
+        /// Énergie perdue par tick au maximum d'écart entre l'isolation d'un individu et
+        /// celle qu'exige la température de sa case : trop froid ou trop chaud coûtent pareil.
+        /// Mesuré sur 6 graines à 10000 ticks : écart moyen à l'isolation idéale de 0.31 sans
+        /// coût, 0.14 à ce taux.
+        double thermalCostRate = 0.15;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -571,6 +577,7 @@ namespace Serina::Simulation
                 double speedNorm = normalizeTrait(Genetics::TraitType::SPEED, genome.getTrait(Genetics::TraitType::SPEED));
                 snap.sizeScale = normalizeTrait(Genetics::TraitType::SIZE, genome.getTrait(Genetics::TraitType::SIZE));
                 snap.resistance = normalizeTrait(Genetics::TraitType::RESISTANCE, genome.getTrait(Genetics::TraitType::RESISTANCE));
+                snap.insulation = genome.getTrait(Genetics::TraitType::INSULATION);
                 // Élongation : un organisme relativement plus rapide que
                 // grand paraît fuselé (proche de 1), l'inverse trapu (proche
                 // de 0) -- un ratio dérivé plutôt qu'exposer SPEED comme son
@@ -1025,6 +1032,12 @@ namespace Serina::Simulation
                     double mismatch = normalizeTrait(Genetics::TraitType::RESISTANCE, organism.getGenome().getTrait(Genetics::TraitType::RESISTANCE)) -
                                       localEnv->pressures.climaticStress;
                     organism.setEnergy(organism.getEnergy() - params_.climateCostRate * mismatch * mismatch);
+                }
+
+                if (params_.thermalCostRate > 0.0 && localEnv)
+                {
+                    double gap = organism.getGenome().getTrait(Genetics::TraitType::INSULATION) - Habitat::idealInsulation(localEnv->climate.temperature);
+                    organism.setEnergy(organism.getEnergy() - params_.thermalCostRate * gap * gap);
                 }
 
                 // Régulation par la densité : la case ne peut nourrir qu'un
@@ -1772,6 +1785,7 @@ namespace Serina::Simulation
                     sum.size = sum.speed = sum.energyEfficiency = sum.reproductionRate = 0.0;
                     sum.aggression = sum.intelligence = sum.longevity = sum.resistance = 0.0;
                     sum.visionRange = sum.hearingAcuity = sum.camouflage = sum.socialBehavior = 0.0;
+                    sum.insulation = 0.0;
                     for (size_t idx : indices)
                     {
                         auto traits = toTraitValues(population_[idx].getGenome());
@@ -1787,6 +1801,7 @@ namespace Serina::Simulation
                         sum.hearingAcuity += traits.hearingAcuity;
                         sum.camouflage += traits.camouflage;
                         sum.socialBehavior += traits.socialBehavior;
+                        sum.insulation += traits.insulation;
                     }
                     double n = static_cast<double>(indices.size());
                     snap.averageTraits.size = sum.size / n;
@@ -1801,6 +1816,7 @@ namespace Serina::Simulation
                     snap.averageTraits.hearingAcuity = sum.hearingAcuity / n;
                     snap.averageTraits.camouflage = sum.camouflage / n;
                     snap.averageTraits.socialBehavior = sum.socialBehavior / n;
+                    snap.averageTraits.insulation = sum.insulation / n;
 
                     // Adaptations réelles : un trait moyen mesurablement
                     // au-dessus de sa valeur par défaut biologique, alors
@@ -1881,6 +1897,7 @@ namespace Serina::Simulation
             values.hearingAcuity = genome.getTrait(Genetics::TraitType::HEARING_ACUITY);
             values.camouflage = genome.getTrait(Genetics::TraitType::CAMOUFLAGE);
             values.socialBehavior = genome.getTrait(Genetics::TraitType::SOCIAL_BEHAVIOR);
+            values.insulation = genome.getTrait(Genetics::TraitType::INSULATION);
             values.fertility = values.reproductionRate;
             values.neuralComplexity = values.intelligence;
             values.sensoryAcuity = values.hearingAcuity;

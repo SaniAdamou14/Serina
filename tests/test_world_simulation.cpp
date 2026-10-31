@@ -810,11 +810,16 @@ TEST_CASE("the engine remembers extinctions and the game's history", "[worldsim]
         CHECK(sample.generation > previous);
         previous = sample.generation;
     }
-    CHECK(sim.getHistory().back().population == sim.getHistory().back().population);
 
     // Toute espèce enregistrée comme éteinte n'existe plus.
     const auto lineages = sim.getLineageSnapshots();
     for (const auto &event : sim.getExtinctionEvents())
         for (const auto &lineage : lineages)
             CHECK(lineage.speciesName != event.species);
+}
+
+TEST_CASE("colder climates call for more insulation", "[worldsim][habitat]") {
+    CHECK(Habitat::idealInsulation(30.0) == 0.0);
+    CHECK(Habitat::idealInsulation(-20.0) == 1.0);
+    CHECK(Habitat::idealInsulation(5.0) > Habitat::idealInsulation(25.0));
 }

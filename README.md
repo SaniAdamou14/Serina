@@ -38,8 +38,10 @@ starting point and the plan.
 
 These are measured or read from the code. See the roadmap for the details.
 
-- **Climate has a modest effect**: it costs energy, and resistance only partly tracks
-  local climate (correlation 0.12 to 0.16 on unseen seeds). Biomes never change.
+- **Adaptation to climate works between species, not inside one**: insulation moves
+  towards what the climate demands (mean gap 0.25 without selection, 0.12 with it on
+  unseen seeds), but each species lives in a narrow range of climates, so there is no
+  measurable local adaptation within a species. Biomes never change.
 - **Few species**: a split needs real geographic isolation, and a 12×9 map has few
   real barriers, so worlds hold about 5 or 6 species.
 - **Movement and body size cost nothing**, and five of the twelve traits have
