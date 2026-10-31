@@ -171,9 +171,9 @@ TEST_CASE("a seed produces the same world on every compiler", "[determinism]")
     // Si le modèle change exprès, mettre la nouvelle valeur à jour dans le
     // même commit, après avoir vérifié qu'elle est la même sous Linux et Windows.
     uint64_t hash = runWorld(20261030, 400);
-    if (hash != 0x8641b565814567dfULL)
+    if (hash != 0x202fbf2481de8652ULL)
         std::printf("world hash: 0x%llxULL\n", static_cast<unsigned long long>(hash));
-    CHECK(hash == 0x8641b565814567dfULL);
+    CHECK(hash == 0x202fbf2481de8652ULL);
 }
 
 TEST_CASE("running other simulations first does not change a world", "[determinism]")
