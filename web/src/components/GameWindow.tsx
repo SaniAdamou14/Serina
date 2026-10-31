@@ -7,6 +7,10 @@ interface GameWindowProps {
   title: string
   onClose: () => void
   children: ReactNode
+  /** tab : posée au-dessus de la barre d'onglets. center : fiche au milieu de l'écran. */
+  placement?: 'tab' | 'center'
+  width?: number
+  height?: number
 }
 
 /**
@@ -14,7 +18,7 @@ interface GameWindowProps {
  * sans jamais masquer l'interface autour. Une erreur dans son contenu reste
  * contenue dans la fenêtre.
  */
-export function GameWindow({ title, onClose, children }: GameWindowProps) {
+export function GameWindow({ title, onClose, children, placement = 'tab', width = 960, height = 640 }: GameWindowProps) {
   const [offset, setOffset] = useState({ x: 0, y: 0 })
   const drag = useRef<{ pointerX: number; pointerY: number; x: number; y: number } | null>(null)
 
@@ -33,11 +37,11 @@ export function GameWindow({ title, onClose, children }: GameWindowProps) {
 
   return (
     <section
-      className="game-panel absolute left-2 bottom-11 z-30 flex flex-col"
+      className={`game-panel absolute z-30 flex flex-col ${placement === 'tab' ? 'left-2 bottom-11' : 'left-1/2 top-1/2 z-40'}`}
       style={{
-        width: 'min(960px, calc(100vw - 16px))',
-        height: 'min(640px, calc(100vh - 64px))',
-        transform: `translate(${offset.x}px, ${offset.y}px)`
+        width: `min(${width}px, calc(100vw - 16px))`,
+        maxHeight: `min(${height}px, calc(100vh - 64px))`,
+        transform: placement === 'tab' ? `translate(${offset.x}px, ${offset.y}px)` : `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`
       }}
       aria-label={title}
     >

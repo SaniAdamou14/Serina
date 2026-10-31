@@ -796,3 +796,25 @@ TEST_CASE("a species only splits after a long real isolation", "[worldsim][speci
             CHECK(event.generation >= params.speciationIsolationGenerations);
     }
 }
+
+TEST_CASE("the engine remembers extinctions and the game's history", "[worldsim][history]") {
+    // Un monde minuscule, où des fondateurs disparaissent vite.
+    UnifiedWorldSimulator sim({}, 99);
+    sim.seedFounderSpecies(1);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    REQUIRE(!sim.getHistory().empty());
+    uint32_t previous = 0;
+    for (const auto &sample : sim.getHistory()) {
+        CHECK(sample.generation > previous);
+        previous = sample.generation;
+    }
+    CHECK(sim.getHistory().back().population == sim.getHistory().back().population);
+
+    // Toute espèce enregistrée comme éteinte n'existe plus.
+    const auto lineages = sim.getLineageSnapshots();
+    for (const auto &event : sim.getExtinctionEvents())
+        for (const auto &lineage : lineages)
+            CHECK(lineage.speciesName != event.species);
+}

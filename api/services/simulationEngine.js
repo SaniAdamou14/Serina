@@ -193,6 +193,12 @@ class SimulationEngine extends EventEmitter {
    * avancer la simulation elle-même -- c'est le fil planificateur du daemon
    * qui s'en charge en continu tant qu'elle est en lecture.
    */
+  /** Histoire de la partie, gardée par le moteur. */
+  async getHistory(simulationId) {
+    if (!this.simulations.has(simulationId)) throw new Error('Simulation not found');
+    return this.client.send('history', simulationId);
+  }
+
   async pull(simulationId) {
     const instance = this.simulations.get(simulationId);
     if (!instance) return null;

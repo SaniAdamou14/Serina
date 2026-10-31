@@ -351,6 +351,27 @@ namespace Serina::Simulation
             events.push_back(serializeSpeciationEvent(e));
         j["speciationEvents"] = events;
 
+        json extinctions = json::array();
+        for (const auto &e : extinctionEvents_)
+            extinctions.push_back({{"species", e.species}, {"generation", e.generation}, {"lastPopulation", e.lastPopulation}});
+        j["extinctionEvents"] = extinctions;
+
+        json lastCounts = json::object();
+        for (const auto &[name, count] : lastCounts_)
+            lastCounts[name] = count;
+        j["lastCounts"] = lastCounts;
+
+        json history = json::array();
+        for (const auto &h : history_)
+            history.push_back({{"generation", h.generation},
+                               {"population", h.population},
+                               {"speciesCount", h.speciesCount},
+                               {"totalEnergy", h.totalEnergy},
+                               {"meanDiversity", h.meanDiversity},
+                               {"bySpecies", h.bySpecies}});
+        j["history"] = history;
+        j["historyInterval"] = historyInterval_;
+
         // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
         // génération avant la sauvegarde -- lue par buildBrainInputs() au
         // step suivant (entrée "recentPredationPressure"). Sans elle, une
@@ -480,6 +501,31 @@ namespace Serina::Simulation
         sim->brains_.clear();
         for (const auto &[name, val] : j.at("brains").items())
             sim->brains_.emplace(name, lineageBrainFromJson(val));
+
+        // Absents des sauvegardes plus anciennes.
+        sim->extinctionEvents_.clear();
+        // Copies nommées : items() sur un temporaire laisserait une référence pendante.
+        const json savedExtinctions = j.value("extinctionEvents", json::array());
+        const json savedCounts = j.value("lastCounts", json::object());
+        const json savedHistory = j.value("history", json::array());
+        for (const auto &e : savedExtinctions)
+            sim->extinctionEvents_.push_back({e.at("species").get<std::string>(), e.at("generation").get<uint32_t>(), e.at("lastPopulation").get<uint32_t>()});
+        sim->lastCounts_.clear();
+        for (const auto &[name, count] : savedCounts.items())
+            sim->lastCounts_[name] = count.get<uint32_t>();
+        sim->history_.clear();
+        for (const auto &h : savedHistory)
+        {
+            HistorySample sample;
+            sample.generation = h.at("generation").get<uint32_t>();
+            sample.population = h.at("population").get<uint32_t>();
+            sample.speciesCount = h.at("speciesCount").get<uint32_t>();
+            sample.totalEnergy = h.at("totalEnergy").get<double>();
+            sample.meanDiversity = h.at("meanDiversity").get<double>();
+            sample.bySpecies = h.at("bySpecies").get<std::map<std::string, uint32_t>>();
+            sim->history_.push_back(std::move(sample));
+        }
+        sim->historyInterval_ = j.value("historyInterval", sim->historyInterval_);
 
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))

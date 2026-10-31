@@ -22,6 +22,9 @@ export const BIOLOGICAL_TYPE_NAMES = [
   'CRUSTACEAN'
 ] as const
 
+/** Noms affichés des groupes, dans le même ordre que BIOLOGICAL_TYPE_NAMES. */
+export const BIOLOGICAL_GROUP_LABELS = ['Oiseau', 'Poisson', 'Arthropode', 'Mollusque', 'Cnidaire', 'Annélide', 'Plante', 'Crustacé'] as const
+
 // === status command -> latestData.status ===
 
 /** Real average of the 12 diploid trait values (Genetics::TraitType) across
@@ -147,6 +150,28 @@ export interface IndividualsResult {
   error?: string
 }
 
+export interface ExtinctionEventInfo {
+  species: string
+  generation: number
+  lastPopulation: number
+}
+
+/** One point of the game's history, kept by the engine (`history` command). */
+export interface HistorySample {
+  tick: number
+  population: number
+  species: number
+  energy: number
+  diversity: number
+  bySpecies: Record<string, number>
+}
+
+export interface HistoryResult {
+  status: 'success' | 'error'
+  samples: HistorySample[]
+  error?: string
+}
+
 // === lineages command -> latestData.lineages ===
 
 export interface SpeciationEventInfo {
@@ -173,6 +198,7 @@ export interface LineagesResult {
   status: 'success' | 'error'
   lineages: LineageStatus[]
   speciationEvents: SpeciationEventInfo[]
+  extinctionEvents: ExtinctionEventInfo[]
   convergenceSignals: ConvergenceSignalInfo[]
   error?: string
 }

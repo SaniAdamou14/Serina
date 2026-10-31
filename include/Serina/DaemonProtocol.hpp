@@ -430,9 +430,27 @@ namespace Serina::Daemon
                 r["speciationEvents"] = json::array();
                 for (const auto &e : m.sim->getSpeciationEvents())
                     r["speciationEvents"].push_back(speciationEventToJson(e));
+                r["extinctionEvents"] = json::array();
+                for (const auto &e : m.sim->getExtinctionEvents())
+                    r["extinctionEvents"].push_back({{"species", e.species}, {"generation", e.generation}, {"lastPopulation", e.lastPopulation}});
                 r["convergenceSignals"] = json::array();
                 for (const auto &s : m.sim->getConvergenceSignals())
                     r["convergenceSignals"].push_back(convergenceSignalToJson(s));
+                return r; });
+        }
+        else if (command == "history")
+        {
+            result = registry.withSimulation(simulationId, [&](ManagedSimulation &m)
+                                              {
+                json r = successJson();
+                r["samples"] = json::array();
+                for (const auto &h : m.sim->getHistory())
+                    r["samples"].push_back({{"tick", h.generation},
+                                            {"population", h.population},
+                                            {"species", h.speciesCount},
+                                            {"energy", h.totalEnergy},
+                                            {"diversity", h.meanDiversity},
+                                            {"bySpecies", h.bySpecies}});
                 return r; });
         }
         else if (command == "ping")

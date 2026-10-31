@@ -40,6 +40,7 @@ explaining why) plus the echoed `id`.
 |---|---|---|
 | `create` | `founderCount` (default 40), `seed` (optional) | Builds a real `UnifiedWorldSimulator`, seeds the five founder lineages with `founderCount` individuals each (diploid genomes, real NEAT brains). Errors if `simulationId` already exists. |
 | `destroy` | - | Frees the simulation. |
+| `history` | - | Returns `samples`: population, species, energy, diversity and per-species counts over the whole game, at most 1000 points. |
 | `save` | - | Returns a full snapshot in `snapshot` (JSON) via `UnifiedWorldSimulator::toJson()`. |
 | `load` | `snapshot` (required) | Restores a simulation from a snapshot via `UnifiedWorldSimulator::fromJson()`. Errors if `simulationId` already exists. |
 | `list` | - (no `simulationId`) | All active simulations with `id`, `running`, `generation`, `population`. |

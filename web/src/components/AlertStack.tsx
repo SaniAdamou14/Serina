@@ -1,6 +1,6 @@
 import { RefreshCw, Rocket, Skull, WifiOff, X } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
-import { useEcologicalEvents } from '../hooks/useEcologicalEvents'
+import { useGameLog } from '@services/GameLogContext'
 
 /**
  * Bord droit de l'écran, façon RimWorld : les alertes durables (perte de connexion,
@@ -8,11 +8,11 @@ import { useEcologicalEvents } from '../hooks/useEcologicalEvents'
  */
 export function AlertStack() {
   const { simulationData, currentSimulationId, isConnected, connect } = useSimulation()
-  const { events, dismiss } = useEcologicalEvents(simulationData, currentSimulationId)
+  const { letters: events, dismissLetter: dismiss } = useGameLog()
   const isExtinct = !!currentSimulationId && simulationData?.status.population === 0
 
   return (
-    <div className="absolute top-44 right-2 bottom-48 z-20 w-60 flex flex-col items-end gap-1 overflow-hidden pointer-events-none">
+    <div className="absolute top-44 right-2 bottom-56 z-20 w-60 flex flex-col items-end gap-1 overflow-hidden pointer-events-none">
       {!isConnected && (
         <button className="game-panel pointer-events-auto w-full px-2 py-1.5 text-xs text-left flex items-center gap-2 text-red-300" onClick={connect} title="Reconnecter">
           <WifiOff className="w-3.5 h-3.5 shrink-0" />

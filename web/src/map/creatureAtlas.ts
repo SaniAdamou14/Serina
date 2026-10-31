@@ -7,7 +7,7 @@
  * yeux) gardent leur couleur. Variantes : ornementation et motif, projections réelles du
  * génome (IndividualSnapshot dans WorldSimulation.hpp).
  */
-const CELL_PX = 192;
+export const CELL_PX = 192;
 const ORNAMENTS = 4;
 const PATTERNS = 3;
 const GROUPS = 4;

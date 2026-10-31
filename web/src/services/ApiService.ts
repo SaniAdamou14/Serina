@@ -15,7 +15,7 @@ import {
   EvolutionHistoryEntry,
   ResumableSimulation,
   HealthCheckResponse
-} from '../types'
+, HistoryResult } from '../types'
 
 const BASE_URL = import.meta.env.VITE_API_URL ?? ''
 
@@ -126,6 +126,10 @@ class ApiService {
 
   getEvolutionHistory(simulationId: SimulationId, limit = 100) {
     return request<ApiResponse<EvolutionHistoryEntry[]>>(`/api/simulations/${simulationId}/history?limit=${limit}`)
+  }
+
+  getGameHistory(simulationId: SimulationId) {
+    return request<HistoryResult>(`/api/serina/history/${simulationId}`)
   }
 
   getPopulationTrends(simulationId: SimulationId, generations = 50) {
