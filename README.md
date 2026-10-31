@@ -43,8 +43,7 @@ These are measured or read from the code. See the roadmap for the details.
   unseen seeds), but each species lives in a narrow range of climates, so there is no
   measurable local adaptation within a species. Biomes never change.
 - **Few species**: a split needs real geographic isolation, and a 12×9 map has few
-  real barriers, so worlds hold about 10 species, a few of them split by diet in
-  place. Founder groups are not always safe either: over 8000 ticks, birds survive
+  real barriers, so worlds hold about 10 species. Founder groups are not always safe either: over 8000 ticks, birds survive
   in about 8 worlds out of 10.
 - **Several traits have no direct effect on survival** yet: intelligence, hearing,
   camouflage, social behavior and reproduction rate.

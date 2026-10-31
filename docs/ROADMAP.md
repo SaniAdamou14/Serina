@@ -280,9 +280,11 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
   - Fait, côté moteur : plantes qui repoussent, cadavres qui se décomposent, gène de régime,
     chasse par individu quand il a faim, y compris d'un membre de son espèce au régime différent,
     et scission d'une espèce sur place selon le régime. Se déplacer coûte moins en volant ou en
-    nageant qu'en marchant. Mesuré sur 10 graines nouvelles à 8000 ticks : 10 espèces au lieu de
-    6, 2 niches sur 3 occupées au lieu de 1, oiseaux vivants dans 8 mondes sur 10 (9 avant),
-    poissons dans 10 (8 avant), population de 4445 au lieu de 6957.
+    nageant qu'en marchant. Mesuré sur 10 graines nouvelles à 8000 ticks, comparé à une validation
+    précédente sur d'autres graines : 10 espèces au lieu de 6, oiseaux vivants dans 8 mondes sur
+    10 (9 avant), poissons dans 10 (8 avant), population de 4445 au lieu de 6957. 2 niches sur 3
+    sont occupées (1 sur 3 à 20 000 ticks sans chasse). La part des scissions dues au régime
+    n'est pas mesurée.
   - Objectif pas encore atteint : les canaris n'occupent pas toute la chaîne (1 niche sur 3 en
     médiane, 2 au mieux). À 20 000 ticks, avant la règle de la faim, les 3 niches étaient
     occupées mais surtout par d'autres groupes, et les oiseaux ne survivaient que dans 3 mondes
