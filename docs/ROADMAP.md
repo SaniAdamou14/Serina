@@ -55,8 +55,8 @@ Constats issus de la lecture du code :
 - **Traits sans coût** : taille, agressivité et vision n'ont aucun coût.
 - **Traits sans effet** : 5 traits sur 12 n'ont aucun effet direct sur la survie
   (intelligence, ouïe, camouflage, comportement social, taux de reproduction).
-- **Pas de chaîne alimentaire** : la nourriture est illimitée (seule une capacité
-  de charge par case la limite), et la prédation transfère de l'énergie sans tuer.
+- **Chaîne alimentaire encore jeune** : plantes, cadavres et chasse existent, mais les plantes
+  restent presque pleines (0,9 de leur capacité), donc la nourriture limite peu.
 - **Fondateurs fragiles** : sur 120 graines et 4 000 ticks, les arthropodes
   disparaissent dans plus de 9 mondes sur 10 (cause à chercher en M1).
 - **Dette** : aucun test web ni API.
@@ -276,7 +276,20 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
   10 000 créatures, 25 à 50 000. Reste une limite : les bords dessinés ondulent autour des
   cases du moteur, donc un clic près d'une frontière peut inspecter la case voisine.
 - **I3, les informations** : alertes, lettres, infobulles, calques complets.
-- **I4, la nature vivante** : plantes, débris, cadavres, feux et météo, simulés puis dessinés.
+- **I4, la nature vivante (en cours)** :
+  - Fait, côté moteur : plantes qui repoussent, cadavres qui se décomposent, gène de régime,
+    chasse par individu quand il a faim, y compris d'un membre de son espèce au régime différent,
+    et scission d'une espèce sur place selon le régime. Se déplacer coûte moins en volant ou en
+    nageant qu'en marchant. Mesuré sur 10 graines nouvelles à 8000 ticks, comparé à une validation
+    précédente sur d'autres graines : 10 espèces au lieu de 6, oiseaux vivants dans 8 mondes sur
+    10 (9 avant), poissons dans 10 (8 avant), population de 4445 au lieu de 6957. 2 niches sur 3
+    sont occupées (1 sur 3 à 20 000 ticks sans chasse). La part des scissions dues au régime
+    n'est pas mesurée.
+  - Objectif pas encore atteint : les canaris n'occupent pas toute la chaîne (1 niche sur 3 en
+    médiane, 2 au mieux). À 20 000 ticks, avant la règle de la faim, les 3 niches étaient
+    occupées mais surtout par d'autres groupes, et les oiseaux ne survivaient que dans 3 mondes
+    sur 6 (5 sans chasse). Ce résultat reste à refaire avec la règle de la faim.
+  - Reste à faire : dessiner plantes et cadavres à partir de ces données, puis feux et météo.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
 - **I6, les créatures issues de leur génome (en cours)** :
@@ -285,8 +298,8 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
     taille moyenne normalisée passe de 0,43 à 0,30. Couleur due à la lignée seule : le faux
     camouflage, mélangé à la couleur du biome sans calcul derrière, est retiré.
   - Essayé et écarté : le pigment (aucun effet aux deux essais, car la prédation est trop rare
-    pour le sélectionner) et la prédation mortelle (poissons vivants dans 6 mondes sur 10, sans
-    gain mesuré ; le code reste en place pour la chaîne alimentaire).
+    pour le sélectionner). La prédation mortelle, écartée ici à cause des poissons, revient avec la
+    chaîne alimentaire d'I4.
   - Reste à faire : d'autres gènes de forme (longueur du corps et des membres, tégument), et une
     silhouette générée pour chaque lignée à partir de ces gènes, à la place des quatre gabarits.
     Un gène n'est gardé que si le banc montre qu'il répond à la sélection.

@@ -173,7 +173,7 @@ TEST_CASE("a seed produces the same world on every compiler", "[determinism]")
     uint64_t hash = runWorld(20261030, 400);
     if (hash != 0xd87afddb8a25ed2ULL)
         std::printf("world hash: 0x%llxULL\n", static_cast<unsigned long long>(hash));
-    CHECK(hash == 0xd87afddb8a25ed2ULL);
+    CHECK(hash == 0x2d0a2429e4d17a1cULL);
 }
 
 TEST_CASE("running other simulations first does not change a world", "[determinism]")

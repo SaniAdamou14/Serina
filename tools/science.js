@@ -54,6 +54,8 @@ async function main() {
   );
   console.log(
     `  dans chaque espèce : résistance/climat ${med('resistanceWithin')} | isolation/température ${med('insulationWithin')}\n` +
+      `  niches des oiseaux ${med('birdGuilds')}/3 (max ${Math.max(...rows.map((r) => r.birdGuilds))}) | toutes espèces ${med('allGuilds')}/3 | écart de régime des oiseaux ${med('birdDietSpread')} | régime moyen ${med('meanDiet')} | plantes ${med('plantLevel')}\n` +
+      `  voisinage entre espèces ${med('sympatry')} | étendue du régime des oiseaux (p10-p90) ${med('birdDietRange')}\n` +
       `  taille moyenne ${med('meanSize')} | proies tuées ${med('kills')}\n` +
       `  isolation : écart à l'idéal ${med('insulationGap')} | avantage local ${med('localAdvantage')} | étendue climatique ${med('climateSpread')}`
   );

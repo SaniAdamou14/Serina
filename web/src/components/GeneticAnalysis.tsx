@@ -19,7 +19,8 @@ const SHORT_LABELS: Record<keyof AverageTraits, string> = {
   hearingAcuity: 'Ouïe',
   camouflage: 'Camou.',
   socialBehavior: 'Social',
-  insulation: 'Isol.'
+  insulation: 'Isol.',
+  diet: 'Régime'
 }
 
 function normalized(key: keyof AverageTraits, value: number): number {

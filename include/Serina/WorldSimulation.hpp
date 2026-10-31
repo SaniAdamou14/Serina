@@ -140,6 +140,8 @@ namespace Serina::Simulation
         double competitionIntensity = 0.0;
         double climaticStress = 0.0;
         uint32_t population = 0;
+        double plants = 0.0;  ///< biomasse végétale, fraction [0,1] de la capacité de la case
+        double carrion = 0.0; ///< énergie des cadavres présents dans la case
     };
 
     /// @brief Snapshot en lecture seule d'un individu réel : de quoi
@@ -168,6 +170,7 @@ namespace Serina::Simulation
         uint8_t patternTier = 0;        ///< SOCIAL_BEHAVIOR quantifiée en 5 paliers [0,4]
         double resistance = 0.0;        ///< RESISTANCE normalisée [0,1]
         double insulation = 0.5;        ///< INSULATION [0,1]
+        double diet = 0.2;              ///< DIET [0,1], 0 herbivore et 1 carnivore
     };
 
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
@@ -346,11 +349,36 @@ namespace Serina::Simulation
         /// Mesuré sur 6 graines à 10000 ticks : écart moyen à l'isolation idéale de 0.31 sans
         /// coût, 0.14 à ce taux.
         double thermalCostRate = 0.15;
-        /// Chance qu'une attaque réussie tue la proie, au lieu de seulement lui voler de
-        /// l'énergie. Le prédateur gagne alors une part de l'énergie de sa proie. Désactivée :
-        /// à 0.1, poissons vivants dans 6 mondes sur 10 à 8000 ticks, sans aucun gain de
-        /// sélection mesuré. À reprendre avec une vraie chaîne alimentaire.
-        double predationKillChance = 0.0;
+        /// Part de la capacité à laquelle une case de plantes ne donne plus que la moitié de
+        /// ce qu'elle donne pleine : plus la case est broutée, plus manger y rapporte peu.
+        double plantHalfSaturation = 0.3;
+        /// Énergie de cadavres sur une case pour laquelle un charognard mange à moitié.
+        double carrionHalfSaturation = 30.0;
+        /// Prix du généraliste [0,1] : à 0 le rendement suit le régime en ligne droite, à 1 il
+        /// suit son carré, et un régime moyen rapporte moins que deux spécialistes.
+        double dietSpecialization = 0.25;
+        /// Chances par tick qu'un carnivore pur (régime 1) tente une chasse si des proies
+        /// abondent ; proportionnel au régime, donc un herbivore ne chasse pas.
+        double huntRate = 0.05;
+        /// Énergie au-dessus de laquelle un prédateur repu ne chasse plus : il tue pour se
+        /// nourrir, pas sans fin. Reste au-dessus du seuil de reproduction (50).
+        double huntSatiety = 55.0;
+        /// Écart de régime qui fait d'un membre de sa propre espèce une proie : sans lui, une
+        /// espèce seule sur ses cases n'aurait rien à chasser et ne se diversifierait jamais.
+        double preyDietGap = 0.1;
+        /// Écart de régime au-delà duquel deux individus ne s'accouplent pas : ils ne
+        /// partagent plus le même mode de vie. C'est ce qui rend possible une divergence sur place.
+        double assortativeMatingGap = 0.3;
+        /// Écart de régime entre deux groupes d'une espèce à partir duquel elle peut se scinder.
+        double nicheSplitGap = 0.12;
+        /// Ticks pendant lesquels cet écart doit durer avant la scission.
+        uint32_t nicheSplitDuration = 500;
+        /// Biomasse végétale maximale d'une case, par unité de ressource du biome.
+        double plantCapacityPerResource = 2000.0;
+        /// Croissance logistique des plantes par tick.
+        double plantGrowthRate = 0.05;
+        /// Fraction des cadavres décomposée par tick ; une part revient au sol et aux plantes.
+        double carrionDecayRate = 0.01;
         /// Énergie dépensée par tick par un corps de taille maximale : la taille aide à
         /// chasser, ce coût l'empêche d'être gratuite. Mesuré sur 8 graines à 4000 ticks :
         /// taille moyenne normalisée de 0.43 sans coût, 0.31 avec ce taux et movementCost.
@@ -440,6 +468,8 @@ namespace Serina::Simulation
                     if (const auto *rules = constraints_.getBiologicalGroupRules(founder.type))
                         for (const auto &[trait, limits] : rules->traitLimits)
                             genome->rescaleAllelesToRange(trait, limits.first, limits.second);
+                    const auto dietRange = Habitat::founderDietRange(founder.type);
+                    genome->rescaleAllelesToRange(Genetics::TraitType::DIET, dietRange.first, dietRange.second);
                     Evolution::Organism organism(std::move(genome), founder.commonName);
                     placeInRegion(organism, gx, gy);
                     organism.setEnergy(100.0);
@@ -455,6 +485,7 @@ namespace Serina::Simulation
         void step()
         {
             ++generation_;
+            updateFood();
             moveOrganisms();
             applySurvivalAndInteractions();
             removeDead();
@@ -554,6 +585,13 @@ namespace Serina::Simulation
                     }
                     auto it = counts.find(regionKey(x, y));
                     snap.population = (it != counts.end()) ? it->second : 0;
+                    if (!plants_.empty())
+                    {
+                        const size_t cellIndex = static_cast<size_t>(y) * grid_.getWidth() + x;
+                        const double capacity = plantCapacity(x, y);
+                        snap.plants = capacity > 0.0 ? plants_[cellIndex] / capacity : 0.0;
+                        snap.carrion = carrion_[cellIndex];
+                    }
                     result.push_back(std::move(snap));
                 }
             }
@@ -588,6 +626,7 @@ namespace Serina::Simulation
                 snap.sizeScale = normalizeTrait(Genetics::TraitType::SIZE, genome.getTrait(Genetics::TraitType::SIZE));
                 snap.resistance = normalizeTrait(Genetics::TraitType::RESISTANCE, genome.getTrait(Genetics::TraitType::RESISTANCE));
                 snap.insulation = genome.getTrait(Genetics::TraitType::INSULATION);
+                snap.diet = genome.getTrait(Genetics::TraitType::DIET);
                 // Élongation : un organisme relativement plus rapide que
                 // grand paraît fuselé (proche de 1), l'inverse trapu (proche
                 // de 0) -- un ratio dérivé plutôt qu'exposer SPEED comme son
@@ -627,10 +666,15 @@ namespace Serina::Simulation
         std::vector<Evolution::Organism> population_;
         std::map<std::string, Taxonomy::BiologicalType> biologicalTypeOf_;
         std::map<std::string, uint32_t> divergentStreak_; ///< par espèce
+        std::map<std::string, uint32_t> nicheStreak_;     ///< par espèce
         std::map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
         std::vector<ExtinctionEvent> extinctionEvents_;
         std::set<uint64_t> killedThisTick_;
+        std::vector<double> plants_;  ///< biomasse végétale par case
+        std::vector<double> carrion_; ///< énergie des cadavres par case
+        /// Énergie que contient un corps par unité de taille.
+        static constexpr double BODY_ENERGY_PER_SIZE = 30.0;
         std::map<std::string, uint32_t> lastCounts_; ///< effectifs du tick précédent
         std::vector<HistorySample> history_;
         uint32_t historyInterval_ = 20; ///< ticks entre deux points, double quand l'historique est plein
@@ -878,7 +922,9 @@ namespace Serina::Simulation
                 if (params_.movementCost > 0.0)
                 {
                     double size = organism.getGenome().getTrait(Genetics::TraitType::SIZE);
-                    organism.setEnergy(organism.getEnergy() - params_.movementCost * size * std::sqrt(dx * dx + dy * dy));
+                    auto group = biologicalTypeOf_.find(organism.getSpecies());
+                    const double locomotion = group != biologicalTypeOf_.end() ? Habitat::locomotionCostFactor(group->second) : 1.0;
+                    organism.setEnergy(organism.getEnergy() - params_.movementCost * locomotion * size * std::sqrt(dx * dx + dy * dy));
                 }
             }
         }
@@ -1095,123 +1141,137 @@ namespace Serina::Simulation
                     }
                 }
 
+                // La nourriture existe vraiment : ce qui est mangé manque aux suivants. Le
+                // régime partage l'effort entre plantes et cadavres, sans en faire deux gratuits.
                 if (foragingIncome > 0.0)
-                    organism.setEnergy(organism.getEnergy() + foragingIncome);
+                {
+                    ensureFood();
+                    const size_t cell = static_cast<size_t>(gy) * grid_.getWidth() + gx;
+                    const double diet = organism.getGenome().getTrait(Genetics::TraitType::DIET);
+                    const double plantStock = plants_[cell];
+                    const double plantHalf = params_.plantHalfSaturation * std::max(plantCapacity(gx, gy), 1.0);
+                    const double plantResponse = plantStock * (1.0 + params_.plantHalfSaturation) / std::max(plantStock + plantHalf, 1e-9);
+                    const double carrionResponse = carrion_[cell] / std::max(carrion_[cell] + params_.carrionHalfSaturation, 1e-9);
+                    const double fromPlants = std::min(plantStock, foragingIncome * dietEfficiency(1.0 - diet) * plantResponse);
+                    const double fromCarrion = std::min(carrion_[cell], foragingIncome * dietEfficiency(diet) * carrionResponse);
+                    plants_[cell] -= fromPlants;
+                    carrion_[cell] -= fromCarrion;
+                    organism.setEnergy(organism.getEnergy() + fromPlants + fromCarrion);
+                }
             }
 
-            // --- Passe 3 : prédation -- transaction appairée à somme
-            // exactement nulle (même constante des deux côtés), tirée au
-            // sort indépendamment pour chaque individu prédateur plutôt
-            // qu'un drain garanti à chaque génération (garde-fou impératif
-            // du Chantier F). Chantier G1 : la probabilité de base au
-            // niveau espèce reste la même autorité, mais chaque individu y
-            // ajoute un effort de chasse (prédateur) ou d'évasion (proie)
-            // personnel décidé par son propre cerveau -- jamais un second
-            // canal indépendant, seulement une modulation bornée de ce qui
-            // existe déjà. ---
-            Det::UniformReal huntRoll(0.0, 1.0);
-            Det::UniformReal evasionRoll(0.0, 1.0);
-            for (auto &[region, relations] : regionRelations)
+            // --- Passe 3 : chasse, décidée par chaque individu selon son propre régime et ses
+            // propres traits. Un carnivore rare trouve des proies, un carnivore trop commun
+            // les épuise : c'est ce qui peut ouvrir et fermer la niche.
+            Det::UniformReal roll(0.0, 1.0);
+            for (auto &[region, bySpecies] : regionSpecies)
             {
-                const auto &speciesHere = regionSpecies[region];
-                for (const auto &rel : relations)
+                std::vector<size_t> everyone;
+                for (const auto &[name, entry] : bySpecies)
+                    everyone.insert(everyone.end(), entry.individualIndices.begin(), entry.individualIndices.end());
+                if (everyone.size() < 2)
+                    continue;
+                Det::UniformInt<size_t> pick(0, everyone.size() - 1);
+
+                for (size_t predatorIdx : everyone)
                 {
-                    std::string predatorSpecies, preySpecies;
-                    if (rel.classification.relation == Ecology::EcologicalRelation::A_PREYS_ON_B)
-                    {
-                        predatorSpecies = rel.speciesA;
-                        preySpecies = rel.speciesB;
-                    }
-                    else if (rel.classification.relation == Ecology::EcologicalRelation::B_PREYS_ON_A)
-                    {
-                        predatorSpecies = rel.speciesB;
-                        preySpecies = rel.speciesA;
-                    }
-                    else
-                    {
-                        continue; // compétition déjà traitée en passe 2
-                    }
-
-                    auto predatorIt = speciesHere.find(predatorSpecies);
-                    auto preyIt = speciesHere.find(preySpecies);
-                    if (predatorIt == speciesHere.end() || preyIt == speciesHere.end())
+                    auto &predator = population_[predatorIdx];
+                    if (!predator.isAlive() || predator.getEnergy() >= params_.huntSatiety)
                         continue;
-                    const auto &preyIndices = preyIt->second.individualIndices;
-                    if (preyIndices.empty())
+                    const double diet = predator.getGenome().getTrait(Genetics::TraitType::DIET);
+                    double huntEffort = 1.0;
+                    auto outputs = latestBrainOutputs_.find(predator.getId());
+                    if (outputs != latestBrainOutputs_.end() && outputs->second.size() > WorldSimulationParameters::OUTPUT_HUNT_EFFORT)
+                        huntEffort = outputs->second[WorldSimulationParameters::OUTPUT_HUNT_EFFORT];
+                    const double chance = params_.huntRate * diet * (0.5 + 0.5 * huntEffort) * Ecology::densitySaturation(static_cast<uint32_t>(everyone.size() - 1));
+                    if (chance <= 0.0 || roll(rng_) >= chance)
                         continue;
 
-                    double probability = Ecology::predationEncounterProbability(
-                        rel.classification.dominanceGap, preyIt->second.profile.population);
-                    if (probability <= 0.0)
+                    auto &prey = population_[everyone[pick(rng_)]];
+                    if (!prey.isAlive())
+                        continue; // rencontre manquée
+                    if (prey.getSpecies() == predator.getSpecies() && diet - prey.getGenome().getTrait(Genetics::TraitType::DIET) < params_.preyDietGap)
+                        continue; // un semblable, pas une proie
+
+                    const auto trait = [](const Evolution::Organism &o, Genetics::TraitType type) { return normalizeTrait(type, o.getGenome().getTrait(type)); };
+                    const double attack = 0.45 * trait(predator, Genetics::TraitType::AGGRESSION) + 0.30 * trait(predator, Genetics::TraitType::SIZE) + 0.25 * trait(predator, Genetics::TraitType::VISION_RANGE);
+                    const double defense = std::max(trait(prey, Genetics::TraitType::SPEED), trait(prey, Genetics::TraitType::RESISTANCE));
+                    double evasion = 0.0;
+                    auto preyOutputs = latestBrainOutputs_.find(prey.getId());
+                    if (preyOutputs != latestBrainOutputs_.end() && preyOutputs->second.size() > WorldSimulationParameters::OUTPUT_EVASION_EFFORT)
+                        evasion = preyOutputs->second[WorldSimulationParameters::OUTPUT_EVASION_EFFORT] * WorldSimulationParameters::MAX_PERSONAL_EVASION_CHANCE;
+                    const double success = std::clamp(0.5 + attack - defense, 0.05, 0.95) * (1.0 - evasion);
+                    if (roll(rng_) >= success)
                         continue;
 
-                    Det::UniformInt<size_t> preyPick(0, preyIndices.size() - 1);
-                    for (size_t predatorIdx : predatorIt->second.individualIndices)
-                    {
-                        if (!population_[predatorIdx].isAlive())
-                            continue;
+                    // Le prédateur mange le corps : réserves de la proie, et chair selon sa taille.
+                    lifeEvents_.predationKills++;
+                    lifeEvents_.predationTransfers++;
+                    const double body = BODY_ENERGY_PER_SIZE * prey.getGenome().getTrait(Genetics::TraitType::SIZE);
+                    predator.setEnergy(predator.getEnergy() + (prey.getEnergy() + body) * 0.5);
+                    killedThisTick_.insert(prey.getId());
+                    prey.setAlive(false);
+                }
+            }
+        }
 
-                        double huntEffort = 1.0;
-                        auto predatorOutputsIt = latestBrainOutputs_.find(population_[predatorIdx].getId());
-                        if (predatorOutputsIt != latestBrainOutputs_.end() && predatorOutputsIt->second.size() > WorldSimulationParameters::OUTPUT_HUNT_EFFORT)
-                            huntEffort = predatorOutputsIt->second[WorldSimulationParameters::OUTPUT_HUNT_EFFORT];
-                        // Borné à [50%, 100%] de la probabilité de base au
-                        // niveau espèce -- un effort de chasse personnel ne
-                        // peut jamais faire dépasser ce que le profil de
-                        // traits moyen autorise, seulement s'en approcher ou
-                        // s'en éloigner de moitié au pire.
-                        double personalProbability = probability * (0.5 + 0.5 * huntEffort);
-                        if (huntRoll(rng_) >= personalProbability)
-                            continue;
+        /// @brief Rendement d'un régime pour la part donnée : le généraliste paie son manque de spécialisation.
+        double dietEfficiency(double share) const
+        {
+            return (1.0 - params_.dietSpecialization) * share + params_.dietSpecialization * share * share;
+        }
 
-                        size_t preyIdx = preyIndices[preyPick(rng_)];
-                        if (!population_[preyIdx].isAlive())
-                            continue;
+        double plantCapacity(int gx, int gy) const
+        {
+            const auto *env = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
+            return params_.plantCapacityPerResource * (env ? env->resources.primaryProducers : 0.5);
+        }
 
-                        double evasionEffort = 0.0;
-                        auto preyOutputsIt = latestBrainOutputs_.find(population_[preyIdx].getId());
-                        if (preyOutputsIt != latestBrainOutputs_.end() && preyOutputsIt->second.size() > WorldSimulationParameters::OUTPUT_EVASION_EFFORT)
-                            evasionEffort = preyOutputsIt->second[WorldSimulationParameters::OUTPUT_EVASION_EFFORT];
-                        // Chance personnelle et bornée d'échapper à une
-                        // attaque par ailleurs réussie -- jamais totale
-                        // (voir MAX_PERSONAL_EVASION_CHANCE), au-delà du
-                        // profil de traits moyen déjà utilisé pour classer
-                        // la relation elle-même.
-                        if (evasionRoll(rng_) < evasionEffort * WorldSimulationParameters::MAX_PERSONAL_EVASION_CHANCE)
-                            continue; // la proie a évité l'attaque : aucun transfert, comme une chasse manquée
+        /// @brief Première utilisation : les plantes couvrent toute leur capacité.
+        void ensureFood()
+        {
+            if (!plants_.empty())
+                return;
+            const size_t cells = static_cast<size_t>(grid_.getWidth()) * grid_.getHeight();
+            plants_.resize(cells);
+            carrion_.assign(cells, 0.0);
+            for (int y = 0; y < grid_.getHeight(); ++y)
+                for (int x = 0; x < grid_.getWidth(); ++x)
+                    plants_[static_cast<size_t>(y) * grid_.getWidth() + x] = plantCapacity(x, y);
+        }
 
-                        if (params_.predationKillChance > 0.0 && evasionRoll(rng_) < params_.predationKillChance)
-                        {
-                            // Le prédateur assimile une part de l'énergie de sa proie.
-                            lifeEvents_.predationKills++;
-                            population_[predatorIdx].setEnergy(population_[predatorIdx].getEnergy() + population_[preyIdx].getEnergy() * 0.5);
-                            killedThisTick_.insert(population_[preyIdx].getId());
-                            population_[preyIdx].setAlive(false);
-                            continue;
-                        }
-
-                        // Transfert à somme exactement nulle : la MÊME
-                        // constante des deux côtés d'un événement unique et
-                        // appairé (pas deux tirages indépendants qui
-                        // pourraient déséquilibrer le bilan énergétique
-                        // total quand prédateurs et proies sont en nombre
-                        // différent).
-                        lifeEvents_.predationTransfers++;
-                        population_[predatorIdx].setEnergy(population_[predatorIdx].getEnergy() + Ecology::PREDATION_ENERGY_TRANSFER);
-                        population_[preyIdx].setEnergy(population_[preyIdx].getEnergy() - Ecology::PREDATION_ENERGY_TRANSFER);
-                    }
+        /// @brief Les plantes repoussent, les cadavres se décomposent et nourrissent le sol.
+        void updateFood()
+        {
+            ensureFood();
+            for (int y = 0; y < grid_.getHeight(); ++y)
+            {
+                for (int x = 0; x < grid_.getWidth(); ++x)
+                {
+                    const size_t cell = static_cast<size_t>(y) * grid_.getWidth() + x;
+                    const double capacity = plantCapacity(x, y);
+                    const double decayed = carrion_[cell] * params_.carrionDecayRate;
+                    carrion_[cell] -= decayed;
+                    double &plants = plants_[cell];
+                    // Un minimum de repousse : une case rasée n'est jamais perdue pour toujours.
+                    const double growth = params_.plantGrowthRate * std::max(plants, capacity * 0.02) * (1.0 - plants / std::max(capacity, 1.0));
+                    plants = std::min(capacity, plants + std::max(0.0, growth) + decayed * 0.5);
                 }
             }
         }
 
         void removeDead()
         {
+            ensureFood();
             for (const auto &o : population_)
             {
                 if (o.isAlive())
                     continue;
                 if (killedThisTick_.count(o.getId()))
-                    continue; // déjà comptée comme proie
+                    continue; // déjà mangée
+                auto [cellX, cellY] = regionOf(o);
+                carrion_[static_cast<size_t>(cellY) * grid_.getWidth() + cellX] +=
+                    BODY_ENERGY_PER_SIZE * o.getGenome().getTrait(Genetics::TraitType::SIZE) + o.getEnergy() * 0.5;
                 if (o.getEnergy() <= 0.0)
                     lifeEvents_.starvationDeaths++;
                 else
@@ -1259,6 +1319,8 @@ namespace Serina::Simulation
 
                         auto &parent1 = population_[indices[i]];
                         auto &parent2 = population_[indices[i + 1]];
+                        if (std::abs(parent1.getGenome().getTrait(Genetics::TraitType::DIET) - parent2.getGenome().getTrait(Genetics::TraitType::DIET)) > params_.assortativeMatingGap)
+                            continue;
 
                         auto child = tryReproduce(parent1, parent2, species);
                         if (child)
@@ -1328,6 +1390,9 @@ namespace Serina::Simulation
                     continue;
                 }
 
+                if (generation_ % 50 == 0 && checkNicheSplit(species, regionGroups))
+                    continue;
+
                 auto populations = isolatedPopulations(regionGroups);
                 if (populations.size() < 2 || populations[1].size() < params_.speciationMinPopulation)
                 {
@@ -1350,6 +1415,48 @@ namespace Serina::Simulation
                     divergentStreak_[species] = 0;
                 }
             }
+        }
+
+        /// @brief Scission sur place : deux groupes de régime séparés par un vrai écart, qui
+        /// ne se croisent plus depuis assez longtemps. Vrai si l'espèce vient de se scinder.
+        bool checkNicheSplit(const std::string &species, const std::map<long long, std::vector<size_t>> &regionGroups)
+        {
+            std::vector<std::pair<double, size_t>> byDiet;
+            for (const auto &[region, members] : regionGroups)
+                for (size_t idx : members)
+                    byDiet.emplace_back(population_[idx].getGenome().getTrait(Genetics::TraitType::DIET), idx);
+            std::sort(byDiet.begin(), byDiet.end());
+
+            const size_t minimum = params_.speciationMinPopulation;
+            double widest = 0.0;
+            size_t cut = 0;
+            for (size_t i = minimum; i + minimum <= byDiet.size(); ++i)
+            {
+                const double gap = byDiet[i].first - byDiet[i - 1].first;
+                if (gap > widest)
+                {
+                    widest = gap;
+                    cut = i;
+                }
+            }
+
+            if (widest < params_.nicheSplitGap)
+            {
+                nicheStreak_[species] = 0;
+                return false;
+            }
+            uint32_t &streak = nicheStreak_[species];
+            streak += 50;
+            if (streak < params_.nicheSplitDuration)
+                return false;
+
+            std::vector<size_t> lower, upper;
+            for (size_t i = 0; i < byDiet.size(); ++i)
+                (i < cut ? lower : upper).push_back(byDiet[i].second);
+            const double distance = averageInterGroupDistance(evenSample(lower, 15), evenSample(upper, 15));
+            performSpeciation(species, upper, distance);
+            streak = 0;
+            return true;
         }
 
         /// @brief Populations d'une espèce sans contact entre elles : composantes connexes
@@ -1479,6 +1586,7 @@ namespace Serina::Simulation
                     auto last = lastCounts_.find(it->first);
                     extinctionEvents_.push_back({it->first, generation_, last != lastCounts_.end() ? last->second : 0u});
                     divergentStreak_.erase(it->first);
+                    nicheStreak_.erase(it->first);
                     it = brains_.erase(it);
                 }
                 else
@@ -1815,7 +1923,7 @@ namespace Serina::Simulation
                     sum.size = sum.speed = sum.energyEfficiency = sum.reproductionRate = 0.0;
                     sum.aggression = sum.intelligence = sum.longevity = sum.resistance = 0.0;
                     sum.visionRange = sum.hearingAcuity = sum.camouflage = sum.socialBehavior = 0.0;
-                    sum.insulation = 0.0;
+                    sum.insulation = sum.diet = 0.0;
                     for (size_t idx : indices)
                     {
                         auto traits = toTraitValues(population_[idx].getGenome());
@@ -1832,6 +1940,7 @@ namespace Serina::Simulation
                         sum.camouflage += traits.camouflage;
                         sum.socialBehavior += traits.socialBehavior;
                         sum.insulation += traits.insulation;
+                        sum.diet += traits.diet;
                     }
                     double n = static_cast<double>(indices.size());
                     snap.averageTraits.size = sum.size / n;
@@ -1847,6 +1956,7 @@ namespace Serina::Simulation
                     snap.averageTraits.camouflage = sum.camouflage / n;
                     snap.averageTraits.socialBehavior = sum.socialBehavior / n;
                     snap.averageTraits.insulation = sum.insulation / n;
+                    snap.averageTraits.diet = sum.diet / n;
 
                     // Adaptations réelles : un trait moyen mesurablement
                     // au-dessus de sa valeur par défaut biologique, alors
@@ -1928,6 +2038,7 @@ namespace Serina::Simulation
             values.camouflage = genome.getTrait(Genetics::TraitType::CAMOUFLAGE);
             values.socialBehavior = genome.getTrait(Genetics::TraitType::SOCIAL_BEHAVIOR);
             values.insulation = genome.getTrait(Genetics::TraitType::INSULATION);
+            values.diet = genome.getTrait(Genetics::TraitType::DIET);
             values.fertility = values.reproductionRate;
             values.neuralComplexity = values.intelligence;
             values.sensoryAcuity = values.hearingAcuity;
