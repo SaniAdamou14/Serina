@@ -1,110 +1,162 @@
-import { useState } from 'react'
-import { Skull } from 'lucide-react'
-import { TopBar } from './TopBar'
-import { BottomBar } from './BottomBar'
-import { LeftRail, DashboardTab } from './LeftRail'
-import { InspectorPanel } from './InspectorPanel'
-import { SimulationControl } from './SimulationControl'
-import { PopulationChart } from './PopulationChart'
-import { GeneticAnalysis } from './GeneticAnalysis'
-import { EnvironmentView } from './EnvironmentView'
-import { SpeciesPanel } from './SpeciesPanel'
-import { EngineStatus } from './PerformanceMetrics'
-import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
-import { HistoryView } from './HistoryView'
-import { WorldMap } from './WorldMap'
-import { SpeciesDetailPanel } from './SpeciesDetailPanel'
-import { SpeciesComparisonPanel } from './SpeciesComparisonPanel'
-import { EventTicker } from './EventTicker'
+import { useCallback, useEffect, useState } from 'react'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
+import { SimulationCommand } from '../types'
+import { AlertStack } from './AlertStack'
+import { EnvironmentView } from './EnvironmentView'
+import { ErrorBoundary } from './ErrorBoundary'
+import { GameWindow } from './GameWindow'
+import { GeneticAnalysis } from './GeneticAnalysis'
+import { HistoryView } from './HistoryView'
+import { InspectorPanel } from './InspectorPanel'
+import { LineageBar } from './LineageBar'
+import { MAIN_TABS, MainTab, SPEED_TIERS } from './gameConstants'
+import { MainTabBar } from './MainTabBar'
+import { EngineStatus } from './PerformanceMetrics'
+import { PopulationChart } from './PopulationChart'
+import { ResourceReadout } from './ResourceReadout'
+import { SimulationControl } from './SimulationControl'
+import { SpeciesComparisonPanel } from './SpeciesComparisonPanel'
+import { SpeciesDetailPanel } from './SpeciesDetailPanel'
+import { SpeciesEvolutionTree } from './SpeciesEvolutionTree'
+import { SpeciesPanel } from './SpeciesPanel'
+import { TimeControls } from './TimeControls'
+import { WorldMap } from './WorldMap'
+
+function tabContent(tab: MainTab) {
+  switch (tab) {
+    case 'species':
+      return <SpeciesPanel />
+    case 'evolution':
+      return <SpeciesEvolutionTree />
+    case 'genetics':
+      return <GeneticAnalysis />
+    case 'world':
+      return (
+        <>
+          <PopulationChart />
+          <EngineStatus />
+          <EnvironmentView showDetails />
+        </>
+      )
+    case 'history':
+      return <HistoryView />
+    case 'menu':
+      return <SimulationControl />
+  }
+}
 
 /**
- * Squelette de disposition façon RimWorld (Chantier E1) : barre du haut et
- * barre du bas fixes (TopBar/BottomBar, toujours visibles), rail de
- * navigation à gauche (LeftRail, remplace les anciens onglets horizontaux),
- * panneau d'inspection ancré à droite de la carte (InspectorPanel, remplace
- * les popups flottantes qui vivaient dans WorldMap.tsx). Tant qu'aucune
- * simulation n'est active, seul l'écran de configuration (SimulationControl)
- * est affiché -- l'équivalent de l'écran de création de colonie.
+ * Coquille façon RimWorld : la carte occupe tout l'écran et tout le reste se pose
+ * dessus. Sans simulation active, seul l'écran de création du monde est affiché.
  */
 export function SimulationDashboard() {
-  const { currentSimulationId, simulationData } = useSimulation()
-  const { detailSpecies, showSpeciesDetail, compareOpen } = useSelection()
-  const [activeTab, setActiveTab] = useState<DashboardTab>('map')
+  const { currentSimulationId, isRunning, isConnected, sendCommand, setSpeed, stepSimulation, saveSnapshot } = useSimulation()
+  const { detailSpecies, showSpeciesDetail, compareOpen, setCompareOpen, clearSelection } = useSelection()
+  const [activeTab, setActiveTab] = useState<MainTab | null>(null)
+  const [activeSpeed, setActiveSpeed] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  // Fait réel observé en production : une simulation peut perdre toute sa
-  // population (effondrement génétique d'une petite population isolée) et
-  // continuer à tourner sur un monde vide pendant des milliers de
-  // générations sans que rien ne le signale. Le daemon se met maintenant en
-  // pause automatiquement dès que ça arrive (voir DaemonProtocol.hpp) ;
-  // cet avis rend ce fait honnêtement visible plutôt que de laisser
-  // deviner pourquoi plus rien n'avance.
-  const isExtinct = !!currentSimulationId && simulationData?.status.population === 0
+  const canControl = isConnected && !!currentSimulationId
+
+  const togglePause = useCallback(() => {
+    sendCommand(isRunning ? SimulationCommand.PAUSE : SimulationCommand.RESUME)
+  }, [isRunning, sendCommand])
+
+  const changeSpeed = useCallback((ticksPerSecond: number) => {
+    setActiveSpeed(ticksPerSecond)
+    setSpeed(ticksPerSecond)
+  }, [setSpeed])
+
+  const runExclusive = async (action: () => Promise<void>) => {
+    setBusy(true)
+    try {
+      await action()
+    } catch {
+      // connectionError est déjà mis à jour par SimulationContext.
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!currentSimulationId) return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      if (e.key === ' ') {
+        e.preventDefault()
+        // Sinon Espace activerait aussi le dernier bouton cliqué.
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+        if (canControl) togglePause()
+      } else if (e.key === 'Escape') {
+        if (compareOpen) setCompareOpen(false)
+        else if (detailSpecies) showSpeciesDetail(null)
+        else if (activeTab) setActiveTab(null)
+        else clearSelection()
+      } else if (e.key >= '1' && e.key <= String(SPEED_TIERS.length)) {
+        if (canControl) changeSpeed(SPEED_TIERS[Number(e.key) - 1])
+      } else {
+        const tab = MAIN_TABS.find((t) => t.hotkey === e.key.toUpperCase())
+        if (tab) setActiveTab((current) => (current === tab.id ? null : tab.id))
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [currentSimulationId, canControl, togglePause, changeSpeed, compareOpen, detailSpecies, activeTab, setCompareOpen, showSpeciesDetail, clearSelection])
+
+  if (!currentSimulationId) {
+    return (
+      <div className="fixed inset-0 overflow-y-auto bg-slate-950 flex justify-center p-6">
+        <div className="w-full max-w-md py-6 h-fit">
+          <h1 className="text-3xl font-bold text-center mb-6">Serina</h1>
+          <SimulationControl />
+        </div>
+      </div>
+    )
+  }
+
+  const activeLabel = MAIN_TABS.find((t) => t.id === activeTab)?.label
 
   return (
-    <div className="h-screen flex flex-col bg-slate-950 overflow-hidden">
-      <TopBar />
-      <EventTicker />
+    <div className="fixed inset-0 overflow-hidden bg-slate-950">
+      <div className="absolute inset-0">
+        <ErrorBoundary fallbackLabel="Carte">
+          <WorldMap />
+        </ErrorBoundary>
+      </div>
 
-      {isExtinct && (
-        <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-2 text-sm text-red-300 shrink-0">
-          <Skull className="w-4 h-4 shrink-0" />
-          Écosystème éteint, plus aucun individu vivant (génération {simulationData?.status.generation}). Simulation automatiquement mise en pause.
-        </div>
+      <ResourceReadout />
+      <LineageBar />
+      <AlertStack />
+      <ErrorBoundary fallbackLabel="Inspecteur">
+        <InspectorPanel />
+      </ErrorBoundary>
+      <TimeControls
+        activeSpeed={activeSpeed}
+        onSpeed={changeSpeed}
+        onTogglePause={togglePause}
+        onStep={() => runExclusive(() => stepSimulation(1))}
+        onSave={() => runExclusive(saveSnapshot)}
+        busy={busy}
+      />
+
+      {activeTab && activeLabel && (
+        <GameWindow key={activeTab} title={activeLabel} onClose={() => setActiveTab(null)}>
+          {tabContent(activeTab)}
+        </GameWindow>
       )}
 
-      {!currentSimulationId ? (
-        <main className="flex-1 overflow-y-auto flex justify-center p-6">
-          {/* items-center retiré volontairement : un flex centré verticalement
-              rend le haut du contenu inatteignable dès qu'il dépasse la
-              hauteur de la fenêtre (le défilement part du milieu, jamais du
-              haut) -- bug réel signalé sur les petites fenêtres. Un simple
-              padding vertical centre visuellement sans jamais rien couper. */}
-          <div className="w-full max-w-md py-6">
-            <SimulationControl />
-          </div>
-        </main>
-      ) : (
-        <div className="flex-1 flex min-h-0">
-          <LeftRail activeTab={activeTab} onSelectTab={setActiveTab} />
+      <MainTabBar activeTab={activeTab} onSelect={(tab) => setActiveTab((current) => (current === tab ? null : tab))} />
 
-          {activeTab === 'map' ? (
-            <div className="flex-1 flex min-h-0">
-              <div className="flex-1 relative min-h-0">
-                <WorldMap />
-              </div>
-              <div className="w-80 shrink-0 overflow-y-auto border-l border-slate-700 bg-slate-900 p-4">
-                <InspectorPanel />
-              </div>
-            </div>
-          ) : (
-            <main className="flex-1 overflow-y-auto">
-              <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-                {activeTab === 'overview' && (
-                  <>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                      <PopulationChart />
-                      <EngineStatus />
-                    </div>
-                    <EnvironmentView showDetails />
-                  </>
-                )}
-
-                {activeTab === 'evolution' && <SpeciesEvolutionTree />}
-                {activeTab === 'genetics' && <GeneticAnalysis />}
-                {activeTab === 'species' && <SpeciesPanel />}
-                {activeTab === 'history' && <HistoryView />}
-              </div>
-            </main>
-          )}
-        </div>
-      )}
-
-      <BottomBar />
-
-      {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => showSpeciesDetail(null)} />}
-      {compareOpen && <SpeciesComparisonPanel />}
+      <ErrorBoundary fallbackLabel="Fiche de l'espèce">
+        {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => showSpeciesDetail(null)} />}
+        {compareOpen && <SpeciesComparisonPanel />}
+      </ErrorBoundary>
     </div>
   )
 }

@@ -1,58 +1,61 @@
-import { Thermometer, Sprout, Crosshair, Swords, Snowflake, Users, Zap, Clock, MapPin, ClipboardList, MousePointerClick } from 'lucide-react'
+import { ClipboardList, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useSelection } from '@services/SelectionContext'
 
+function Row({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span className="text-slate-400">{label}</span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  )
+}
+
 /**
- * Panneau d'inspection ancré à droite de la carte, façon RimWorld -- remplace
- * les popups flottantes qui vivaient autrefois dans WorldMap.tsx. Lit la
- * sélection depuis SelectionContext (levée hors de la carte) pour pouvoir,
- * à terme, rester visible même si la sélection a été faite ailleurs.
+ * Inspecteur en bas à gauche, façon RimWorld : il n'existe que lorsqu'une région ou
+ * un individu est sélectionné.
  */
 export function InspectorPanel() {
-  const { selectedRegion, selectedIndividual, showSpeciesDetail } = useSelection()
-
-  if (selectedRegion) {
-    return (
-      <div className="text-sm">
-        <h4 className="font-semibold text-blue-200">
-          {selectedRegion.environmentName || 'Biome inconnu'}, case ({selectedRegion.gridX}, {selectedRegion.gridY})
-        </h4>
-        <div className="grid grid-cols-1 gap-y-2 mt-3 text-blue-300 text-xs">
-          <div className="flex items-center gap-1.5"><Thermometer className="w-3.5 h-3.5 shrink-0" /> Température : {selectedRegion.temperature.toFixed(1)}°C</div>
-          <div className="flex items-center gap-1.5"><Sprout className="w-3.5 h-3.5 shrink-0" /> Producteurs primaires : {(selectedRegion.primaryProducers * 100).toFixed(0)}%</div>
-          <div className="flex items-center gap-1.5"><Crosshair className="w-3.5 h-3.5 shrink-0" /> Prédation : {(selectedRegion.predationPressure * 100).toFixed(0)}%</div>
-          <div className="flex items-center gap-1.5"><Swords className="w-3.5 h-3.5 shrink-0" /> Compétition : {(selectedRegion.competitionIntensity * 100).toFixed(0)}%</div>
-          <div className="flex items-center gap-1.5"><Snowflake className="w-3.5 h-3.5 shrink-0" /> Stress climatique : {(selectedRegion.climaticStress * 100).toFixed(0)}%</div>
-          <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 shrink-0" /> Individus ici : {selectedRegion.population}</div>
-        </div>
-      </div>
-    )
-  }
-
-  if (selectedIndividual) {
-    return (
-      <div className="text-sm">
-        <h4 className="font-semibold text-amber-200">{selectedIndividual.species}</h4>
-        <p className="text-xs text-amber-400/80">Individu #{selectedIndividual.id}</p>
-        <div className="grid grid-cols-1 gap-y-2 mt-3 text-amber-300 text-xs">
-          <div className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 shrink-0" /> Énergie : {selectedIndividual.energy.toFixed(1)}</div>
-          <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 shrink-0" /> Âge : {selectedIndividual.age.toFixed(1)}</div>
-          <div className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 shrink-0" /> Position : ({selectedIndividual.x.toFixed(1)}, {selectedIndividual.y.toFixed(1)})</div>
-        </div>
-        <button
-          className="mt-4 w-full flex items-center justify-center gap-1.5 text-xs bg-amber-800 hover:bg-amber-700 text-amber-100 rounded px-2 py-1.5"
-          onClick={() => showSpeciesDetail(selectedIndividual.species)}
-        >
-          <ClipboardList className="w-3.5 h-3.5" /> Voir la fiche complète de l'espèce
-        </button>
-      </div>
-    )
-  }
+  const { selectedRegion, selectedIndividual, showSpeciesDetail, clearSelection } = useSelection()
+  if (!selectedRegion && !selectedIndividual) return null
 
   return (
-    <div className="h-full flex flex-col items-center justify-center text-center text-xs text-slate-500 gap-2 px-2">
-      <MousePointerClick className="w-6 h-6 text-slate-600" />
-      <p>Cliquez une région ou un individu sur la carte pour l'inspecter.</p>
-      <p className="text-slate-600">Molette : zoom. Glisser : déplacer.</p>
-    </div>
+    <aside className="game-panel absolute left-2 bottom-11 z-20 w-80 text-xs">
+      <div className="flex items-center justify-between px-2 h-7 border-b border-slate-600 bg-slate-800">
+        <h3 className="text-sm font-bold truncate">
+          {selectedRegion ? selectedRegion.environmentName || 'Biome inconnu' : selectedIndividual?.species}
+        </h3>
+        <button className="opacity-70 hover:opacity-100" onClick={clearSelection} aria-label="Fermer l'inspecteur" title="Fermer (Échap)">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+
+      {selectedRegion && (
+        <div className="p-2 space-y-0.5">
+          <Row label="Case" value={`${selectedRegion.gridX}, ${selectedRegion.gridY}`} />
+          <Row label="Individus ici" value={selectedRegion.population} />
+          <Row label="Température" value={`${selectedRegion.temperature.toFixed(1)} °C`} />
+          <Row label="Producteurs primaires" value={`${(selectedRegion.primaryProducers * 100).toFixed(0)} %`} />
+          <Row label="Prédation" value={`${(selectedRegion.predationPressure * 100).toFixed(0)} %`} />
+          <Row label="Compétition" value={`${(selectedRegion.competitionIntensity * 100).toFixed(0)} %`} />
+          <Row label="Stress climatique" value={`${(selectedRegion.climaticStress * 100).toFixed(0)} %`} />
+        </div>
+      )}
+
+      {selectedIndividual && (
+        <div className="p-2 space-y-0.5">
+          <Row label="Individu" value={`#${selectedIndividual.id}`} />
+          <Row label="Énergie" value={selectedIndividual.energy.toFixed(1)} />
+          <Row label="Âge" value={selectedIndividual.age.toFixed(0)} />
+          <Row label="Position" value={`${selectedIndividual.x.toFixed(1)}, ${selectedIndividual.y.toFixed(1)}`} />
+          <button
+            className="game-button w-full mt-2 py-1 flex items-center justify-center gap-1"
+            onClick={() => showSpeciesDetail(selectedIndividual.species)}
+          >
+            <ClipboardList className="w-3.5 h-3.5" /> Fiche de l'espèce
+          </button>
+        </div>
+      )}
+    </aside>
   )
 }

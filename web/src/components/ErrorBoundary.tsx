@@ -3,6 +3,8 @@ import { Dna } from 'lucide-react'
 
 interface Props {
   children: ReactNode
+  /** Si présent, l'erreur reste contenue dans cette zone de l'interface. */
+  fallbackLabel?: string
 }
 
 interface State {
@@ -40,6 +42,16 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
+    if (this.state.hasError && this.props.fallbackLabel) {
+      return (
+        <div className="game-panel p-3 text-sm text-red-300">
+          <p className="font-semibold">Erreur dans : {this.props.fallbackLabel}</p>
+          <p className="text-xs text-slate-400 mt-1 break-words">{this.state.error?.message}</p>
+          <button className="game-button px-2 py-1 mt-2 text-xs" onClick={this.handleReset}>Réessayer</button>
+        </div>
+      )
+    }
+
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">

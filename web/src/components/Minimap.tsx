@@ -49,7 +49,7 @@ export function Minimap({ regions, cellSize, worldWidth, worldHeight, viewBox, b
   };
 
   return (
-    <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg p-1.5 shadow-lg pointer-events-auto">
+    <div className="game-panel p-1 pointer-events-auto">
       <div
         ref={containerRef}
         data-testid="minimap"
@@ -81,8 +81,8 @@ export function Minimap({ regions, cellSize, worldWidth, worldHeight, viewBox, b
             y={viewBox.y}
             width={viewBox.w}
             height={viewBox.h}
-            fill="#38bdf822"
-            stroke="#38bdf8"
+            fill="#e6d09222"
+            stroke="#e6d092"
             strokeWidth={Math.max(worldWidth, worldHeight) * 0.006}
           />
         </svg>

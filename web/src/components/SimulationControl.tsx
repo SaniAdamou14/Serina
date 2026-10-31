@@ -12,8 +12,8 @@ const MAX_TICKS_PER_SECOND = 20
  * Écran de configuration affiché uniquement tant qu'aucune simulation n'est
  * active -- l'équivalent de l'écran de création de colonie de RimWorld.
  * Une fois une simulation démarrée, ce composant disparaît : le contrôle en
- * direct (vitesse, pause, pas-à-pas, arrêt) vit désormais dans BottomBar.tsx
- * et TopBar.tsx, toujours visibles quel que soit l'onglet actif.
+ * direct (vitesse, pause, pas-à-pas, arrêt) vit dans TimeControls.tsx, toujours
+ * visible.
  */
 export function SimulationControl() {
   const {
