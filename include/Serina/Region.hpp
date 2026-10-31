@@ -112,8 +112,27 @@ namespace Serina::Spatial
             struct Center { int x, y; Ecosystem::EnvironmentType type; };
             std::vector<Center> centers;
             centers.reserve(centerCount);
+            // Les premiers centres garantissent les biomes d'origine des fondateurs (voir
+            // seedFounderSpecies) : sans eux, un groupe entier n'aurait nulle part où vivre.
+            static constexpr Ecosystem::EnvironmentType kFounderBiomes[] = {
+                Ecosystem::EnvironmentType::FRESHWATER, Ecosystem::EnvironmentType::GRASSLAND,
+                Ecosystem::EnvironmentType::FOREST, Ecosystem::EnvironmentType::WETLAND};
+            static constexpr int kFounderBiomeCount = sizeof(kFounderBiomes) / sizeof(kFounderBiomes[0]);
             for (int i = 0; i < centerCount; ++i)
-                centers.push_back({xDist(rng), yDist(rng), kBiomes[biomeDist(rng)]});
+            {
+                // Deux centres sur la même case : le second disparaîtrait de la carte.
+                int x, y;
+                bool taken;
+                int attempts = 0;
+                do
+                {
+                    x = xDist(rng);
+                    y = yDist(rng);
+                    taken = std::any_of(centers.begin(), centers.end(), [&](const Center &c) { return c.x == x && c.y == y; });
+                } while (taken && ++attempts < 64);
+                const int drawn = biomeDist(rng);
+                centers.push_back({x, y, i < kFounderBiomeCount ? kFounderBiomes[i] : kBiomes[drawn]});
+            }
 
             for (int y = 0; y < height_; ++y)
             {

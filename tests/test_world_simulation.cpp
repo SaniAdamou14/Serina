@@ -307,11 +307,10 @@ TEST_CASE("relative divergence criterion does not speciate on the founder pool's
         simLegacy.step();
     }
 
-    // Les fondateurs naissent dans la plage de leur groupe, donc le pool est plus
-    // homogène qu'à l'époque des 38 spéciations d'artefact : le critère historique
-    // en produit moins, mais le relatif doit rester nettement en dessous.
-    REQUIRE(simLegacy.getSpeciationEvents().size() >= 3);
-    REQUIRE(simRelative.getSpeciationEvents().size() <= simLegacy.getSpeciationEvents().size() / 3);
+    // Les fondateurs naissent dans la plage de leur groupe et se déplacent peu au
+    // départ : le critère historique n'a plus d'artefact à produire. Le relatif doit
+    // rester à ce niveau, sans poussée de spéciations dès les premiers ticks.
+    REQUIRE(simRelative.getSpeciationEvents().size() <= simLegacy.getSpeciationEvents().size() + 2);
 }
 
 TEST_CASE("relative divergence criterion keeps producing real speciations over a long run", "[worldsim][speciation][divergence]") {
@@ -731,5 +730,49 @@ TEST_CASE("individuals do not pile up against the world's edges", "[worldsim][mo
             if (ind.x < 0.5 || ind.y < 0.5 || ind.x > width - 0.5 || ind.y > height - 0.5)
                 atWall++;
         CHECK(static_cast<double>(atWall) / individuals.size() < 0.30);
+    }
+}
+
+TEST_CASE("the habitat table matches each group's biology", "[worldsim][habitat]") {
+    using Biome = Ecosystem::EnvironmentType;
+    using Group = Taxonomy::BiologicalType;
+    for (auto biome : {Biome::GRASSLAND, Biome::FOREST, Biome::MOUNTAIN, Biome::DESERT, Biome::ARCTIC, Biome::TROPICAL})
+        CHECK_FALSE(Habitat::suitabilityOf(Group::FISH, biome).passable);
+    for (auto biome : {Biome::FRESHWATER, Biome::OCEAN}) {
+        CHECK(Habitat::suitabilityOf(Group::FISH, biome).passable);
+        CHECK_FALSE(Habitat::suitabilityOf(Group::ARTHROPOD, biome).passable);
+        CHECK_FALSE(Habitat::suitabilityOf(Group::MOLLUSC, biome).passable);
+    }
+    // L'oiseau survole l'océan, sans pouvoir s'y nourrir.
+    CHECK(Habitat::suitabilityOf(Group::BIRD, Biome::OCEAN).passable);
+    CHECK(Habitat::suitabilityOf(Group::BIRD, Biome::OCEAN).foraging == 0.0);
+}
+
+TEST_CASE("no individual ever stands in a biome its group cannot enter", "[worldsim][habitat]") {
+    for (uint32_t seed : {1u, 2u, 3u, 4u, 5u, 6u}) {
+        UnifiedWorldSimulator sim({}, seed);
+        sim.seedFounderSpecies(30);
+        const double width = sim.getGrid().getWidth() * sim.getCellSize();
+        const double height = sim.getGrid().getHeight() * sim.getCellSize();
+
+        for (int tick = 0; tick <= 600; ++tick) {
+            if (tick % 100 == 0) {
+                for (const auto &ind : sim.getIndividualSnapshots()) {
+                    auto [gx, gy] = sim.getGrid().positionToGrid(ind.x, ind.y, width, height);
+                    REQUIRE(Habitat::suitabilityOf(ind.biologicalType, sim.getGrid().at(gx, gy).environmentType).passable);
+                }
+            }
+            sim.step();
+        }
+    }
+}
+
+TEST_CASE("every map contains the founders' home biomes", "[worldsim][habitat]") {
+    for (uint32_t seed = 1; seed <= 200; ++seed) {
+        Spatial::RegionGrid grid(12, 9, seed);
+        CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::FRESHWATER).empty());
+        CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::GRASSLAND).empty());
+        CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::FOREST).empty());
+        CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::WETLAND).empty());
     }
 }

@@ -38,16 +38,16 @@ starting point and the plan.
 
 These are measured or read from the code. See the roadmap for the details.
 
-- **Climate is displayed but affects nothing**, and biomes never change.
-- **Habitat is not enforced**: fish can live in a desert.
+- **Climate has only a weak effect**: it costs energy, but resistance barely tracks
+  local climate on unseen seeds (correlation 0.045 after 5000 ticks). Biomes never change.
 - **Speciation happens far too fast**: a few dozen events within about five
   lifespans. The UI's "generation" is really a tick.
 - **Movement and body size cost nothing**, and five of the twelve traits have
   no direct effect on survival.
 - **There is no food chain**: food is unlimited apart from a per-cell capacity,
   and predation does not kill directly.
-- **Most worlds lose some founders**: molluscs die out in more than half of
-  them.
+- **Most worlds lose some founders**: over 5000 ticks, molluscs survive in only
+  5 worlds out of 12.
 - **The engine does not scale to a planet**: about 5 µs per individual per tick
   on one core, and 2.7 KB of memory per individual.
 - **The API has no authentication**, so it should only run locally.

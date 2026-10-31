@@ -9,6 +9,7 @@
 
 #include "DeterministicRandom.hpp"
 #include "Region.hpp"
+#include "Habitat.hpp"
 #include "PopulationManager.hpp"
 #include "EcosystemTaxonomy.hpp"
 #include "TraitEcology.hpp"
@@ -146,6 +147,7 @@ namespace Serina::Simulation
         uint8_t ornamentTier = 0;       ///< AGGRESSION quantifiée en 4 paliers [0,3]
         double sensoryProminence = 0.0; ///< moyenne normalisée de VISION_RANGE et HEARING_ACUITY, [0,1]
         uint8_t patternTier = 0;        ///< SOCIAL_BEHAVIOR quantifiée en 5 paliers [0,4]
+        double resistance = 0.0;        ///< RESISTANCE normalisée [0,1]
     };
 
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
@@ -310,6 +312,13 @@ namespace Serina::Simulation
         double movementCost = 0.0;
         /// Rebondir sur le bord du monde plutôt que de s'y arrêter.
         bool reflectAtBorders = true;
+        /// Énergie perdue par tick au maximum d'inadaptation au climat local : coût
+        /// = taux × (résistance normalisée − stress climatique de la case)². Résister
+        /// coûte donc quand le climat est doux : aucun niveau n'est bon partout.
+        /// Mesuré sur 12 graines à 3000 ticks (corrélation résistance/stress local,
+        /// population médiane) : 0 -> 0.04, 8859 ; 0.03 -> 0.03, 9059 ; 0.08 -> 0.12, 6228 ;
+        /// 0.2 -> 0.16, 4515. Au-delà de 0.08, la carte se vide plus vite que l'adaptation ne gagne.
+        double climateCostRate = 0.08;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -374,7 +383,9 @@ namespace Serina::Simulation
 
                 auto candidateRegions = grid_.regionsOfType(founder.preferredBiome);
                 if (candidateRegions.empty())
-                    candidateRegions = {{0, 0}}; // biome absent de cette carte : repli sur l'origine
+                    candidateRegions = bestHabitatRegions(founder.type);
+                if (candidateRegions.empty())
+                    continue; // aucune case habitable pour ce groupe sur cette carte
 
                 Det::UniformInt<size_t> regionPick(0, candidateRegions.size() - 1);
 
@@ -535,6 +546,7 @@ namespace Serina::Simulation
                 const auto &genome = organism.getGenome();
                 double speedNorm = normalizeTrait(Genetics::TraitType::SPEED, genome.getTrait(Genetics::TraitType::SPEED));
                 snap.sizeScale = normalizeTrait(Genetics::TraitType::SIZE, genome.getTrait(Genetics::TraitType::SIZE));
+                snap.resistance = normalizeTrait(Genetics::TraitType::RESISTANCE, genome.getTrait(Genetics::TraitType::RESISTANCE));
                 // Élongation : un organisme relativement plus rapide que
                 // grand paraît fuselé (proche de 1), l'inverse trapu (proche
                 // de 0) -- un ratio dérivé plutôt qu'exposer SPEED comme son
@@ -631,6 +643,36 @@ namespace Serina::Simulation
             if (bounds.max <= bounds.min)
                 return 0.5;
             return std::clamp((realValue - bounds.min) / (bounds.max - bounds.min), 0.0, 1.0);
+        }
+
+        Habitat::Suitability habitatOf(const std::string &species, int gx, int gy) const
+        {
+            auto type = biologicalTypeOf_.find(species);
+            if (type == biologicalTypeOf_.end())
+                return {};
+            return Habitat::suitabilityOf(type->second, grid_.at(gx, gy).environmentType);
+        }
+
+        /// @brief Les cases les plus favorables à un groupe, pour un fondateur dont le
+        /// biome préféré manque sur cette carte. Vide si aucune n'est habitable.
+        std::vector<std::pair<int, int>> bestHabitatRegions(Taxonomy::BiologicalType group) const
+        {
+            std::vector<std::pair<int, int>> best;
+            double bestForaging = 0.0;
+            for (int y = 0; y < grid_.getHeight(); ++y)
+            {
+                for (int x = 0; x < grid_.getWidth(); ++x)
+                {
+                    auto suitability = Habitat::suitabilityOf(group, grid_.at(x, y).environmentType);
+                    if (!suitability.passable || suitability.foraging <= 0.0 || suitability.foraging < bestForaging)
+                        continue;
+                    if (suitability.foraging > bestForaging)
+                        best.clear();
+                    bestForaging = suitability.foraging;
+                    best.emplace_back(x, y);
+                }
+            }
+            return best;
         }
 
         std::pair<int, int> regionOf(const Evolution::Organism &o) const
@@ -774,6 +816,17 @@ namespace Serina::Simulation
                 }
                 nx = std::clamp(nx, 0.0, worldWidth() - 1e-6);
                 ny = std::clamp(ny, 0.0, worldHeight() - 1e-6);
+
+                // Une case interdite arrête le déplacement : l'individu reste sur place
+                // et la dispersion aléatoire le fera repartir ailleurs.
+                auto [targetX, targetY] = grid_.positionToGrid(nx, ny, worldWidth(), worldHeight());
+                if (!habitatOf(organism.getSpecies(), targetX, targetY).passable)
+                {
+                    nx = organism.getX();
+                    ny = organism.getY();
+                    dx = 0.0;
+                    dy = 0.0;
+                }
                 organism.setPosition(nx, ny);
 
                 if (params_.movementCost > 0.0)
@@ -798,7 +851,7 @@ namespace Serina::Simulation
         {
             auto [gx, gy] = regionOf(organism);
             const auto *localEnv = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
-            double localResource = localEnv ? localEnv->resources.primaryProducers : 0.5;
+            double localResource = (localEnv ? localEnv->resources.primaryProducers : 0.5) * habitatOf(organism.getSpecies(), gx, gy).foraging;
             double localPredation = localEnv ? localEnv->pressures.predationPressure : 0.3;
 
             // N, S, E, W, retombe sur la ressource locale (gradient nul)
@@ -813,7 +866,7 @@ namespace Serina::Simulation
                     continue;
                 const auto *neighborEnv = environments_.getEnvironment(grid_.at(nx, ny).environmentType);
                 if (neighborEnv)
-                    neighborResources[i] = neighborEnv->resources.primaryProducers;
+                    neighborResources[i] = neighborEnv->resources.primaryProducers * habitatOf(organism.getSpecies(), nx, ny).foraging;
             }
 
             return {
@@ -937,7 +990,14 @@ namespace Serina::Simulation
                 const auto *localEnv = environments_.getEnvironment(environmentType);
                 double resourceLevel = localEnv ? localEnv->resources.primaryProducers : 0.5;
                 double efficiency = organism.getGenome().getTrait(Genetics::TraitType::ENERGY_EFFICIENCY);
-                double foragingIncome = resourceLevel * efficiency * params_.foragingRate;
+                double foragingIncome = resourceLevel * efficiency * params_.foragingRate * habitatOf(organism.getSpecies(), gx, gy).foraging;
+
+                if (params_.climateCostRate > 0.0 && localEnv)
+                {
+                    double mismatch = normalizeTrait(Genetics::TraitType::RESISTANCE, organism.getGenome().getTrait(Genetics::TraitType::RESISTANCE)) -
+                                      localEnv->pressures.climaticStress;
+                    organism.setEnergy(organism.getEnergy() - params_.climateCostRate * mismatch * mismatch);
+                }
 
                 // Régulation par la densité : la case ne peut nourrir qu'un
                 // nombre borné d'individus (voir carryingCapacityPerResource).

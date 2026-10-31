@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { centerCamera, clampCamera, fitCamera, ViewBox, WorldSize, zoomCamera, zoomLevel } from '../utils/mapCamera';
-import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { ChevronUp, ChevronDown, Pin, PinOff, Columns3 } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { useSelection } from '@services/SelectionContext';
-import { IndividualInfo, RegionInfo } from '../types';
-import { computeLineageHues, creatureColor } from '../utils/lineageColor';
-import { BIOME_PATTERN_IDS, jitterColor } from '../utils/mapTexture';
+import { RegionInfo } from '../types';
+import { MapCreature, MapRenderer } from '../map/mapRenderer';
+import { computeLineageHues, creatureColor, hexToRgb } from '../utils/lineageColor';
 import { OverlayMode, OVERLAY_LABELS, sequentialColor, ramp } from '../utils/overlayColor';
-import { BiomeTextureDefs } from './BiomeTextureDefs';
-import { CreatureIcon } from './CreatureIcon';
 import { Minimap } from './Minimap';
 
 /** Une métrique réelle par région (RegionInfo) pour chaque overlay -- pas
@@ -38,9 +36,22 @@ const BIOME_COLORS: Record<string, string> = {
 };
 const FALLBACK_BIOME_COLOR = '#9ca3af';
 
+/** Couche de sol de chaque biome dans le rendu (voir map/mapRenderer.ts). */
+const BIOME_LAYERS: Record<string, number> = {
+  'Prairie de Serina': 0,
+  'Forêts de Serina': 1,
+  'Forêts tropicales de Serina': 2,
+  'Marécages et zones humides': 3,
+  'Chaînes montagneuses': 4,
+  'Déserts de Serina': 5,
+  'Régions arctiques de Serina': 6,
+  'Lacs et rivières': 7,
+  'Océans de Serina': 8
+};
+const OVERLAY_ALPHA = 173;
+
 
 const PAN_STEP_FRACTION = 0.15;
-const DETAIL_ZOOM_THRESHOLD = 1.2; // en "zoom equivalent" (worldWidth / viewBox.w)
 
 /** Distance en pixels à partir de laquelle un appui devient un glisser, pas un clic. */
 const DRAG_THRESHOLD_PX = 4;
@@ -56,7 +67,7 @@ const DRAG_THRESHOLD_PX = 4;
  */
 export function WorldMap() {
   const { simulationData } = useSimulation();
-  const { selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
+  const { selectedRegion, selectedIndividual, selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
   const [legendCollapsed, setLegendCollapsed] = useState(true);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
@@ -68,13 +79,10 @@ export function WorldMap() {
   const justDragged = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const lastWorld = useRef<WorldSize | null>(null);
-  // Position précédente et cap réel par individu, pour orienter sa
-  // silhouette dans le sens de son vrai déplacement entre deux instantanés
-  // plutôt que de la laisser fixe ou orientée au hasard. Mise à jour
-  // pendant le rendu (jamais via setState : c'est un simple cache dérivé,
-  // pas un état qui doit déclencher un nouveau rendu).
-  const previousPositions = useRef<Map<number, { x: number; y: number }>>(new Map());
-  const headings = useRef<Map<number, number>>(new Map());
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+  const renderer = useRef<MapRenderer | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [worldImage, setWorldImage] = useState<string | null>(null);
 
   const regionsData = simulationData?.regions;
   const worldWidth = regionsData ? regionsData.gridWidth * regionsData.cellSize : 0;
@@ -104,6 +112,43 @@ export function WorldMap() {
     setViewBox((current) => (newWorld || !current ? fitCamera(world, aspect) : clampCamera(current, world, aspect)));
   }, [world, worldWidth, worldHeight, aspect]);
 
+  useEffect(() => {
+    if (!canvas) return;
+    let created: MapRenderer | null = null;
+    try {
+      created = new MapRenderer(canvas, (e) => setRenderError(e.message), setWorldImage);
+      renderer.current = created;
+      created.start().catch((e: Error) => setRenderError(e.message));
+      if (import.meta.env.DEV) (window as unknown as { __serinaMap?: MapRenderer }).__serinaMap = created;
+    } catch (e) {
+      setRenderError((e as Error).message);
+    }
+    return () => {
+      created?.destroy();
+      renderer.current = null;
+    };
+  }, [canvas]);
+
+  // Le terrain ne change que si la carte change, pas à chaque tick.
+  const regionCells = simulationData?.regions.regions;
+  const terrainKey = regionCells?.map((r) => BIOME_LAYERS[r.environmentName] ?? 0).join('') ?? '';
+  useEffect(() => {
+    if (!renderer.current || !regionsData || !regionCells || regionCells.length === 0) return;
+    const layers = new Uint8Array(regionsData.gridWidth * regionsData.gridHeight);
+    for (const r of regionCells) layers[r.gridY * regionsData.gridWidth + r.gridX] = BIOME_LAYERS[r.environmentName] ?? 0;
+    renderer.current.setWorld({ gridWidth: regionsData.gridWidth, gridHeight: regionsData.gridHeight, cellSize: regionsData.cellSize, layers });
+    // regionCells change à chaque tick : terrainKey dit si le terrain a vraiment changé.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvas, terrainKey, worldWidth, worldHeight]);
+
+  useEffect(() => {
+    if (viewBox) renderer.current?.setCamera(viewBox);
+  }, [viewBox, canvas]);
+
+  useEffect(() => {
+    renderer.current?.setSelection(selectedRegion ? [selectedRegion.gridX, selectedRegion.gridY] : null, selectedIndividual?.id ?? null);
+  }, [selectedRegion, selectedIndividual, canvas]);
+
   const lineages = simulationData?.status.lineages;
   const speciationEvents = simulationData?.lineages.speciationEvents;
   const lineageHues = useMemo(() => {
@@ -111,16 +156,83 @@ export function WorldMap() {
     return computeLineageHues(speciationEvents ?? [], names);
   }, [lineages, speciationEvents]);
 
+  const individualList = simulationData?.individuals.individuals;
+  useEffect(() => {
+    if (!renderer.current || !individualList || !regionsData || !regionCells) return;
+    const { gridWidth, gridHeight, cellSize } = regionsData;
+    const biomeNames: string[] = new Array(gridWidth * gridHeight);
+    for (const r of regionCells) biomeNames[r.gridY * gridWidth + r.gridX] = r.environmentName;
+
+    // Le camouflage mélange la teinte de la lignée à la couleur du biome : mis en cache,
+    // car la même combinaison revient des milliers de fois.
+    const colors = new Map<string, [number, number, number]>();
+    const creatures: MapCreature[] = individualList.map((ind) => {
+      const gx = Math.max(0, Math.min(gridWidth - 1, Math.floor(ind.x / cellSize)));
+      const gy = Math.max(0, Math.min(gridHeight - 1, Math.floor(ind.y / cellSize)));
+      const biome = biomeNames[gy * gridWidth + gx];
+      const hue = lineageHues.get(ind.species) ?? 0;
+      const camouflage = Math.round(ind.camouflage * 20) / 20;
+      const key = `${hue}|${camouflage}|${biome}`;
+      let color = colors.get(key);
+      if (!color) {
+        const [r, g, b] = hexToRgb(creatureColor(hue, camouflage, BIOME_COLORS[biome] ?? FALLBACK_BIOME_COLOR));
+        color = [r / 255, g / 255, b / 255];
+        colors.set(key, color);
+      }
+      return {
+        id: ind.id,
+        x: ind.x,
+        y: ind.y,
+        biologicalType: ind.biologicalType,
+        sizeScale: ind.sizeScale,
+        elongation: ind.elongation,
+        ornamentTier: ind.ornamentTier,
+        patternTier: ind.patternTier,
+        color
+      };
+    });
+    renderer.current.setCreatures(showIndividuals ? creatures : []);
+  }, [individualList, regionsData, regionCells, lineageHues, showIndividuals, canvas]);
+
+  useEffect(() => {
+    if (!renderer.current || !regionsData || !regionCells) return;
+    const metric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
+    if (!metric) {
+      renderer.current.setOverlay(null);
+      return;
+    }
+    const values = regionCells.map(metric);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const rgba = new Uint8Array(regionsData.gridWidth * regionsData.gridHeight * 4);
+    regionCells.forEach((r, i) => {
+      const [red, green, blue] = hexToRgb(sequentialColor(values[i], min, max, overlayMode as Exclude<OverlayMode, 'biome'>));
+      const at = (r.gridY * regionsData.gridWidth + r.gridX) * 4;
+      rgba[at] = red;
+      rgba[at + 1] = green;
+      rgba[at + 2] = blue;
+      rgba[at + 3] = OVERLAY_ALPHA;
+    });
+    renderer.current.setOverlay(rgba);
+    // Les valeurs par case ne changent pas d'un tick à l'autre, seul le mode ou la carte compte.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [overlayMode, terrainKey, worldWidth, worldHeight, canvas]);
+
   const zoomByFactor = useCallback((factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
     setViewBox((current) => (current ? zoomCamera(current, factor, anchorXFrac, anchorYFrac, world, aspect) : current));
   }, [world, aspect]);
 
-  const handleWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
+  // Écouteur natif : React attache la molette en mode passif, où preventDefault est refusé.
+  useEffect(() => {
     if (!container) return;
-    const rect = container.getBoundingClientRect();
-    zoomByFactor(e.deltaY > 0 ? 1.12 : 1 / 1.12, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
-  };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = container.getBoundingClientRect();
+      zoomByFactor(e.deltaY > 0 ? 1.12 : 1 / 1.12, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+    };
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => container.removeEventListener('wheel', onWheel);
+  }, [container, zoomByFactor]);
 
   const handleMouseDown = (e: ReactMouseEvent<HTMLDivElement>) => {
     if (!viewBox) return;
@@ -172,6 +284,24 @@ export function WorldMap() {
       cursorReadoutRef.current.textContent = `x: ${Math.round(worldX)} y: ${Math.round(worldY)}`;
       cursorReadoutRef.current.style.display = 'block';
     }
+  };
+
+  const handleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (!container || !viewBox || !regionsData || !regionCells || !individualList) return;
+    const rect = container.getBoundingClientRect();
+    const worldX = viewBox.x + ((e.clientX - rect.left) / rect.width) * viewBox.w;
+    const worldY = viewBox.y + ((e.clientY - rect.top) / rect.height) * viewBox.h;
+
+    const id = renderer.current?.pickCreature(worldX, worldY);
+    const individual = id != null ? individualList.find((i) => i.id === id) : undefined;
+    if (individual) {
+      selectIndividual(individual);
+      return;
+    }
+    const gx = Math.floor(worldX / regionsData.cellSize);
+    const gy = Math.floor(worldY / regionsData.cellSize);
+    const region = regionCells.find((r) => r.gridX === gx && r.gridY === gy);
+    if (region) selectRegion(region);
   };
 
   const handleDoubleClick = (e: ReactMouseEvent<HTMLDivElement>) => {
@@ -244,11 +374,9 @@ export function WorldMap() {
     );
   }
 
-  const { regions, gridWidth, gridHeight, cellSize } = simulationData.regions;
-  const individuals = simulationData.individuals.individuals;
+  const { regions } = simulationData.regions;
   const distinctBiomes = Array.from(new Set(regions.map((r) => r.environmentName))).filter(Boolean);
   const currentZoom = zoomLevel(viewBox, world, aspect);
-  const detailed = worldWidth / viewBox.w >= DETAIL_ZOOM_THRESHOLD;
 
   const overlayMetric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
   const overlayRange = overlayMetric
@@ -261,110 +389,35 @@ export function WorldMap() {
       )
     : null;
 
-  const biomeColorAt = (x: number, y: number): string => {
-    const gx = Math.max(0, Math.min(gridWidth - 1, Math.floor(x / cellSize)));
-    const gy = Math.max(0, Math.min(gridHeight - 1, Math.floor(y / cellSize)));
-    const region = regions.find((r) => r.gridX === gx && r.gridY === gy);
-    return region ? BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR : FALLBACK_BIOME_COLOR;
-  };
-
-  const computeHeading = (individual: IndividualInfo): number => {
-    const prev = previousPositions.current.get(individual.id);
-    previousPositions.current.set(individual.id, { x: individual.x, y: individual.y });
-    if (prev) {
-      const dx = individual.x - prev.x;
-      const dy = individual.y - prev.y;
-      if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) {
-        headings.current.set(individual.id, (Math.atan2(dy, dx) * 180) / Math.PI);
-      }
-    }
-    return headings.current.get(individual.id) ?? 0;
-  };
-
   return (
     <div className="relative h-full w-full bg-slate-950 overflow-hidden">
       <div
         ref={setContainer}
         className="absolute inset-0"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-        onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={(e) => { handleMouseMove(e); handleMouseMoveWorld(e); }}
         onMouseUp={stopDragging}
         onMouseLeave={() => { stopDragging(); if (cursorReadoutRef.current) cursorReadoutRef.current.style.display = 'none'; }}
         onDoubleClick={handleDoubleClick}
+        onClick={handleClick}
         onClickCapture={handleClickCapture}
       >
-        <svg viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`} style={{ width: '100%', height: '100%' }}>
-          <BiomeTextureDefs cellSize={cellSize} />
-
-          {regions.map((region) => {
-            const baseColor = BIOME_COLORS[region.environmentName] ?? FALLBACK_BIOME_COLOR;
-            const patternId = BIOME_PATTERN_IDS[region.environmentName];
-            return (
-              <g
-                key={`${region.gridX}-${region.gridY}`}
-                onClick={() => selectRegion(region)}
-                style={{ cursor: 'pointer' }}
-              >
-                <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}), ${region.population} individu(s)`}</title>
-                {/* Teinte de base légèrement variée par case (jamais un
-                    aplat parfaitement uniforme, comme un vrai terrain) puis
-                    motif de texture propre au biome par-dessus. */}
-                <rect
-                  x={region.gridX * cellSize}
-                  y={region.gridY * cellSize}
-                  width={cellSize}
-                  height={cellSize}
-                  fill={jitterColor(baseColor, region.gridX, region.gridY)}
-                  stroke="#00000022"
-                  strokeWidth={cellSize * 0.008}
-                />
-                {patternId && (
-                  <rect
-                    x={region.gridX * cellSize}
-                    y={region.gridY * cellSize}
-                    width={cellSize}
-                    height={cellSize}
-                    fill={`url(#${patternId})`}
-                  />
-                )}
-                {/* Calque de données au-dessus du terrain (semi-transparent,
-                    façon RimWorld) : le terrain reste lisible dessous, la
-                    teinte de la métrique réelle porte l'information. */}
-                {overlayMetric && overlayRange && (
-                  <rect
-                    x={region.gridX * cellSize}
-                    y={region.gridY * cellSize}
-                    width={cellSize}
-                    height={cellSize}
-                    fill={sequentialColor(overlayMetric(region), overlayRange.min, overlayRange.max, overlayMode as Exclude<OverlayMode, 'biome'>)}
-                    fillOpacity={0.68}
-                  />
-                )}
-              </g>
-            );
-          })}
-
-          {showIndividuals && individuals.map((individual) => {
-            const hue = lineageHues.get(individual.species) ?? 0;
-            const color = creatureColor(hue, individual.camouflage, biomeColorAt(individual.x, individual.y));
-            return (
-              <CreatureIcon
-                key={individual.id}
-                individual={individual}
-                color={color}
-                detailed={detailed}
-                headingDegrees={computeHeading(individual)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectIndividual(individual);
-                }}
-              />
-            );
-          })}
-        </svg>
+        <canvas
+          ref={setCanvas}
+          data-viewbox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block' }}
+        />
       </div>
+
+      {renderError && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-950 z-[5]">
+          <div className="game-panel p-4 text-sm max-w-md">
+            <p className="font-semibold text-red-300">Impossible d'afficher la carte</p>
+            <p className="text-xs text-slate-400 mt-1">{renderError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Outils de carte au-dessus du temps, en bas à droite. */}
       <div className="absolute right-2 bottom-[136px] w-60 flex flex-col gap-0.5 z-10">
@@ -477,12 +530,10 @@ export function WorldMap() {
 
       <div className="absolute top-2 right-2 pointer-events-none z-10">
         <Minimap
-          regions={regions}
-          cellSize={cellSize}
+          image={worldImage}
           worldWidth={worldWidth}
           worldHeight={worldHeight}
           viewBox={viewBox}
-          biomeColors={BIOME_COLORS}
           onNavigate={navigateFromMinimap}
         />
       </div>
