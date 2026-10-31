@@ -219,16 +219,18 @@ Ce qu'on reprend de RimWorld :
 - **Barre d'onglets en bas** (Espèces, Évolution, Génétique, Monde, Historique, Dieu),
   chacun ouvrant une fenêtre posée sur la carte et déplaçable.
 - **Inspecteur en bas à gauche**, qui apparaît à la sélection, avec ses propres onglets.
-- **Temps en haut à droite** : date, pause, vitesses, raccourcis `Espace` et `1` à `4`.
+- **Temps en bas à droite** : tick, pause, vitesses, raccourcis `Espace` et `1` à `5`.
 - **Alertes sur le bord droit** et lettres d'événements cliquables qui centrent la carte.
-- **Calques en bas à droite**, activés par icônes.
+- **Calques en bas à droite**, activés par icônes (pour l'instant une liste).
 - **Infobulles partout**, qui expliquent chaque valeur et comment elle est calculée.
 - **Style visuel** : panneaux sombres à angles droits et bordure fine, texte compact,
   aucune carte arrondie, une icône claire par action.
 
 Étapes :
 
-- **I1, la coquille** : carte plein écran, barre du bas, temps, inspecteur, fenêtres.
+- **I1, la coquille (fait)** : carte plein écran, barre du bas, temps, inspecteur, fenêtres
+  déplaçables, raccourcis clavier, alertes et lettres, thème sombre à angles droits, erreurs
+  contenues par zone. Vérifié par un parcours automatique dans le navigateur.
 - **I2, le rendu** : carte en WebGL (PixiJS) à la place du SVG, créatures dessinées.
 - **I3, les informations** : alertes, lettres, infobulles, calques complets.
 

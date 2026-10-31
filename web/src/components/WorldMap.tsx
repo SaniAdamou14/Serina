@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, WheelEvent as ReactWheelEvent } from 'react';
-import { Map as MapIcon, ChevronUp, ChevronDown, Pin, PinOff, Columns3, Maximize2 } from 'lucide-react';
+import { ChevronUp, ChevronDown, Pin, PinOff, Columns3 } from 'lucide-react';
 import { useSimulation } from '@services/SimulationContext';
 import { useSelection } from '@services/SelectionContext';
 import { IndividualInfo, RegionInfo } from '../types';
@@ -53,7 +53,7 @@ interface ViewBox {
  * caméra ; aucune transformation CSS n'est appliquée par-dessus. */
 const MIN_VIEW_FRACTION = 0.06;
 const MAX_VIEW_FRACTION = 1.3;
-const INITIAL_VIEW_FRACTION = 0.6;
+const INITIAL_VIEW_FRACTION = 1;
 const PAN_STEP_FRACTION = 0.15;
 const DETAIL_ZOOM_THRESHOLD = 1.2; // en "zoom equivalent" (worldWidth / viewBox.w)
 
@@ -86,7 +86,7 @@ export function WorldMap() {
   const { simulationData } = useSimulation();
   const { selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
-  const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [legendCollapsed, setLegendCollapsed] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [viewBox, setViewBox] = useState<ViewBox | null>(null);
   const cursorReadoutRef = useRef<HTMLDivElement>(null);
@@ -209,11 +209,6 @@ export function WorldMap() {
     const h = worldHeight * INITIAL_VIEW_FRACTION;
     setViewBox({ x: (worldWidth - w) / 2, y: (worldHeight - h) / 2, w, h });
   }, [worldWidth, worldHeight]);
-
-  const fitWorld = () => {
-    if (worldWidth <= 0 || worldHeight <= 0) return;
-    setViewBox({ x: 0, y: 0, w: worldWidth, h: worldHeight });
-  };
 
   // Raccourcis clavier pour naviguer sur la carte (façon RimWorld/RTS)
   useEffect(() => {
@@ -396,60 +391,44 @@ export function WorldMap() {
         </svg>
       </div>
 
-      {/* Barre d'info flottante en haut */}
-      <div className="absolute top-3 left-3 right-3 flex justify-between items-start gap-3 pointer-events-none">
-        <div className="bg-slate-900/85 backdrop-blur-sm text-slate-200 rounded-lg px-3 py-2 text-xs pointer-events-auto shadow-lg">
-          <div className="font-semibold text-sm flex items-center gap-1.5"><MapIcon className="w-4 h-4" /> Monde de Serina</div>
-          <div className="text-slate-400">
-            {gridWidth}×{gridHeight} régions, {individuals.length} individus en direct
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-2 pointer-events-auto">
-          <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-2 py-1.5 flex items-center gap-1.5 shadow-lg">
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1.25)} title="Zoom arrière (-)">−</button>
-            <span className="text-slate-300 text-xs w-12 text-center">{Math.round(currentZoom * 100)}%</span>
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-sm" onClick={() => zoomByFactor(1 / 1.25)} title="Zoom avant (+)">+</button>
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-2 py-1 text-xs ml-1" onClick={resetView} title="Recentrer (0/Home)">Recentrer</button>
-            <button className="text-slate-200 hover:bg-slate-700 rounded px-1.5 py-1" onClick={fitWorld} title="Ajuster à la vue d'ensemble">
-              <Maximize2 className="w-3.5 h-3.5" />
-            </button>
-            <button className={showIndividuals ? "text-primary-400 hover:bg-slate-700 rounded px-2 py-1 text-xs" : "text-slate-400 hover:bg-slate-700 rounded px-2 py-1 text-xs"} onClick={() => setShowIndividuals((v) => !v)} title="Afficher/Masquer individus (I)">
-              Indiv.
-            </button>
-          </div>
-          <select
-            value={overlayMode}
-            onChange={(e) => setOverlayMode(e.target.value as OverlayMode)}
-            className="input-field text-xs px-2 py-1.5 shadow-lg"
-          >
-            {(Object.keys(OVERLAY_LABELS) as OverlayMode[]).map((mode) => (
-              <option key={mode} value={mode}>{OVERLAY_LABELS[mode]}</option>
-            ))}
-          </select>
-          {overlayMetric && overlayRange && (
-            <div className="bg-slate-900/85 backdrop-blur-sm rounded-lg px-3 py-2 text-xs shadow-lg w-48">
-              <div
-                className="h-2 rounded-full mb-1"
-                style={{ background: `linear-gradient(to right, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).light}, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).dark})` }}
-              />
-              <div className="flex justify-between text-slate-400">
-                <span>{overlayRange.min.toFixed(1)}</span>
-                <span>{overlayRange.max.toFixed(1)}</span>
-              </div>
+      {/* Outils de carte au-dessus du temps, en bas à droite. */}
+      <div className="absolute right-2 bottom-[136px] w-60 flex flex-col gap-0.5 z-10">
+        {overlayMetric && overlayRange && (
+          <div className="game-panel px-2 py-1 text-xs">
+            <div
+              className="h-2 mb-1"
+              style={{ background: `linear-gradient(to right, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).light}, ${ramp(overlayMode as Exclude<OverlayMode, 'biome'>).dark})` }}
+            />
+            <div className="flex justify-between text-slate-400">
+              <span>{overlayRange.min.toFixed(1)}</span>
+              <span>{overlayRange.max.toFixed(1)}</span>
             </div>
-          )}
+          </div>
+        )}
+        <select
+          value={overlayMode}
+          onChange={(e) => setOverlayMode(e.target.value as OverlayMode)}
+          className="input-field text-xs w-full"
+          aria-label="Calque de la carte"
+        >
+          {(Object.keys(OVERLAY_LABELS) as OverlayMode[]).map((mode) => (
+            <option key={mode} value={mode}>{OVERLAY_LABELS[mode]}</option>
+          ))}
+        </select>
+        <div className="game-panel p-1 flex items-center gap-0.5">
+          <button className="game-button px-2 text-sm" onClick={() => zoomByFactor(1.25)} title="Zoom arrière (-)">−</button>
+          <span className="text-xs w-11 text-center">{Math.round(currentZoom * 100)} %</span>
+          <button className="game-button px-2 text-sm" onClick={() => zoomByFactor(1 / 1.25)} title="Zoom avant (+)">+</button>
+          <button className="game-button flex-1 text-xs py-0.5" onClick={resetView} title="Voir tout le monde (0)">Tout voir</button>
+          <button className={`game-button px-1.5 text-xs py-0.5 ${showIndividuals ? 'game-button-active' : ''}`} onClick={() => setShowIndividuals((v) => !v)} title="Afficher ou masquer les individus (I)">
+            Indiv.
+          </button>
         </div>
       </div>
 
-      {!detailed && (
-        <div className="absolute top-16 left-3 bg-amber-900/85 backdrop-blur-sm text-amber-200 rounded-lg px-3 py-1.5 text-xs pointer-events-none shadow-lg">
-          Zoomez pour voir les silhouettes détaillées.
-        </div>
-      )}
-
       <div
         ref={cursorReadoutRef}
-        className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-slate-900/80 backdrop-blur-sm text-slate-400 rounded px-2 py-1 text-[10px] pointer-events-none shadow-lg"
+        className="absolute bottom-11 left-1/2 -translate-x-1/2 game-panel text-slate-400 px-2 py-0.5 text-[11px] pointer-events-none"
         style={{ display: 'none' }}
       />
 
@@ -457,16 +436,16 @@ export function WorldMap() {
           la liste d'espèces grandit avec les spéciations réelles et finissait
           par couvrir une bonne partie de la carte (bug signalé), donc jamais
           plus qu'une bande défilante, quelle que soit la génération. */}
-      <div className="absolute bottom-3 left-3 max-w-sm bg-slate-900/85 backdrop-blur-sm rounded-lg text-xs shadow-lg">
+      <div className="absolute top-[74px] left-2 w-72 game-panel text-xs z-10">
         <button
-          className="w-full flex items-center justify-between px-3 py-2 text-slate-300 hover:text-slate-100"
+          className="w-full flex items-center justify-between px-2 py-1 text-slate-200 hover:bg-slate-700"
           onClick={() => setLegendCollapsed((v) => !v)}
         >
           <span className="font-medium">Légende ({distinctBiomes.length} biomes, {(lineages ?? []).length} espèces)</span>
           {legendCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
         {!legendCollapsed && (
-          <div className="px-3 pb-2 space-y-2 max-h-52 overflow-y-auto">
+          <div className="px-2 pb-2 space-y-2 max-h-72 overflow-y-auto scrollbar-thin">
             <div className="flex flex-wrap gap-2">
               {distinctBiomes.map((name) => {
                 const stats = biomeStats.get(name);
@@ -511,7 +490,7 @@ export function WorldMap() {
       </div>
 
       {pinnedSpecies.length >= 2 && (
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none">
+        <div className="absolute bottom-[72px] left-1/2 -translate-x-1/2 pointer-events-none z-10">
           <button
             className="button-primary px-3 py-1.5 text-xs flex items-center gap-1.5 shadow-lg pointer-events-auto"
             onClick={() => setCompareOpen(true)}
@@ -521,7 +500,7 @@ export function WorldMap() {
         </div>
       )}
 
-      <div className="absolute bottom-3 right-3 pointer-events-none">
+      <div className="absolute top-2 right-2 pointer-events-none z-10">
         <Minimap
           regions={regions}
           cellSize={cellSize}

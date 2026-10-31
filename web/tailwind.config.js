@@ -7,18 +7,32 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Gris neutres et chauds, sable pour la sélection : la palette de RimWorld.
+        slate: {
+          50: '#f2f2ef',
+          100: '#e6e5e0',
+          200: '#d6d5ce',
+          300: '#bcbbb3',
+          400: '#98978f',
+          500: '#767570',
+          600: '#5b5b56',
+          700: '#464743',
+          800: '#373835',
+          900: '#2a2b29',
+          950: '#191a19',
+        },
         primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
-          950: '#082f49',
+          50: '#faf6e8',
+          100: '#f3eacb',
+          200: '#ecdca9',
+          300: '#e6d092',
+          400: '#d9bd74',
+          500: '#c5a557',
+          600: '#9f8541',
+          700: '#7d6832',
+          800: '#5e4e26',
+          900: '#45391c',
+          950: '#2a2311',
         },
         genetic: {
           50: '#faf5ff',
@@ -47,9 +61,21 @@ export default {
           950: '#052e16',
         }
       },
+      // Aucun angle arrondi, comme dans RimWorld ; full reste pour les points de couleur.
+      borderRadius: {
+        none: '0',
+        sm: '0',
+        DEFAULT: '0',
+        md: '0',
+        lg: '0',
+        xl: '0',
+        '2xl': '0',
+        '3xl': '0',
+        full: '9999px',
+      },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Calibri', 'Segoe UI', 'Arial', 'sans-serif'],
+        mono: ['Consolas', 'monospace'],
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

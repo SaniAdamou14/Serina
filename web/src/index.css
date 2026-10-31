@@ -2,18 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Thème "poste de contrôle sombre" (voir CONTRIBUTING.md, refonte
-   post-Phase-10) : pas un mode sombre optionnel en plus d'un thème clair --
-   c'est le seul thème de l'app, cohérent avec l'esthétique déjà utilisée sur
-   la carte (WorldMap.tsx) depuis le début de cette refonte. Densité
-   d'information et palette d'instrument scientifique plutôt que cartes
-   pastel et emoji décoratifs. */
+/* Thème façon RimWorld, seul thème de l'application : panneaux sombres à angles
+   droits, bordure fine, texte compact. La palette vit dans tailwind.config.js. */
 
 :root {
   --color-primary: 56 189 248;
   --color-genetic: 192 132 252;
   --color-ecosystem: 74 222 128;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: Consolas, monospace;
 }
 
 @layer base {
@@ -23,7 +19,7 @@
 
   body {
     @apply bg-slate-950 text-slate-200 font-sans;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-size: 14px;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -32,28 +28,41 @@
 }
 
 @layer components {
+  .game-panel {
+    @apply bg-slate-900 text-slate-200 border border-slate-600;
+    box-shadow: 0 2px 6px rgb(0 0 0 / 0.6);
+  }
+
+  .game-button {
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-500 font-semibold disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .game-button-active {
+    @apply bg-primary-700 hover:bg-primary-700 border-primary-400 text-primary-100;
+  }
+
   .card {
-    @apply bg-slate-900 rounded-xl shadow-lg border border-slate-700 p-6;
+    @apply bg-slate-800 border border-slate-600 p-3;
   }
 
   .button-primary {
-    @apply bg-primary-600 hover:bg-primary-500 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-primary-700 hover:bg-primary-600 text-primary-50 border border-primary-500 font-semibold px-3 py-1.5;
   }
 
   .button-secondary {
-    @apply bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-slate-700 hover:bg-slate-600 text-slate-100 border border-slate-500 font-semibold px-3 py-1.5;
   }
 
   .button-danger {
-    @apply bg-red-700 hover:bg-red-600 text-white font-medium px-4 py-2 rounded-lg transition-colors duration-200;
+    @apply bg-red-900 hover:bg-red-800 text-red-100 border border-red-700 font-semibold px-3 py-1.5;
   }
 
   .input-field {
-    @apply bg-slate-800 border border-slate-600 text-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all duration-200;
+    @apply bg-slate-950 border border-slate-600 text-slate-200 px-2 py-1 focus:border-primary-400 outline-none;
   }
 
   .status-indicator {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-semibold;
   }
 
   .status-running {
@@ -69,7 +78,7 @@
   }
 
   .metric-card {
-    @apply bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl p-6 shadow-lg border border-slate-700;
+    @apply bg-slate-800 p-3 border border-slate-600;
   }
 
   .genetic-trait {
