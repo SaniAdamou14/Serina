@@ -150,6 +150,28 @@ export interface IndividualsResult {
   error?: string
 }
 
+export interface ExtinctionEventInfo {
+  species: string
+  generation: number
+  lastPopulation: number
+}
+
+/** One point of the game's history, kept by the engine (`history` command). */
+export interface HistorySample {
+  tick: number
+  population: number
+  species: number
+  energy: number
+  diversity: number
+  bySpecies: Record<string, number>
+}
+
+export interface HistoryResult {
+  status: 'success' | 'error'
+  samples: HistorySample[]
+  error?: string
+}
+
 // === lineages command -> latestData.lineages ===
 
 export interface SpeciationEventInfo {
@@ -176,6 +198,7 @@ export interface LineagesResult {
   status: 'success' | 'error'
   lineages: LineageStatus[]
   speciationEvents: SpeciationEventInfo[]
+  extinctionEvents: ExtinctionEventInfo[]
   convergenceSignals: ConvergenceSignalInfo[]
   error?: string
 }

@@ -5,6 +5,7 @@ import { SimulationCommand } from '../types'
 import { AlertStack } from './AlertStack'
 import { ChroniclesPage } from './ChroniclesPage'
 import { ErrorBoundary } from './ErrorBoundary'
+import { GameTooltip } from './GameTooltip'
 import { GameWindow } from './GameWindow'
 import { GeneticAnalysis } from './GeneticAnalysis'
 import { GraphsPage } from './GraphsPage'
@@ -158,6 +159,8 @@ export function SimulationDashboard() {
         {detailSpecies && <SpeciesDetailPanel speciesName={detailSpecies} onClose={() => showSpeciesDetail(null)} />}
         {compareOpen && <SpeciesComparisonPanel />}
       </ErrorBoundary>
+
+      <GameTooltip />
     </div>
   )
 }

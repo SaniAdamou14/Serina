@@ -80,6 +80,24 @@ namespace Serina::Simulation
         uint64_t eligibleWithoutPartner = 0;
     };
 
+    struct ExtinctionEvent
+    {
+        std::string species;
+        uint32_t generation = 0;
+        uint32_t lastPopulation = 0;
+    };
+
+    /// @brief Un point de l'histoire de la partie, pour les graphiques.
+    struct HistorySample
+    {
+        uint32_t generation = 0;
+        uint32_t population = 0;
+        uint32_t speciesCount = 0;
+        double totalEnergy = 0.0;
+        double meanDiversity = 0.0;
+        std::map<std::string, uint32_t> bySpecies;
+    };
+
     struct SpeciationEvent
     {
         std::string parentSpecies;
@@ -432,6 +450,8 @@ namespace Serina::Simulation
                 evolveBrains();
             if (generation_ % params_.convergenceCheckInterval == 0)
                 checkConvergence();
+            if (generation_ % historyInterval_ == 0)
+                recordHistory();
         }
 
         uint32_t getGeneration() const { return generation_; }
@@ -462,6 +482,8 @@ namespace Serina::Simulation
         /// régions (discrète) sans dupliquer cette constante.
         double getCellSize() const { return params_.cellSize; }
         const std::vector<SpeciationEvent> &getSpeciationEvents() const { return speciationEvents_; }
+        const std::vector<ExtinctionEvent> &getExtinctionEvents() const { return extinctionEvents_; }
+        const std::vector<HistorySample> &getHistory() const { return history_; }
         /// @brief Historique des signaux de convergence évolutive candidats
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
         /// ce qu'un signal représente réellement et ne représente pas.
@@ -590,6 +612,10 @@ namespace Serina::Simulation
         std::map<std::string, uint32_t> divergentStreak_; ///< par espèce
         std::map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
+        std::vector<ExtinctionEvent> extinctionEvents_;
+        std::map<std::string, uint32_t> lastCounts_; ///< effectifs du tick précédent
+        std::vector<HistorySample> history_;
+        uint32_t historyInterval_ = 20; ///< ticks entre deux points, double quand l'historique est plein
 
         /// @brief Sorties complètes du cerveau de chaque individu vivant
         /// pour LA génération courante (Chantier G1) -- vidé et repeuplé à
@@ -1407,6 +1433,8 @@ namespace Serina::Simulation
             {
                 if (counts.find(it->first) == counts.end())
                 {
+                    auto last = lastCounts_.find(it->first);
+                    extinctionEvents_.push_back({it->first, generation_, last != lastCounts_.end() ? last->second : 0u});
                     divergentStreak_.erase(it->first);
                     it = brains_.erase(it);
                 }
@@ -1414,6 +1442,39 @@ namespace Serina::Simulation
                 {
                     ++it;
                 }
+            }
+            lastCounts_ = std::move(counts);
+        }
+
+        /// @brief Ajoute un point à l'histoire de la partie. Quand elle est pleine, un point
+        /// sur deux disparaît : toute la partie reste visible, à mémoire bornée.
+        void recordHistory()
+        {
+            static constexpr size_t MAX_SAMPLES = 1000;
+
+            HistorySample sample;
+            sample.generation = generation_;
+            sample.population = static_cast<uint32_t>(population_.size());
+            for (const auto &organism : population_)
+                sample.totalEnergy += organism.getEnergy();
+
+            double weightedDiversity = 0.0;
+            for (const auto &lineage : buildSnapshots())
+            {
+                sample.bySpecies[lineage.speciesName] = lineage.population;
+                weightedDiversity += lineage.geneticDiversity * lineage.population;
+            }
+            sample.speciesCount = static_cast<uint32_t>(sample.bySpecies.size());
+            sample.meanDiversity = sample.population > 0 ? weightedDiversity / sample.population : 0.0;
+            history_.push_back(std::move(sample));
+
+            if (history_.size() >= MAX_SAMPLES)
+            {
+                size_t kept = 0;
+                for (size_t i = 0; i < history_.size(); i += 2)
+                    history_[kept++] = std::move(history_[i]);
+                history_.resize(kept);
+                historyInterval_ *= 2;
             }
         }
 

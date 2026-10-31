@@ -24,6 +24,25 @@ interface SimulationContextType {
 
 const SimulationContext = createContext<SimulationContextType | undefined>(undefined)
 
+const CURRENT_SIMULATION_KEY = 'serina.currentSimulation'
+
+function rememberSimulation(id: SimulationId | null) {
+  try {
+    if (id === null) localStorage.removeItem(CURRENT_SIMULATION_KEY)
+    else localStorage.setItem(CURRENT_SIMULATION_KEY, String(id))
+  } catch {
+    // Stockage indisponible : recharger la page ramènera simplement à l'écran de départ.
+  }
+}
+
+function rememberedSimulation(): string | null {
+  try {
+    return localStorage.getItem(CURRENT_SIMULATION_KEY)
+  } catch {
+    return null
+  }
+}
+
 interface SimulationProviderProps {
   children: ReactNode
 }
@@ -79,6 +98,25 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
 
       if (currentSimulationId) {
         socket.emit('subscribe-simulation', currentSimulationId)
+      } else {
+        // Après un rechargement : la partie tourne encore côté serveur, on la rejoint.
+        const remembered = rememberedSimulation()
+        if (remembered) {
+          apiService
+            .listActiveSimulations()
+            .then((response) => {
+              const running = response.success && response.simulations.find((sim) => String(sim.id) === remembered)
+              if (running) {
+                setCurrentSimulationId(running.id)
+                socket.emit('subscribe-simulation', running.id)
+              } else {
+                rememberSimulation(null)
+              }
+            })
+            .catch(() => {
+              // Serveur injoignable : on réessaiera à la prochaine connexion.
+            })
+        }
       }
     })
 
@@ -143,6 +181,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       }
 
       setCurrentSimulationId(response.simulationId)
+      rememberSimulation(response.simulationId)
       setIsRunning(true)
       console.log('✅ Simulation started:', response.simulationId)
 
@@ -168,6 +207,7 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       socketRef.current?.emit('unsubscribe-simulation', currentSimulationId)
       setIsRunning(false)
       setCurrentSimulationId(null)
+      rememberSimulation(null)
       setSimulationData(null)
       await refreshSimulationList()
       await refreshResumableSimulations()

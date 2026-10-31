@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
-import { useGameLog } from '@services/GameLogContext'
 import { useLineageHues } from '../hooks/useLineageHues'
 import { creatureColor } from '../utils/lineageColor'
 
@@ -28,11 +27,11 @@ const WIDTH = 930
 export function SpeciesEvolutionTree() {
   const { simulationData } = useSimulation()
   const { showSpeciesDetail } = useSelection()
-  const { chronicle } = useGameLog()
   const hues = useLineageHues()
 
   const lineages = simulationData?.status.lineages
   const events = simulationData?.lineages.speciationEvents
+  const extinctions = simulationData?.lineages.extinctionEvents
   const now = simulationData?.status.generation ?? 0
 
   const branches = useMemo<Branch[]>(() => {
@@ -46,12 +45,7 @@ export function SpeciesEvolutionTree() {
       hasParent.add(e.newSpecies)
     }
 
-    const extinctionTick = new Map<string, number>()
-    for (const c of chronicle) {
-      if (c.type !== 'extinction') continue
-      const name = c.message.match(/« (.+?) »/)?.[1]
-      if (name) extinctionTick.set(name, c.generation)
-    }
+    const extinctionTick = new Map((extinctions ?? []).map((e) => [e.species, e.generation]))
 
     const result: Branch[] = []
     const visit = (name: string, start: number, parentRow: number | null, distance: number | null) => {
@@ -75,7 +69,7 @@ export function SpeciesEvolutionTree() {
     const known = new Set([...lineages.map((l) => l.speciesName), ...events.map((e) => e.parentSpecies)])
     for (const root of [...known].filter((n) => !hasParent.has(n)).sort()) visit(root, 0, null, null)
     return result
-  }, [lineages, events, chronicle, now])
+  }, [lineages, events, extinctions, now])
 
   if (!simulationData) return null
 
@@ -105,10 +99,12 @@ export function SpeciesEvolutionTree() {
         {branches.map((b) => {
           const color = b.alive ? creatureColor(hues.get(b.name) ?? 0, 0, '#2a2b29') : '#767570'
           return (
-            <g key={b.name} className="cursor-pointer" onClick={() => showSpeciesDetail(b.name)}>
-              <title>
-                {`${b.name}\n${b.alive ? `${b.population.toLocaleString()} individu(s)` : 'Éteinte'}\nApparue au tick ${b.start.toLocaleString()}${b.distance !== null ? `, distance génétique ${b.distance.toFixed(3)}` : ''}`}
-              </title>
+            <g
+              key={b.name}
+              className="cursor-pointer"
+              onClick={() => showSpeciesDetail(b.name)}
+              data-tip={`${b.name}\n${b.alive ? `${b.population.toLocaleString()} individu(s)` : `Éteinte au tick ${b.end.toLocaleString()}`}\nApparue au tick ${b.start.toLocaleString()}${b.distance !== null ? `, distance génétique ${b.distance.toFixed(3)}` : ''}`}
+            >
               {b.parentRow !== null && (
                 <line x1={x(b.start)} x2={x(b.start)} y1={y(b.parentRow)} y2={y(b.row)} stroke={color} strokeWidth={1.5} />
               )}

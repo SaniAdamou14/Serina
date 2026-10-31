@@ -177,3 +177,17 @@ TEST_CASE("resuming a many-species ecosystem stays bit-identical across several 
 
     requireIdenticalStateIgnoringId(*restored, reference);
 }
+
+TEST_CASE("a saved game keeps its history and its extinctions", "[serialization]") {
+    UnifiedWorldSimulator sim({}, 4321);
+    sim.seedFounderSpecies(6);
+    for (int i = 0; i < 300; ++i)
+        sim.step();
+    REQUIRE(!sim.getHistory().empty());
+
+    auto restored = UnifiedWorldSimulator::fromJson(sim.toJson());
+    REQUIRE(restored->getHistory().size() == sim.getHistory().size());
+    REQUIRE(restored->getExtinctionEvents().size() == sim.getExtinctionEvents().size());
+    CHECK(restored->getHistory().back().generation == sim.getHistory().back().generation);
+    CHECK(restored->getHistory().back().bySpecies == sim.getHistory().back().bySpecies);
+}
