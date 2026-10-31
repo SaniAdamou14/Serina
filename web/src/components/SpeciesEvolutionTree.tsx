@@ -313,7 +313,7 @@ export function SpeciesEvolutionTree() {
             {simulationData!.lineages.convergenceSignals.map((s, i) => (
               <div key={`${s.speciesA}-${s.speciesB}-${s.generation}-${i}`} className="text-xs">
                 <span className="italic">{s.speciesA}</span> et <span className="italic">{s.speciesB}</span>
-                {' '}(génération {s.generation}) — distance de traits : {s.traitDistance.toFixed(3)}
+                {' '}(génération {s.generation}), distance de traits : {s.traitDistance.toFixed(3)}
                 {' '}({s.traitDistanceDelta.toFixed(3)}), distance génétique : {s.geneticDistance.toFixed(3)}
                 {' '}(+{s.geneticDistanceDelta.toFixed(3)})
               </div>

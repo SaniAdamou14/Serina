@@ -1,12 +1,12 @@
-# Serina — feuille de route vers le monde complet
+# Serina : feuille de route vers le monde complet
 
 Rédigée le 2026-10-30, à partir de mesures faites sur `main` (`20a0df0e`).
 
 ## L'objectif, défini pour pouvoir être atteint
 
 > La **profondeur systémique** de Dwarf Fortress, appliquée à l'évolution, sur
-> une **Terre réelle** (globe 3D et carte 2D, régions, climat), avec la
-> **lisibilité** de RimWorld.
+> une **Terre réelle** (globe 3D et carte 2D, régions, climat), avec
+> l'**interface** et la **robustesse** de RimWorld, ou mieux.
 
 « Aussi complet que Dwarf Fortress » ne peut pas vouloir dire « autant de
 fonctionnalités » : DF représente plus de 20 ans de travail. Ce qu'on lui
@@ -91,7 +91,7 @@ complet, et le calcul se parallélise par case : son coût devrait être bien in
 Chaque jalon se termine par un **critère vérifiable**. Taille : S = quelques
 sessions, M = une à deux semaines de travail, L = plusieurs semaines.
 
-### M0 — Assainir (S)
+### M0 : Assainir (S)
 
 Fait :
 
@@ -111,7 +111,7 @@ Reste à faire : fusionner #3 et #6, puis voir la CI passer sous Linux, qui n'a 
 **Critère :** CI verte sous Linux et Windows ; la même graine donne le même monde
 sur GCC et MSVC (vérifié) ; le README ne contient plus rien de faux.
 
-### M1 — Rendre la biologie honnête (M)
+### M1 : Rendre la biologie honnête (M)
 
 - Créer un banc scientifique multi-graines, lancé en commande et archivé. Il mesure
   les indicateurs du tableau ci-dessus et reçoit des seuils de non-régression.
@@ -131,7 +131,7 @@ sans innovation ; spéciations espacées d'un nombre réaliste de générations 
 un trait dont la moyenne corrèle avec le climat local sur des graines non utilisées
 pour la calibration.
 
-### M2 — La Terre, sans simulation (M)
+### M2 : La Terre, sans simulation (M)
 
 - Créer un outil hors ligne qui produit le fichier monde : altitude, océan/terre,
   température et précipitations mensuelles, biome par case H3.
@@ -145,7 +145,7 @@ pour la calibration.
 biomes reconnaissables ; les valeurs de villes témoins (Niamey, Oslo, Manaus) sont
 cohérentes avec leur climat réel.
 
-### M3 — Moteur de démes, première tranche verticale (L)
+### M3 : Moteur de démes, première tranche verticale (L)
 
 - Implémenter le modèle de démes : croissance logistique, migration entre voisins,
   évolution des traits selon l'équation du sélectionneur, niche climatique.
@@ -159,7 +159,7 @@ cohérentes avec leur climat réel.
 s'arrête aux océans et aux déserts selon ses traits, et se scinde de part et d'autre
 d'une barrière réelle. Moins de 100 ms par pas sur ta machine, déterministe.
 
-### M4 — Écosystème complet (L)
+### M4 : Écosystème complet (L)
 
 - Mettre en place les niveaux trophiques (producteurs, herbivores, carnivores,
   décomposeurs) avec conservation de l'énergie.
@@ -169,15 +169,14 @@ d'une barrière réelle. Moins de 100 ms par pas sur ta machine, déterministe.
 **Critères :** bilan énergétique fermé, pyramide trophique plausible, cascades
 observées : retirer un prédateur modifie plusieurs niveaux.
 
-### M5 — Interface façon RimWorld (M)
+### M5 : Interface sur le monde H3 (M)
 
-- Reprendre panneaux, inspecteur, infobulles et calques pour le monde H3.
+- Brancher l'interface de la piste I sur le monde H3, et ajouter le globe.
 - Remplacer le polling JSON par des instantanés binaires.
-- Ajouter le contrôle du temps à plusieurs vitesses, et des tests front.
 
 **Critère :** comprendre « pourquoi cette espèce est ici et pas là » en deux clics.
 
-### M6 — Le zoom local (L)
+### M6 : Le zoom local (L)
 
 - Générer une carte locale à partir d'une case ; y instancier de vrais individus
   depuis les démes (moteur actuel, rendu PixiJS) ; renvoyer les résultats aux démes.
@@ -185,7 +184,7 @@ observées : retirer un prédateur modifie plusieurs niveaux.
 **Critère :** en zoomant, on voit des créatures dont la répartition de traits
 correspond à celle du déme, et l'aller-retour ne déforme pas ses statistiques.
 
-### M7 — Profondeur façon Dwarf Fortress (L, puis continu)
+### M7 : Profondeur façon Dwarf Fortress (L, puis continu)
 
 - **Plans corporels** : locomotion, respiration, tégument, sens, régime, avec des
   innovations rares qui ouvrent de nouvelles niches (sortie de l'eau, vol).
@@ -198,16 +197,62 @@ correspond à celle du déme, et l'aller-retour ne déforme pas ses statistiques
 **Critère :** deux parties à graines différentes racontent deux histoires vraiment
 différentes, et on peut les raconter à partir des seules Chroniques.
 
+## Piste I : l'interface façon RimWorld (active dès maintenant)
+
+Aujourd'hui l'interface ressemble à un tableau de bord web : cartes arrondies, rail
+d'icônes, panneau latéral fixe. Elle doit ressembler à un jeu. Cette piste avance en
+parallèle de la biologie, sur la carte actuelle, puis passe au monde H3 en M5.
+
+Ce qu'on reprend de RimWorld :
+
+- **La carte occupe tout l'écran**, et tout le reste vient se poser dessus.
+- **Barre d'onglets en bas** (Espèces, Évolution, Génétique, Monde, Historique, Dieu),
+  chacun ouvrant une fenêtre posée sur la carte et déplaçable.
+- **Inspecteur en bas à gauche**, qui apparaît à la sélection, avec ses propres onglets.
+- **Temps en haut à droite** : date, pause, vitesses, raccourcis `Espace` et `1` à `4`.
+- **Alertes sur le bord droit** et lettres d'événements cliquables qui centrent la carte.
+- **Calques en bas à droite**, activés par icônes.
+- **Infobulles partout**, qui expliquent chaque valeur et comment elle est calculée.
+- **Style visuel** : panneaux sombres à angles droits et bordure fine, texte compact,
+  aucune carte arrondie, une icône claire par action.
+
+Étapes :
+
+- **I1, la coquille** : carte plein écran, barre du bas, temps, inspecteur, fenêtres.
+- **I2, le rendu** : carte en WebGL (PixiJS) à la place du SVG, créatures dessinées.
+- **I3, les informations** : alertes, lettres, infobulles, calques complets.
+
+**Critère :** une personne qui connaît RimWorld s'y retrouve sans explication ; 60
+images/s avec 10 000 individus affichés.
+
+## Piste R : la robustesse (active dès maintenant)
+
+L'objectif : une partie peut tourner des jours sans perte. Chaque point est testé.
+
+- **Sauvegarde** : sauvegarde automatique avec rotation, écriture atomique (un arrêt
+  brutal ne corrompt jamais la dernière sauvegarde), format versionné avec migration.
+- **Reprise après panne** : si le daemon tombe, l'API le relance et recharge la dernière
+  sauvegarde ; l'interface l'indique sans planter.
+- **Entrées** : le protocole et l'API refusent proprement toute requête invalide ; test
+  avec des requêtes aléatoires (fuzzing) sur le protocole et le chargement de sauvegardes.
+- **Interface** : une erreur dans une fenêtre ne fait jamais tomber la carte ; tests de
+  bout en bout dans un vrai navigateur, lancés en CI.
+- **Longue durée** : test d'endurance sans fuite de mémoire ni ralentissement anormal.
+
+**Critère :** tuer le daemon ou l'API en pleine partie ne perd pas plus que l'intervalle
+de sauvegarde ; 24 h d'endurance sans erreur ni croissance anormale de la mémoire.
+
 ## Dépendances
 
 ```
 M0 -> M1 -> M3 -> M4 -> M6 -> M7
 M0 -> M2 -> M3
-M2 -> M5 (s'enrichit à chaque jalon suivant)
+M0 -> pistes I et R, en parallèle de tout le reste
+M2 + I -> M5
 ```
 
-M1 et M2 peuvent avancer en parallèle. M3 est le pivot du projet : tant que sa démo
-ne fonctionne pas, n'ajouter aucune fonctionnalité de contenu.
+M1 et M2 peuvent avancer en parallèle. M3 est le pivot du moteur : tant que sa démo ne
+fonctionne pas, n'ajouter aucune fonctionnalité de contenu biologique.
 
 ## Triage des PR ouvertes (état du 2026-10-30)
 

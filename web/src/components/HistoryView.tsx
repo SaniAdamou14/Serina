@@ -258,7 +258,7 @@ export function HistoryView() {
         </div>
         <div className="bg-amber-950 border border-amber-800 rounded-md p-3 text-sm text-amber-300">
           Historique indisponible : {error}. L'historique persistant nécessite une base de données MySQL
-          connectée (voir README) — les autres onglets, eux, restent en direct via le moteur.
+          connectée (voir README), les autres onglets, eux, restent en direct via le moteur.
         </div>
       </div>
     )

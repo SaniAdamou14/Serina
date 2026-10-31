@@ -5,8 +5,8 @@
 // JSON qui les pilote. Extrait dans un header (plutôt que gardé dans
 // serina_daemon.cpp) pour que Catch2 puisse tester handleCommand()
 // directement, sans ouvrir de vraie socket. N'est inclus que par
-// serina_daemon.cpp et ses tests — jamais par les headers de simulation
-// principaux — pour ne pas leur ajouter la dépendance nlohmann/json.
+// serina_daemon.cpp et ses tests, jamais par les headers de simulation
+// principaux, pour ne pas leur ajouter la dépendance nlohmann/json.
 
 #include "NetSocket.hpp"
 #include "WorldSimulation.hpp"
@@ -239,7 +239,7 @@ namespace Serina::Daemon
 
         /// @brief Appelé en boucle par le fil planificateur : fait avancer
         /// chaque simulation en lecture dont l'intervalle configuré s'est
-        /// écoulé — une vraie boucle temps réel, pas seulement un pas par
+        /// écoulé, une vraie boucle temps réel, pas seulement un pas par
         /// requête client.
         void tickAll()
         {
@@ -298,7 +298,7 @@ namespace Serina::Daemon
     };
 
     /// @brief Traite une requête JSON-lines déjà parsée et renvoie la
-    /// réponse — fonction pure testable sans ouvrir de socket réelle.
+    /// réponse, fonction pure testable sans ouvrir de socket réelle.
     inline json handleCommand(SimulationRegistry &registry, const json &request)
     {
         json response;

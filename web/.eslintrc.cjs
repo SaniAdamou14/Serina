@@ -21,7 +21,7 @@ module.exports = {
     {
       // Context + Provider + companion hook colocated in one file is the
       // standard React pattern for this (and is what the React docs
-      // themselves recommend) — the fast-refresh warning doesn't apply.
+      // themselves recommend), so the fast-refresh warning doesn't apply.
       files: ['src/services/SimulationContext.tsx', 'src/services/SelectionContext.tsx'],
       rules: {
         'react-refresh/only-export-components': 'off'

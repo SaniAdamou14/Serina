@@ -14,7 +14,7 @@ export function InspectorPanel() {
     return (
       <div className="text-sm">
         <h4 className="font-semibold text-blue-200">
-          {selectedRegion.environmentName || 'Biome inconnu'} — case ({selectedRegion.gridX}, {selectedRegion.gridY})
+          {selectedRegion.environmentName || 'Biome inconnu'}, case ({selectedRegion.gridX}, {selectedRegion.gridY})
         </h4>
         <div className="grid grid-cols-1 gap-y-2 mt-3 text-blue-300 text-xs">
           <div className="flex items-center gap-1.5"><Thermometer className="w-3.5 h-3.5 shrink-0" /> Température : {selectedRegion.temperature.toFixed(1)}°C</div>

@@ -148,7 +148,7 @@ export function SimulationControl() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-300 mb-1">Graine (optionnel — pour rejouer une génération de carte identique)</label>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Graine (optionnel, pour rejouer une génération de carte identique)</label>
               <input
                 type="number"
                 value={seedInput}

@@ -7,7 +7,7 @@ import { HealthCheckResponse } from '../types'
 /**
  * Panneau d'état du moteur. L'ancien "PerformanceMetrics" affichait des
  * métriques (FPS, CPU, mémoire) et des mentions "SIMD ✓ Enabled" / "OpenMP
- * ✓ Active" qui n'ont jamais correspondu à quoi que ce soit de réel — le
+ * ✓ Active" qui n'ont jamais correspondu à quoi que ce soit de réel, le
  * backend ne rapporte aucune télémétrie de ce type, et l'audit du moteur
  * C++ a confirmé que ces optimisations ne sont pas branchées dans le
  * binaire qui tourne réellement (voir CONTRIBUTING.md). Ce composant
@@ -72,7 +72,7 @@ export function EngineStatus() {
               label="Moteur C++ (serina_daemon)"
               ok={health.services.simulationEngine}
               okLabel="Construit et disponible"
-              koLabel="Non construit — voir README"
+              koLabel="Non construit, voir README"
             />
             <StatusRow
               label="Base de données"

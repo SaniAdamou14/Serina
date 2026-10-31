@@ -8,8 +8,8 @@ Humans*: five founder species (canaries, tropical fish, crickets, fire ants,
 giant land snails) are introduced to an empty world and left to diversify.
 
 The long-term goal is the systemic depth of Dwarf Fortress, applied to
-evolution, on the real Earth, with the readability of RimWorld. The project is
-far from that today. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the measured
+evolution, on the real Earth, with the interface and robustness of RimWorld or
+better. The project is far from that today. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the measured
 starting point and the plan.
 
 ## What works today

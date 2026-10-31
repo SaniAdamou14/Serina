@@ -1,7 +1,7 @@
 // Backend live du monde unifié : serina_daemon
 // garde un ou plusieurs UnifiedWorldSimulator réels en mémoire, les fait
 // avancer en continu sur un fil d'exécution dédié, et répond aux requêtes
-// JSON-lines de l'API Node sur une connexion TCP locale persistante — pas de
+// JSON-lines de l'API Node sur une connexion TCP locale persistante, pas de
 // resérialisation du génome diploïde complet de chaque individu à chaque
 // appel. Le protocole lui-même (registre, dispatch de commandes, boucle de
 // connexion) vit dans Serina/DaemonProtocol.hpp pour rester testable sans

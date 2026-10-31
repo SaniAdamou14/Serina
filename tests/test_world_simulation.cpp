@@ -13,7 +13,7 @@ TEST_CASE("RegionGrid generates a coherent, non-uniform biome map", "[worldsim][
     REQUIRE(grid.getHeight() == 9);
 
     // A real Voronoi biome assignment should produce more than one biome
-    // across a 12x9 grid — a single global constant would not.
+    // across a 12x9 grid, a single global constant would not.
     std::vector<Ecosystem::EnvironmentType> seen;
     for (int y = 0; y < grid.getHeight(); ++y) {
         for (int x = 0; x < grid.getWidth(); ++x) {
@@ -111,7 +111,7 @@ TEST_CASE("lineage snapshots include real average trait values, in their real bi
 
 TEST_CASE("genetic diversity is computed from real genome distance, not drawn at random", "[worldsim][genetics]") {
     // AdvancedGenome's own RNG (AdvancedGenome::getRandomEngine()) is a
-    // thread_local engine seeded from std::random_device — genome content
+    // thread_local engine seeded from std::random_device, genome content
     // itself can never be made deterministic by seeding
     // UnifiedWorldSimulator (only world/grid generation is actually
     // seeded), so two independently-constructed populations will not

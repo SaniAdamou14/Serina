@@ -60,7 +60,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: SpeciesDetailPanelP
           <div>
             <h3 className="text-lg font-semibold italic">{speciesName}</h3>
             <p className="text-xs text-slate-400">
-              {BIOLOGICAL_TYPE_NAMES[lineage.biologicalType] ?? 'Type inconnu'} — {lineage.population} individu(s) vivant(s)
+              {BIOLOGICAL_TYPE_NAMES[lineage.biologicalType] ?? 'Type inconnu'}, {lineage.population} individu(s) vivant(s)
             </p>
           </div>
           <button className="text-slate-400 hover:text-slate-200" onClick={onClose}><X className="w-5 h-5" /></button>
@@ -102,7 +102,7 @@ export function SpeciesDetailPanel({ speciesName, onClose }: SpeciesDetailPanelP
               </div>
               <div className="bg-slate-800/50 rounded-lg p-2">
                 <div className="text-xs text-slate-400">Cerveau NEAT</div>
-                <div className="font-semibold">{lineage.hasBrain ? `${lineage.brainComplexity} nœuds/connexions` : '—'}</div>
+                <div className="font-semibold">{lineage.hasBrain ? `${lineage.brainComplexity} nœuds/connexions` : '-'}</div>
               </div>
             </div>
 
