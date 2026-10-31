@@ -38,8 +38,6 @@ starting point and the plan.
 
 These are measured or read from the code. See the roadmap for the details.
 
-- **Most individuals pile up against the map edges**, which skews the speciation
-  calibration.
 - **Climate is displayed but affects nothing**, and biomes never change.
 - **Habitat is not enforced**: fish can live in a desert.
 - **Speciation happens far too fast**: a few dozen events within about five
@@ -48,8 +46,8 @@ These are measured or read from the code. See the roadmap for the details.
   no direct effect on survival.
 - **There is no food chain**: food is unlimited apart from a per-cell capacity,
   and predation does not kill directly.
-- **Most worlds lose some founders**: arthropods die out in more than nine
-  worlds out of ten.
+- **Most worlds lose some founders**: molluscs die out in more than half of
+  them.
 - **The engine does not scale to a planet**: about 5 µs per individual per tick
   on one core, and 2.7 KB of memory per individual.
 - **The API has no authentication**, so it should only run locally.

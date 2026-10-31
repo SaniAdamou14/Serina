@@ -113,10 +113,20 @@ sur GCC et MSVC (vérifié) ; le README ne contient plus rien de faux.
 
 ### M1 : Rendre la biologie honnête (M)
 
-- Créer un banc scientifique multi-graines, lancé en commande et archivé. Il mesure
-  les indicateurs du tableau ci-dessus et reçoit des seuils de non-régression.
-- Corriger le collage aux bords : trouver la cause (hypothèse : un cerveau partagé
-  dont les sorties saturent, sans entrée de position), puis ajouter de la dispersion.
+Fait (mesuré sur 16 graines, 4 000 ticks) :
+
+- Banc scientifique multi-graines : `tools/serina_bench.cpp` et `tools/science.js`.
+- Collage aux bords corrigé : 2,2 % d'individus au mur contre 93 %. Le cerveau sortait
+  une direction constante ; il ne réagit plus qu'aux écarts réels entre voisins, et une
+  dispersion aléatoire s'y ajoute. Cases occupées : 103 sur 108 contre 21.
+- Limites des groupes biologiques remises à l'échelle des traits, fondateurs créés
+  dans la plage de leur groupe. Arthropodes vivants dans 15 mondes sur 16, contre 0 à 2 :
+  ils ne pouvaient presque pas se reproduire.
+
+Reste à faire :
+
+- Mollusques vivants dans seulement 6 mondes sur 16 : trouver pourquoi.
+- Spéciations encore trop rapides (46 en 4 000 ticks).
 - Introduire le coût du déplacement et de la taille ; donner un effet ou retirer
   chacun des 5 traits inertes.
 - Ajouter l'habitat selon le groupe biologique (poissons dans l'eau, jusqu'à ce
