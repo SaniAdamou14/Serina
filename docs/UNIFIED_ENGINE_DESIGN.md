@@ -16,24 +16,24 @@ Two real, working subsystems already exist and neither is sufficient alone:
   `SimulationAPI::enableAdvancedPopulation()`): individuals
   (`Evolution::Organism`) with a real diploid genome
   (`Genetics::AdvancedGenome`, 12 bounded traits, BLX-α crossover, Gaussian
-  mutation), position, energy, age — and, critically, **genetic diversity
+  mutation), position, energy, age, and, critically, **genetic diversity
   computed from real pairwise genome distance**
   (`AdvancedGenome::geneticDistance()`), not a random draw. This already
   works and is already tested. What it lacks: species identity is a bare
   string with no taxonomy, there is no spatial structure beyond raw (x, y)
   floats (no regions/biomes), and there is exactly one undifferentiated
-  population — no concept of multiple named species coexisting.
+  population, no concept of multiple named species coexisting.
 - **`Simulation::SerinaEcosystemSimulator`** (`SerinaSimulator.hpp`, backend
   of `serina_cli` and the web dashboard): named species with real taxonomy
   (`EcosystemTaxonomy`), real ecological interactions
   (`EcologicalInteractionManager`) and real biological constraints
-  (`SerinaEvolutionaryConstraints`) — but no individuals and no space.
+  (`SerinaEvolutionaryConstraints`), but no individuals and no space.
   Species are aggregate stat bundles (`SpeciesSimulationStats`); "genetic
   diversity" is `uniform(0.1, 1.0)` redrawn every generation
   (`SerinaSimulator.hpp:594`) specifically because there are no genomes to
   measure a distance between.
 
-Neither gap can be closed by wiring in NEAT or tuning parameters — each
+Neither gap can be closed by wiring in NEAT or tuning parameters, each
 system is missing a structural piece the other one has. The plan is to
 build one engine with individuals (from `PopulationManager`) living in
 space, organized into named species (from `SerinaEcosystemSimulator`), with
@@ -51,17 +51,17 @@ Region                              (new)
                                       per region, not one global constant)
   neighbors: Region*[]              (for migration and isolation tracking)
 
-Organism                            (existing, Evolution::Organism — extended)
+Organism                            (existing, Evolution::Organism, extended)
   genome: Genetics::AdvancedGenome  (existing, unchanged)
-  x, y: double                      (existing, unchanged — continuous, not
+  x, y: double                      (existing, unchanged, continuous, not
                                       grid-snapped, for smooth movement)
-  regionId                          (new — derived from x,y each tick)
-  taxon: Taxonomy::TaxonomicInfo*   (new — replaces the bare species_ string;
+  regionId                          (new, derived from x,y each tick)
+  taxon: Taxonomy::TaxonomicInfo*   (new, replaces the bare species_ string;
                                       individuals of the same taxon are one
                                       species, exactly as EcosystemTaxonomy
                                       already models it)
 
-Lineage                             (new — one per living taxon)
+Lineage                             (new, one per living taxon)
   taxon: Taxonomy::TaxonomicInfo
   members: Organism*[]              (filtered view, not a separate store)
   interactions: from EcologicalInteractionManager, keyed by taxon name
@@ -69,7 +69,7 @@ Lineage                             (new — one per living taxon)
 ```
 
 A world is a `Region` grid (target size: enough regions for a handful of
-biomes to matter geographically, not a Dwarf-Fortress-scale map — tens by
+biomes to matter geographically, not a Dwarf-Fortress-scale map, tens by
 tens, not thousands) plus one flat `vector<Organism>` shared by every
 lineage; per-lineage views are computed by filtering on `taxon`, mirroring
 how `SerinaEcosystemSimulator` already filters `speciesStats_` by name.
@@ -85,7 +85,7 @@ does it, just scoped to one taxon's members instead of the whole pool.
    `EnvironmentalAdaptation.hpp` per-region instead of once globally).
 2. **Movement** (Phase 8, real as of this writing): each organism's move is
    the output of its *lineage's* NEAT network (`NEAT.hpp`'s real genome/
-   innovation/mutation implementation) — one network shared by every
+   innovation/mutation implementation), one network shared by every
    individual of a species, not one per individual, so evaluation cost stays
    negligible at the targeted population scale (see "What Phase 8 delivers"
    below). A lineage without a registered brain (should not happen outside
@@ -93,7 +93,7 @@ does it, just scoped to one taxon's members instead of the whole pool.
 3. **Metabolism & survival**: energy cost from `SIZE`/`SPEED`/
    `ENERGY_EFFICIENCY` (as `Organism::update()` already computes), *plus* a
    real foraging income (`params_.foragingRate` × local `resources.primaryProducers`
-   × the organism's own `ENERGY_EFFICIENCY`) that replenishes it — added after
+   × the organism's own `ENERGY_EFFICIENCY`) that replenishes it, added after
    a real bug found by actually running the simulation long enough to see it:
    for the first three phases, there was no positive energy term anywhere in
    the loop, so every organism was on a mathematically guaranteed path to
@@ -102,14 +102,14 @@ does it, just scoped to one taxon's members instead of the whole pool.
    (`EcologicalInteractionManager::calculatePopulationImpact()`, evaluated
    against the actual count of interacting-species individuals **in the same
    region**) still applies on top of this, but it was never a substitute for
-   a baseline energy source — the founder species' names don't even match
+   a baseline energy source, the founder species' names don't even match
    the (legacy, richer-ecosystem) interaction catalog's, so it was inert for
    all five founders regardless.
 4. **Reproduction**: unchanged mechanism
    (`PopulationManager::blendCrossover` + `AdvancedGenome::mutate`), but the
    offspring's mutated traits are checked against
    `SerinaEvolutionaryConstraints::validateMutation()` for the parent's
-   `BiologicalType` before being accepted — a mutation that violates a
+   `BiologicalType` before being accepted, a mutation that violates a
    group's biological constraints (e.g., a bird whose SIZE/SPEED
    combination `EvolutionaryConstraints.hpp`'s flight-capability validator
    rejects) is retried or dampened rather than applied outright.
@@ -121,7 +121,7 @@ does it, just scoped to one taxon's members instead of the whole pool.
    generations (real reproductive isolation, not just a distance snapshot),
    split: call `EcosystemTaxonomy::registerNewSpecies()` for a real Latin
    name and re-tag that cluster's organisms with the new taxon. This is the
-   "evolution that isn't random" the design is for — speciation becomes an
+   "evolution that isn't random" the design is for, speciation becomes an
    emergent consequence of measured divergence plus isolation, not a
    `uniform(0,1) < 0.001` check.
 6. **Extinction**: unchanged trigger conditions
@@ -132,7 +132,7 @@ does it, just scoped to one taxon's members instead of the whole pool.
 ## What Phase 7 delivers, specifically
 
 A tested, standalone simulation loop with real regions, real individuals,
-real genome-distance-based diversity and real constraint-checked mutation —
+real genome-distance-based diversity and real constraint-checked mutation,
 verified by Catch2, *not yet* wired into `serina_cli`/the API/the frontend.
 Speciation-from-isolation (step 5 above) and per-individual ecological
 interactions (step 3) are substantial enough to be their own follow-up
@@ -147,12 +147,12 @@ Real NEAT-driven movement, replacing the biased-random walk: each living
 lineage owns a `NEAT::NEATGenome` (`UnifiedWorldSimulator::brains_`, keyed by
 species name), evaluated per organism per tick against seven sensory inputs
 (own energy, local resource level, the four cardinal neighbor regions'
-resource levels, local predation pressure — `buildBrainInputs()`) and
+resource levels, local predation pressure, `buildBrainInputs()`) and
 producing a two-output movement vector. The brain itself evolves: every
 `brainEvolutionInterval` generations, a (1+1) evolution strategy
 (`evolveBrains()`) mutates weights (and, rarely, adds a node or connection),
 keeping the mutation only if the lineage's real measured average fitness
-over that window did not drop — otherwise reverting to the last accepted
+over that window did not drop, otherwise reverting to the last accepted
 version. A newly speciated lineage inherits a mutated copy of its parent's
 stable brain (`performSpeciation()`), not a fresh random network, so learned
 behavior carries across a species split the same way the genome does.
@@ -166,11 +166,11 @@ confirming `evolveBrains()` is a real, non-inert (1+1)-ES and not a no-op.
 13 Catch2 test cases (9 from Phase 7, 4 new for brain lifecycle: assigned at
 seeding, deterministic/replayable evaluation, structural evolution over
 generations, inheritance at speciation) pass, 185 assertions. Still *not*
-wired into `serina_cli`/the API/the frontend — that is Phase 9.
+wired into `serina_cli`/the API/the frontend, that is Phase 9.
 
 ## What Phase 9 delivers, specifically
 
-Everything above is now reachable from the web stack — through a new
+Everything above is now reachable from the web stack, through a new
 process, not the CLI. `serina_daemon` (`src/serina_daemon.cpp`,
 `include/Serina/DaemonProtocol.hpp`) keeps real `UnifiedWorldSimulator`
 instances alive in memory and steps them on its own scheduler thread; the
@@ -185,7 +185,7 @@ climate/resources/pressures + live population count),
 `getBrainComplexity()`/`hasBrain()` (already existed from Phase 8, now
 surfaced over the wire). The frontend (`web/src/types/index.ts` and every
 component consuming simulation data) was retyped against this real schema
-and re-verified (`tsc`, `eslint`, `vite build`) — no fabricated field was
+and re-verified (`tsc`, `eslint`, `vite build`), no fabricated field was
 carried over from the old schema; where the new engine doesn't yet model
 something the old one claimed to (extinction risk, a single ecosystem
 stability index), the UI was changed to show what's real instead of

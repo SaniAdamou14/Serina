@@ -257,7 +257,7 @@ export function WorldMap() {
                 onClick={() => selectRegion(region)}
                 style={{ cursor: 'pointer' }}
               >
-                <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}) — ${region.population} individu(s)`}</title>
+                <title>{`${region.environmentName} (${region.gridX}, ${region.gridY}), ${region.population} individu(s)`}</title>
                 {/* Teinte de base légèrement variée par case (jamais un
                     aplat parfaitement uniforme, comme un vrai terrain) puis
                     motif de texture propre au biome par-dessus. */}
@@ -321,7 +321,7 @@ export function WorldMap() {
         <div className="bg-slate-900/85 backdrop-blur-sm text-slate-200 rounded-lg px-3 py-2 text-xs pointer-events-auto shadow-lg">
           <div className="font-semibold text-sm flex items-center gap-1.5"><MapIcon className="w-4 h-4" /> Monde de Serina</div>
           <div className="text-slate-400">
-            {gridWidth}×{gridHeight} régions — {individuals.length} individus en direct
+            {gridWidth}×{gridHeight} régions, {individuals.length} individus en direct
           </div>
         </div>
         <div className="flex flex-col items-end gap-2 pointer-events-auto">

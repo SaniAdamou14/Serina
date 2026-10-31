@@ -26,7 +26,7 @@ export function EventTicker() {
         >
           {event.type === 'extinction' ? <Skull className="w-4 h-4 shrink-0 mt-0.5" /> : <Rocket className="w-4 h-4 shrink-0 mt-0.5" />}
           <div className="flex-1">
-            <div className="font-semibold">{event.type === 'extinction' ? 'Extinction' : 'Spéciation'} — génération {event.generation}</div>
+            <div className="font-semibold">{event.type === 'extinction' ? 'Extinction' : 'Spéciation'}, génération {event.generation}</div>
             <div className="mt-0.5">{event.message}</div>
           </div>
           <button className="opacity-60 hover:opacity-100 shrink-0" onClick={() => dismiss(event.id)}>

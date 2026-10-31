@@ -155,18 +155,17 @@ namespace Serina::Evolution
             
             // Limites des traits pour oiseaux
             birdRules.traitLimits = {
-                {Genetics::TraitType::SIZE, {0.3, 2.0}},           // Taille limitée par contraintes de vol
-                {Genetics::TraitType::SPEED, {0.5, 3.0}},          // Vitesse élevée possible
-                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.4, 1.5}}, // Métabolisme élevé
-                {Genetics::TraitType::INTELLIGENCE, {0.6, 2.5}},    // Intelligence élevée possible
-                {Genetics::TraitType::VISION_RANGE, {1.0, 4.0}},    // Excellente vision
-                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.2, 2.0}}, // Variable selon espèce
-                {Genetics::TraitType::RESISTANCE, {0.3, 1.2}},      // Résistance limitée
-                {Genetics::TraitType::AGGRESSION, {0.1, 1.5}},      // Variable
-                {Genetics::TraitType::REPRODUCTION_RATE, {0.4, 1.8}},       // Fertilité modérée
-                {Genetics::TraitType::LONGEVITY, {0.5, 2.0}},       // Longévité variable
-                {Genetics::TraitType::INTELLIGENCE, {0.8, 3.0}}, // Complexité neurale élevée
-                {Genetics::TraitType::HEARING_ACUITY, {1.2, 3.5}}   // Excellents sens
+                {Genetics::TraitType::SIZE, {0.3, 2.0}}, // Taille limitée par contraintes de vol
+                {Genetics::TraitType::SPEED, {0.5, 3.0}}, // Vitesse élevée possible
+                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.4, 1.0}}, // Métabolisme élevé
+                {Genetics::TraitType::INTELLIGENCE, {0.6, 1.0}}, // Intelligence élevée possible
+                {Genetics::TraitType::VISION_RANGE, {1.0, 4.0}}, // Excellente vision
+                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.2, 1.0}}, // Variable selon espèce
+                {Genetics::TraitType::RESISTANCE, {0.3, 1.0}}, // Résistance limitée
+                {Genetics::TraitType::AGGRESSION, {0.1, 1.0}}, // Variable
+                {Genetics::TraitType::REPRODUCTION_RATE, {0.4, 1.0}}, // Fertilité modérée
+                {Genetics::TraitType::LONGEVITY, {0.5, 2.0}}, // Longévité variable
+                {Genetics::TraitType::HEARING_ACUITY, {1.2, 3.0}}, // Excellents sens
             };
 
             // Contraintes spécifiques aux oiseaux
@@ -223,15 +222,15 @@ namespace Serina::Evolution
             fishRules.baseMutationRate = 0.025;
 
             fishRules.traitLimits = {
-                {Genetics::TraitType::SIZE, {0.2, 3.0}},           // Très variable
-                {Genetics::TraitType::SPEED, {0.8, 4.0}},          // Excellent nageur
-                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.6, 2.0}}, // Efficace en milieu aquatique
-                {Genetics::TraitType::INTELLIGENCE, {0.3, 1.5}},    // Intelligence limitée
-                {Genetics::TraitType::VISION_RANGE, {0.4, 2.0}},    // Vision limitée par l'eau
-                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.3, 2.5}}, // Bancs possibles
-                {Genetics::TraitType::RESISTANCE, {0.5, 1.8}},      // Bonne résistance
-                {Genetics::TraitType::REPRODUCTION_RATE, {0.8, 3.0}},       // Très fertile
-                {Genetics::TraitType::LONGEVITY, {0.3, 1.0}}        // Vie courte
+                {Genetics::TraitType::SIZE, {0.2, 2.0}}, // Très variable
+                {Genetics::TraitType::SPEED, {0.8, 3.0}}, // Excellent nageur
+                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.6, 1.0}}, // Efficace en milieu aquatique
+                {Genetics::TraitType::INTELLIGENCE, {0.3, 1.0}}, // Intelligence limitée
+                {Genetics::TraitType::VISION_RANGE, {0.5, 2.0}}, // Vision limitée par l'eau
+                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.3, 1.0}}, // Bancs possibles
+                {Genetics::TraitType::RESISTANCE, {0.5, 1.0}}, // Bonne résistance
+                {Genetics::TraitType::REPRODUCTION_RATE, {0.5, 1.0}}, // Très fertile
+                {Genetics::TraitType::LONGEVITY, {0.5, 1.0}}, // Vie courte
             };
 
             // Contrainte aquatique
@@ -264,13 +263,13 @@ namespace Serina::Evolution
             arthropodRules.baseMutationRate = 0.03;
 
             arthropodRules.traitLimits = {
-                {Genetics::TraitType::SIZE, {0.1, 1.0}},           // Petite taille obligatoire
-                {Genetics::TraitType::SPEED, {0.5, 2.5}},          // Rapides
-                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.8, 2.5}}, // Très efficaces
-                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.1, 3.0}}, // De solitaire à eusocial
-                {Genetics::TraitType::RESISTANCE, {0.7, 2.0}},      // Exosquelette protecteur
-                {Genetics::TraitType::REPRODUCTION_RATE, {1.0, 4.0}},       // Très fertiles
-                {Genetics::TraitType::LONGEVITY, {0.2, 0.8}}        // Vie courte
+                {Genetics::TraitType::SIZE, {0.1, 1.0}}, // Petite taille obligatoire
+                {Genetics::TraitType::SPEED, {0.5, 2.5}}, // Rapides
+                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.6, 1.0}}, // Très efficaces
+                {Genetics::TraitType::SOCIAL_BEHAVIOR, {0.1, 1.0}}, // De solitaire à eusocial
+                {Genetics::TraitType::RESISTANCE, {0.5, 1.0}}, // Exosquelette protecteur
+                {Genetics::TraitType::REPRODUCTION_RATE, {0.6, 1.0}}, // Très fertiles
+                {Genetics::TraitType::LONGEVITY, {0.5, 1.0}}, // Vie courte
             };
 
             // Contrainte d'exosquelette
@@ -320,12 +319,12 @@ namespace Serina::Evolution
             molluscRules.baseMutationRate = 0.015;
 
             molluscRules.traitLimits = {
-                {Genetics::TraitType::SIZE, {0.2, 2.5}},           // Taille variable
-                {Genetics::TraitType::SPEED, {0.1, 0.8}},          // Lents
-                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.5, 2.0}}, // Métabolisme lent
-                {Genetics::TraitType::RESISTANCE, {0.8, 2.5}},      // Coquille protectrice
-                {Genetics::TraitType::REPRODUCTION_RATE, {0.6, 2.0}},       // Fertilité modérée
-                {Genetics::TraitType::LONGEVITY, {0.8, 2.5}}        // Relativement longévifs
+                {Genetics::TraitType::SIZE, {0.2, 2.0}}, // Taille variable
+                {Genetics::TraitType::SPEED, {0.1, 0.8}}, // Lents
+                {Genetics::TraitType::ENERGY_EFFICIENCY, {0.5, 1.0}}, // Métabolisme lent
+                {Genetics::TraitType::RESISTANCE, {0.6, 1.0}}, // Coquille protectrice
+                {Genetics::TraitType::REPRODUCTION_RATE, {0.4, 1.0}}, // Fertilité modérée
+                {Genetics::TraitType::LONGEVITY, {0.8, 2.0}}, // Relativement longévifs
             };
 
             // Contrainte de locomotion
@@ -356,11 +355,11 @@ namespace Serina::Evolution
             cnidarianRules.baseMutationRate = 0.02;
 
             cnidarianRules.traitLimits = {
-                {Genetics::TraitType::SIZE, {0.1, 1.5}},           // Taille limitée
-                {Genetics::TraitType::SPEED, {0.0, 1.0}},          // Peu mobiles
-                {Genetics::TraitType::RESISTANCE, {0.4, 1.5}},      // Corps mou
-                {Genetics::TraitType::REPRODUCTION_RATE, {1.5, 4.0}},       // Très fertiles (bourgeonnement)
-                {Genetics::TraitType::LONGEVITY, {0.5, 3.0}}        // Potentiellement immortels
+                {Genetics::TraitType::SIZE, {0.1, 1.5}}, // Taille limitée
+                {Genetics::TraitType::SPEED, {0.1, 1.0}}, // Peu mobiles
+                {Genetics::TraitType::RESISTANCE, {0.4, 1.0}}, // Corps mou
+                {Genetics::TraitType::REPRODUCTION_RATE, {0.7, 1.0}}, // Très fertiles (bourgeonnement)
+                {Genetics::TraitType::LONGEVITY, {0.5, 2.0}}, // Potentiellement immortels
             };
 
             // Contrainte de symétrie radiale

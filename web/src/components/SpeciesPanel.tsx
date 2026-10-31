@@ -56,7 +56,7 @@ export function SpeciesPanel() {
     <div className="card">
       <div className="border-b border-slate-700 pb-4 mb-6">
         <h3 className="text-lg font-semibold text-slate-100">Espèces de Serina</h3>
-        <p className="text-sm text-slate-400">Surveillance des populations et des lignées évolutives — cliquez une carte pour la fiche complète</p>
+        <p className="text-sm text-slate-400">Surveillance des populations et des lignées évolutives, cliquez une carte pour la fiche complète</p>
       </div>
 
       <div className="grid grid-cols-3 gap-4 mb-6">
@@ -128,7 +128,7 @@ export function SpeciesPanel() {
                   <div className="text-slate-400">Diversité</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-bold text-lg text-slate-100">{lineage.hasBrain ? lineage.brainComplexity : '—'}</div>
+                  <div className="font-bold text-lg text-slate-100">{lineage.hasBrain ? lineage.brainComplexity : '-'}</div>
                   <div className="text-slate-400">Cerveau NEAT</div>
                 </div>
                 <div className="text-center">

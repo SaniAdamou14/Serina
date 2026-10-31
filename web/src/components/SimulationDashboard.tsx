@@ -50,7 +50,7 @@ export function SimulationDashboard() {
       {isExtinct && (
         <div className="bg-red-950 border-b border-red-800 px-4 py-2 flex items-center gap-2 text-sm text-red-300 shrink-0">
           <Skull className="w-4 h-4 shrink-0" />
-          Écosystème éteint — plus aucun individu vivant (génération {simulationData?.status.generation}). Simulation automatiquement mise en pause.
+          Écosystème éteint, plus aucun individu vivant (génération {simulationData?.status.generation}). Simulation automatiquement mise en pause.
         </div>
       )}
 

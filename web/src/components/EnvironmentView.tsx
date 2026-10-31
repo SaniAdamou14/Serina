@@ -48,7 +48,7 @@ export function EnvironmentView({ showDetails = false }: EnvironmentViewProps) {
     <div className="card">
       <div className="border-b border-slate-700 pb-4 mb-6">
         <h3 className="text-lg font-semibold text-slate-100">
-          Environnement — {distinctBiomes} biome{distinctBiomes > 1 ? 's' : ''} sur {regions.length} régions
+          Environnement : {distinctBiomes} biome{distinctBiomes > 1 ? 's' : ''} sur {regions.length} régions
         </h3>
         <p className="text-sm text-slate-400">Moyennes sur toute la carte réelle (grille procédurale de biomes)</p>
       </div>

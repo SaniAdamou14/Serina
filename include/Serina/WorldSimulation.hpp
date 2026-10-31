@@ -42,7 +42,7 @@
 namespace Serina::Simulation
 {
     /// @brief Snapshot en lecture seule de l'état réel d'une lignée
-    /// (espèce vivante), calculé à partir des individus qui la composent —
+    /// (espèce vivante), calculé à partir des individus qui la composent,
     /// pas d'agrégat maintenu séparément qui pourrait diverger de la
     /// réalité de la population.
     struct LineageSnapshot
@@ -105,7 +105,7 @@ namespace Serina::Simulation
     /// @brief Snapshot en lecture seule d'une case de la carte : son biome
     /// réel et les valeurs d'environnement réellement utilisées par la
     /// simulation pour cette case (pas une constante globale), plus le
-    /// compte réel d'individus vivants actuellement dedans — pour un
+    /// compte réel d'individus vivants actuellement dedans, pour un
     /// frontend qui veut dessiner une vraie carte de régions, pas un
     /// placeholder.
     struct RegionSnapshot
@@ -128,7 +128,7 @@ namespace Serina::Simulation
     /// champs visuels ci-dessous sont une projection normalisée ([0,1] ou
     /// un palier entier) d'un sous-ensemble de traits génétiques réels vers
     /// un petit nombre de canaux de rendu délibérément lisibles (voir
-    /// docs/UNIFIED_ENGINE_DESIGN.md, "créatures procédurales") — la
+    /// docs/UNIFIED_ENGINE_DESIGN.md, "créatures procédurales"), la
     /// formule de correspondance vit ici, une seule fois ; le frontend ne
     /// fait que dessiner à partir de ces valeurs déjà calculées.
     struct IndividualSnapshot
@@ -149,7 +149,7 @@ namespace Serina::Simulation
     };
 
     /// @brief Le "cerveau" d'une lignée : un seul réseau NEAT partagé par
-    /// tous ses individus (pas un par individu — voir
+    /// tous ses individus (pas un par individu, voir
     /// docs/UNIFIED_ENGINE_DESIGN.md, "échelle cible"), piloté par
     /// évolution (1+1) : `brain` est le candidat actuellement à l'essai,
     /// `stableBrain` la dernière version dont la fitness mesurée de la
@@ -270,7 +270,7 @@ namespace Serina::Simulation
         /// d'efficacité (ENERGY_EFFICIENCY = 1.0) dans une région à
         /// ressources maximales (primaryProducers = 1.0) : le seul revenu
         /// énergétique positif de la simulation, avant cette constante il
-        /// n'y en avait aucun (voir applySurvivalAndInteractions()) — tout
+        /// n'y en avait aucun (voir applySurvivalAndInteractions()), tout
         /// organisme ne faisait que perdre de l'énergie au métabolisme
         /// jusqu'à une extinction totale garantie, sans rapport avec les
         /// gènes ou l'environnement.
@@ -298,22 +298,18 @@ namespace Serina::Simulation
         /// génération 9900, sur les trois graines testées).
         double carryingCapacityPerResource = 400.0;
 
-        /// Échelle du déplacement par pas (1 = jusqu'à cellSize × vitesse par
-        /// pas, comportement historique). Mesuré : à 1.0 un individu visite
-        /// 5-9 cases en 50 générations pour une vie de ~1000, donc le monde
-        /// est brassé en continu et aucune structure géographique ne peut se
-        /// former. Dose-réponse sur 12 graines à 6000 générations : 1.0 -> 5.0
-        /// espèces et 11 spéciations ; 0.3 -> 9.3 et 24 ; 0.1 -> 12.4 et 35 ;
-        /// aucune extinction dans les trois cas. C'est la spéciation
-        /// allopatrique : des populations restées localisées divergent.
-        /// Validé à 0.1 sur 12 graines jamais utilisées pour choisir
-        /// (13-24), 20 000 générations : 12/12 survivent, 14.1 espèces en
-        /// moyenne à la fin (2 à 36), population bornée (pic <= 9 215).
-        /// (Une niche climatique testée en parallèle -- coût
-        /// force × (résistance − stress)² -- a été rejetée : elle réduisait
-        /// la richesse à tous les niveaux de déplacement sans jamais produire
-        /// de corrélation résistance/stress.)
-        double movementScale = 0.1;
+        /// Échelle du déplacement par pas (1 = jusqu'à cellSize × vitesse par pas).
+        /// Mesuré sur 16 graines à 4000 ticks, après correction de la dérive vers les
+        /// bords : 0.1 -> 7 espèces, 108 cases occupées ; 0.03 -> 26 espèces, 103 cases.
+        /// Plus le déplacement est lent, plus des populations locales restent isolées.
+        double movementScale = 0.03;
+
+        /// Part aléatoire du déplacement [0,1] (0 = cerveau seul).
+        double movementNoise = 0.5;
+        /// Énergie dépensée par unité de taille et par unité de distance parcourue.
+        double movementCost = 0.0;
+        /// Rebondir sur le bord du monde plutôt que de s'y arrêter.
+        bool reflectAtBorders = true;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -392,6 +388,11 @@ namespace Serina::Simulation
                     // réellement identiques, pas seulement des positions
                     // identiques.
                     auto genome = std::make_unique<Genetics::AdvancedGenome>(generation_, static_cast<uint32_t>(rng_()));
+                    // Sinon presque tous les enfants violent les limites de leur
+                    // groupe (validateMutation) et la lignée ne se reproduit pas.
+                    if (const auto *rules = constraints_.getBiologicalGroupRules(founder.type))
+                        for (const auto &[trait, limits] : rules->traitLimits)
+                            genome->rescaleAllelesToRange(trait, limits.first, limits.second);
                     Evolution::Organism organism(std::move(genome), founder.commonName);
                     placeInRegion(organism, gx, gy);
                     organism.setEnergy(100.0);
@@ -464,7 +465,7 @@ namespace Serina::Simulation
         bool hasBrain(const std::string &species) const { return brains_.find(species) != brains_.end(); }
 
         /// @brief Nombre de nœuds + connexions du cerveau stable d'une
-        /// lignée — utile pour vérifier qu'une mutation structurelle
+        /// lignée, utile pour vérifier qu'une mutation structurelle
         /// (addNode/addConnection) a bien eu lieu au fil des générations.
         size_t getBrainComplexity(const std::string &species) const
         {
@@ -473,7 +474,7 @@ namespace Serina::Simulation
         }
 
         /// @brief Un instantané par case de la carte, avec le compte réel
-        /// d'individus vivants dedans à cet instant — pour dessiner une
+        /// d'individus vivants dedans à cet instant, pour dessiner une
         /// vraie carte de régions plutôt qu'un seul environnement global.
         std::vector<RegionSnapshot> getRegionSnapshots() const
         {
@@ -508,9 +509,9 @@ namespace Serina::Simulation
             return result;
         }
 
-        /// @brief Un instantané par individu vivant réel — position,
+        /// @brief Un instantané par individu vivant réel, position,
         /// espèce, énergie, âge, et une projection visuelle réelle de son
-        /// génome — pour un frontend qui veut afficher chaque organisme sur
+        /// génome, pour un frontend qui veut afficher chaque organisme sur
         /// la carte plutôt qu'un agrégat par espèce.
         std::vector<IndividualSnapshot> getIndividualSnapshots() const
         {
@@ -655,8 +656,12 @@ namespace Serina::Simulation
         /// plutôt que de planter.
         void moveOrganisms()
         {
+            // Indices des voisins dans buildBrainInputs().
+            static constexpr size_t INPUT_NORTH = 2, INPUT_SOUTH = 3, INPUT_EAST = 4, INPUT_WEST = 5;
+
             Det::UniformReal fallback(-params_.cellSize * 0.5, params_.cellSize * 0.5);
             latestBrainOutputs_.clear();
+            Det::UniformReal unitNoise(-1.0, 1.0);
 
             // --- Agrégats réels par région pour les nouvelles entrées
             // sensorielles (présence/agressivité perçue d'autres espèces) --
@@ -718,15 +723,34 @@ namespace Serina::Simulation
                     latestBrainOutputs_[organism.getId()] = outputs;
 
                     // Les neurones de sortie de NEATGenome utilisent
-                    // l'activation SIGMOID par défaut (image [0,1]) ; on
-                    // remet le déplacement à l'échelle [-1,1] nous-mêmes
-                    // plutôt que de modifier NEAT.hpp pour un besoin propre
-                    // à cet appelant. Les trois autres sorties (chasse,
-                    // évasion, recherche de nourriture) restent en [0,1]
-                    // natif -- ce sont déjà des efforts/probabilités.
-                    double moveX = outputs[WorldSimulationParameters::OUTPUT_MOVE_X] * 2.0 - 1.0;
-                    double moveY = outputs[WorldSimulationParameters::OUTPUT_MOVE_Y] * 2.0 - 1.0;
+                    // l'activation SIGMOID par défaut (image [0,1]). Les trois
+                    // autres sorties (chasse, évasion, recherche de nourriture)
+                    // restent en [0,1] natif -- ce sont déjà des efforts/probabilités.
+                    //
+                    // La direction est la différence entre la réponse du cerveau
+                    // à ses entrées et sa réponse aux mêmes entrées avec les
+                    // voisins échangés (N/S, E/O). Sans cela, ses sorties saturées
+                    // donnaient une direction presque constante et toute une lignée
+                    // dérivait vers un mur (93 % des individus collés au bord). Un
+                    // milieu uniforme ne pousse ainsi dans aucune direction, par
+                    // construction : seul un vrai écart entre voisins oriente.
+                    double moveX = 0.0;
+                    double moveY = 0.0;
+                    if (inputs[INPUT_NORTH] != inputs[INPUT_SOUTH] || inputs[INPUT_EAST] != inputs[INPUT_WEST])
+                    {
+                        auto mirrored = inputs;
+                        std::swap(mirrored[INPUT_NORTH], mirrored[INPUT_SOUTH]);
+                        std::swap(mirrored[INPUT_EAST], mirrored[INPUT_WEST]);
+                        const auto mirroredOutputs = brainIt->second.brain.evaluate(mirrored);
+                        moveX = outputs[WorldSimulationParameters::OUTPUT_MOVE_X] - mirroredOutputs[WorldSimulationParameters::OUTPUT_MOVE_X];
+                        moveY = outputs[WorldSimulationParameters::OUTPUT_MOVE_Y] - mirroredOutputs[WorldSimulationParameters::OUTPUT_MOVE_Y];
+                    }
                     double speed = organism.getGenome().getTrait(Genetics::TraitType::SPEED);
+                    if (params_.movementNoise > 0.0)
+                    {
+                        moveX = (1.0 - params_.movementNoise) * moveX + params_.movementNoise * unitNoise(rng_);
+                        moveY = (1.0 - params_.movementNoise) * moveY + params_.movementNoise * unitNoise(rng_);
+                    }
                     dx = moveX * params_.cellSize * speed * params_.movementScale;
                     dy = moveY * params_.cellSize * speed * params_.movementScale;
                 }
@@ -739,9 +763,24 @@ namespace Serina::Simulation
                     latestBrainOutputs_[organism.getId()] = {0.5, 0.5, 1.0, 1.0, 1.0};
                 }
 
-                double nx = std::clamp(organism.getX() + dx, 0.0, worldWidth() - 1e-6);
-                double ny = std::clamp(organism.getY() + dy, 0.0, worldHeight() - 1e-6);
+                double nx = organism.getX() + dx;
+                double ny = organism.getY() + dy;
+                if (params_.reflectAtBorders)
+                {
+                    if (nx < 0.0) nx = -nx;
+                    if (ny < 0.0) ny = -ny;
+                    if (nx >= worldWidth()) nx = 2.0 * worldWidth() - nx;
+                    if (ny >= worldHeight()) ny = 2.0 * worldHeight() - ny;
+                }
+                nx = std::clamp(nx, 0.0, worldWidth() - 1e-6);
+                ny = std::clamp(ny, 0.0, worldHeight() - 1e-6);
                 organism.setPosition(nx, ny);
+
+                if (params_.movementCost > 0.0)
+                {
+                    double size = organism.getGenome().getTrait(Genetics::TraitType::SIZE);
+                    organism.setEnergy(organism.getEnergy() - params_.movementCost * size * std::sqrt(dx * dx + dy * dy));
+                }
             }
         }
 
@@ -762,7 +801,7 @@ namespace Serina::Simulation
             double localResource = localEnv ? localEnv->resources.primaryProducers : 0.5;
             double localPredation = localEnv ? localEnv->pressures.predationPressure : 0.3;
 
-            // N, S, E, W — retombe sur la ressource locale (gradient nul)
+            // N, S, E, W, retombe sur la ressource locale (gradient nul)
             // si la région est en bord de carte.
             std::array<double, 4> neighborResources = {localResource, localResource, localResource, localResource};
             const std::array<std::pair<int, int>, 4> offsets = {{{0, -1}, {0, 1}, {1, 0}, {-1, 0}}};
@@ -889,7 +928,7 @@ namespace Serina::Simulation
                 if (!organism.isAlive())
                     continue;
 
-                organism.update(1.0); // métabolisme, âge — logique existante d'Organism
+                organism.update(1.0); // métabolisme, âge, logique existante d'Organism
 
                 auto [gx, gy] = regionOf(organism);
                 long long region = regionKey(gx, gy);
@@ -1143,7 +1182,7 @@ namespace Serina::Simulation
 
         /// @brief Vérifie, pour chaque espèce présente dans plusieurs
         /// régions, si ses deux plus grands sous-groupes régionaux ont
-        /// divergé génétiquement au-delà du seuil de façon soutenue — et
+        /// divergé génétiquement au-delà du seuil de façon soutenue, et
         /// scinde une nouvelle espèce le cas échéant, avec un vrai nom
         /// taxonomique.
         void checkSpeciation()
@@ -1217,7 +1256,7 @@ namespace Serina::Simulation
 
             // Le comportement diverge en même temps que le génome : la
             // nouvelle lignée hérite du cerveau (stable, éprouvé) du
-            // parent, puis mute — pas un cerveau neuf au hasard.
+            // parent, puis mute, pas un cerveau neuf au hasard.
             auto parentBrainIt = brains_.find(parentSpecies);
             if (parentBrainIt != brains_.end())
             {
@@ -1266,7 +1305,7 @@ namespace Serina::Simulation
         /// la lignée comme seul juge. Le candidat à l'essai (`brain`) est
         /// gardé s'il n'a pas fait baisser la fitness depuis le dernier
         /// point de contrôle, sinon on revient à la dernière version
-        /// stable — puis un nouveau candidat est proposé pour la fenêtre
+        /// stable, puis un nouveau candidat est proposé pour la fenêtre
         /// suivante.
         void evolveBrains()
         {

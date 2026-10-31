@@ -43,7 +43,7 @@ export function GeneticAnalysis() {
   if (!simulationData || simulationData.status.lineages.length === 0) {
     return (
       <div className="card">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Dna className="w-5 h-5" /> Analyse Génétique — Serina</h3>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2"><Dna className="w-5 h-5" /> Analyse Génétique : Serina</h3>
         <div className="animate-pulse">
           <div className="h-4 bg-slate-700 rounded w-1/3 mb-4"></div>
           <div className="space-y-3">
@@ -68,7 +68,7 @@ export function GeneticAnalysis() {
   return (
     <div className="card">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2"><Dna className="w-5 h-5" /> Analyse Génétique — Monde de Serina</h3>
+        <h3 className="text-lg font-semibold text-slate-100 flex items-center gap-2"><Dna className="w-5 h-5" /> Analyse Génétique : Monde de Serina</h3>
         {lineages.length > 1 && (
           <select
             value={current.speciesName}
@@ -111,13 +111,13 @@ export function GeneticAnalysis() {
             </div>
             <div>
               <span className="font-medium">Complexité du cerveau (NEAT) :</span>{' '}
-              {current.hasBrain ? `${current.brainComplexity} nœuds/connexions` : '—'}
+              {current.hasBrain ? `${current.brainComplexity} nœuds/connexions` : '-'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Diversité génétique et fitness — les deux seules métriques agrégées
+      {/* Diversité génétique et fitness, les deux seules métriques agrégées
           que le moteur calcule réellement par espèce. */}
       <h4 className="font-semibold mb-4 text-slate-200 flex items-center gap-2"><BarChart3 className="w-4 h-4" /> Profil génétique agrégé</h4>
       <div className="space-y-3 mb-6">
@@ -179,7 +179,7 @@ export function GeneticAnalysis() {
       </div>
 
       <div className="mt-6 p-4 bg-amber-950 border border-amber-800 rounded-lg">
-        <h5 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><Globe2 className="w-4 h-4" /> Contexte évolutif — Serina</h5>
+        <h5 className="font-semibold text-amber-200 mb-2 flex items-center gap-1.5"><Globe2 className="w-4 h-4" /> Contexte évolutif : Serina</h5>
         <p className="text-sm text-amber-300">
           Cette espèce évolue dans le monde de Serina, un écosystème unique où seuls quelques oiseaux,
           insectes, poissons et invertébrés ont colonisé une planète vierge. La diversité génétique et

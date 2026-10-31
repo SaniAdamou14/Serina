@@ -13,7 +13,7 @@ TEST_CASE("RegionGrid generates a coherent, non-uniform biome map", "[worldsim][
     REQUIRE(grid.getHeight() == 9);
 
     // A real Voronoi biome assignment should produce more than one biome
-    // across a 12x9 grid — a single global constant would not.
+    // across a 12x9 grid, a single global constant would not.
     std::vector<Ecosystem::EnvironmentType> seen;
     for (int y = 0; y < grid.getHeight(); ++y) {
         for (int x = 0; x < grid.getWidth(); ++x) {
@@ -111,7 +111,7 @@ TEST_CASE("lineage snapshots include real average trait values, in their real bi
 
 TEST_CASE("genetic diversity is computed from real genome distance, not drawn at random", "[worldsim][genetics]") {
     // AdvancedGenome's own RNG (AdvancedGenome::getRandomEngine()) is a
-    // thread_local engine seeded from std::random_device — genome content
+    // thread_local engine seeded from std::random_device, genome content
     // itself can never be made deterministic by seeding
     // UnifiedWorldSimulator (only world/grid generation is actually
     // seeded), so two independently-constructed populations will not
@@ -223,16 +223,10 @@ TEST_CASE("population survives a long run instead of guaranteed total extinction
 
     REQUIRE(sim.getGeneration() == 2000);
     REQUIRE(sim.getPopulationCount() > 0);
-    // The fix should produce a real equilibrium, not just "barely nonzero"
-    // -- and not unbounded growth either now that there's a real energy
-    // income. The ceiling was recalibrated twice from measurements, not
-    // guessed: 5x when foragingRate was 0.15 (population settled around
-    // 1.5-1.7x its start), then 10x after long scientific runs showed 0.15
-    // left the founders below replacement (4/12 extinctions) and 0.35 fixed
-    // that (0/12), at the price of a higher equilibrium -- bounded by the
-    // per-cell density regulation (carryingCapacityPerResource), not by a
-    // thin energy margin.
-    REQUIRE(sim.getPopulationCount() < initialPopulation * 10);
+    // Une vraie population, bornée par la capacité de charge du monde : au-delà de
+    // carryingCapacityPerResource individus par case, plus aucun revenu.
+    REQUIRE(sim.getPopulationCount() > initialPopulation);
+    REQUIRE(sim.getPopulationCount() < static_cast<size_t>(sim.getParams().gridWidth * sim.getParams().gridHeight * sim.getParams().carryingCapacityPerResource));
 }
 
 TEST_CASE("reproduction respects biological constraints instead of producing arbitrary offspring", "[worldsim][constraints]") {
@@ -313,8 +307,11 @@ TEST_CASE("relative divergence criterion does not speciate on the founder pool's
         simLegacy.step();
     }
 
-    REQUIRE(simLegacy.getSpeciationEvents().size() >= 10);
-    REQUIRE(simRelative.getSpeciationEvents().size() < simLegacy.getSpeciationEvents().size() / 3);
+    // Les fondateurs naissent dans la plage de leur groupe, donc le pool est plus
+    // homogène qu'à l'époque des 38 spéciations d'artefact : le critère historique
+    // en produit moins, mais le relatif doit rester nettement en dessous.
+    REQUIRE(simLegacy.getSpeciationEvents().size() >= 3);
+    REQUIRE(simRelative.getSpeciationEvents().size() <= simLegacy.getSpeciationEvents().size() / 3);
 }
 
 TEST_CASE("relative divergence criterion keeps producing real speciations over a long run", "[worldsim][speciation][divergence]") {
@@ -587,11 +584,9 @@ TEST_CASE("real predation/competition (Chantier F) does not cause a premature ec
 
         if (i % checkpointInterval == 0) {
             REQUIRE(sim.getPopulationCount() > 0);
-            // Pas d'explosion sans borne non plus (aucun mécanisme de
-            // régulation de densité n'a été ajouté par ce chantier -- une
-            // croissance déraisonnable indiquerait que la compétition
-            // n'agit jamais réellement, pas juste qu'elle est douce).
-            REQUIRE(sim.getPopulationCount() < initialPopulation * 20);
+            // Pas d'explosion sans borne non plus : la capacité de charge du monde
+            // reste le plafond absolu.
+            REQUIRE(sim.getPopulationCount() < static_cast<size_t>(sim.getParams().gridWidth * sim.getParams().gridHeight * sim.getParams().carryingCapacityPerResource));
 
             for (const auto &snap : sim.getLineageSnapshots()) {
                 if (!snap.adaptations.empty() || !snap.innovations.empty())
@@ -675,5 +670,66 @@ TEST_CASE("a newly speciated lineage inherits a brain instead of starting blank"
         // inherited (mutated copy of the parent's) or freshly ensured, never
         // absent.
         REQUIRE(sim.hasBrain(event.newSpecies));
+    }
+}
+
+TEST_CASE("every biological group's trait limits are reachable within the trait bounds", "[worldsim][constraints]") {
+    // Les limites étaient écrites sur une autre échelle que les traits : les
+    // arthropodes exigeaient REPRODUCTION_RATE >= 1.0 alors que le trait plafonne
+    // à 1.0, et disparaissaient dans plus de 9 mondes sur 10 faute de descendance.
+    Evolution::SerinaEvolutionaryConstraints constraints(1);
+    for (auto type : {Taxonomy::BiologicalType::BIRD, Taxonomy::BiologicalType::FISH, Taxonomy::BiologicalType::ARTHROPOD,
+                      Taxonomy::BiologicalType::MOLLUSC, Taxonomy::BiologicalType::CNIDARIAN}) {
+        const auto *rules = constraints.getBiologicalGroupRules(type);
+        REQUIRE(rules != nullptr);
+        for (const auto &[trait, limits] : rules->traitLimits) {
+            const auto &bounds = Genetics::TRAIT_BOUNDS[static_cast<size_t>(trait)];
+            CHECK(limits.first < limits.second);
+            CHECK(limits.first >= bounds.min);
+            CHECK(limits.second <= bounds.max);
+        }
+    }
+}
+
+TEST_CASE("every founder lineage can actually reproduce", "[worldsim][constraints]") {
+    // L'arthropode et le mollusque ont les limites les plus étroites : des enfants
+    // doivent quand même naître dès les premières générations.
+    for (uint32_t seed : {3u, 11u, 42u}) {
+        UnifiedWorldSimulator sim({}, seed);
+        sim.seedFounderSpecies(40);
+        for (int i = 0; i < 400; ++i)
+            sim.step();
+
+        int arthropodBorn = 0, molluscBorn = 0;
+        for (const auto &ind : sim.getIndividualSnapshots()) {
+            if (ind.age >= 400.0)
+                continue; // fondateur encore vivant, pas un descendant
+            arthropodBorn += ind.biologicalType == Taxonomy::BiologicalType::ARTHROPOD;
+            molluscBorn += ind.biologicalType == Taxonomy::BiologicalType::MOLLUSC;
+        }
+        CHECK(arthropodBorn > 0);
+        CHECK(molluscBorn > 0);
+    }
+}
+
+TEST_CASE("individuals do not pile up against the world's edges", "[worldsim][movement]") {
+    // Le cerveau sortait une direction presque constante : 93 % des individus
+    // finissaient collés au bord. Voir moveOrganisms(). Le seuil vise la
+    // régression franche sur une graine ; tools/science.js suit la médiane (2 %).
+    for (uint32_t seed : {5u, 17u}) {
+        UnifiedWorldSimulator sim({}, seed);
+        sim.seedFounderSpecies(40);
+        for (int i = 0; i < 1000; ++i)
+            sim.step();
+
+        const auto individuals = sim.getIndividualSnapshots();
+        REQUIRE(!individuals.empty());
+        const double width = sim.getGrid().getWidth() * sim.getCellSize();
+        const double height = sim.getGrid().getHeight() * sim.getCellSize();
+        size_t atWall = 0;
+        for (const auto &ind : individuals)
+            if (ind.x < 0.5 || ind.y < 0.5 || ind.x > width - 0.5 || ind.y > height - 0.5)
+                atWall++;
+        CHECK(static_cast<double>(atWall) / individuals.size() < 0.30);
     }
 }

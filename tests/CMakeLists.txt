@@ -1,5 +1,5 @@
 # Framework de test réel (Catch2 v3). Cherche une installation système
-# d'abord, télécharge sinon — même approche que nlohmann/json dans
+# d'abord, télécharge sinon : même approche que nlohmann/json dans
 # src/CMakeLists.txt.
 find_package(Catch2 3 QUIET)
 if(NOT Catch2_FOUND)

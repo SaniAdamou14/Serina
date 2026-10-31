@@ -337,6 +337,25 @@ namespace Serina::Genetics
             return *phenotypeCache_;
         }
 
+        /// @brief Ramène les allèles d'un trait dans une plage de valeurs réelles, en
+        /// gardant leur position relative -- pour qu'un fondateur appartienne vraiment à
+        /// son groupe biologique sans perdre sa diversité génétique.
+        void rescaleAllelesToRange(TraitType type, double low, double high)
+        {
+            const auto &bounds = TRAIT_BOUNDS[static_cast<size_t>(type)];
+            const double span = bounds.max - bounds.min;
+            const double lowNorm = std::clamp((low - bounds.min) / span, 0.0, 1.0);
+            const double highNorm = std::clamp((high - bounds.min) / span, 0.0, 1.0);
+            for (auto &trait : traits_)
+            {
+                if (trait.type != type)
+                    continue;
+                trait.alleles.first.value = lowNorm + trait.alleles.first.value * (highNorm - lowNorm);
+                trait.alleles.second.value = lowNorm + trait.alleles.second.value * (highNorm - lowNorm);
+            }
+            invalidateCache();
+        }
+
         /// @brief Invalide le cache des phénotypes
         void invalidateCache() { phenotypeCache_.reset(); }
 

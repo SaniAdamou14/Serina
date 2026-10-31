@@ -187,7 +187,7 @@ namespace Serina::Net
         SerinaSocketHandle fd_ = kSerinaInvalidSocket;
     };
 
-    /// @brief Ouvre une connexion cliente — utilisé par les tests
+    /// @brief Ouvre une connexion cliente, utilisé par les tests
     /// d'intégration pour vérifier le protocole réel de bout en bout.
     inline TcpConnection connectTo(const std::string &host, uint16_t port)
     {
