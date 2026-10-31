@@ -130,6 +130,19 @@ export interface RegionsResult {
 
 // === individuals command -> latestData.individuals ===
 
+export interface CorpseInfo {
+  id: number
+  species: string
+  x: number
+  y: number
+  biologicalType: number
+  sizeScale: number
+  /** Ticks depuis la mort */
+  age: number
+  /** Tué et mangé : il ne reste que les os */
+  eaten: boolean
+}
+
 export interface IndividualInfo {
   id: number
   species: string
@@ -157,6 +170,8 @@ export interface IndividualInfo {
 export interface IndividualsResult {
   status: 'success' | 'error'
   individuals: IndividualInfo[]
+  /** Morts récents, là où ils sont tombés ; absent d'un moteur plus ancien. */
+  corpses?: CorpseInfo[]
   error?: string
 }
 

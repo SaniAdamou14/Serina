@@ -199,6 +199,7 @@ uniform float uTime;
 uniform float uShadow;
 uniform float uShadowFrame;
 uniform float uFur;
+uniform float uProp; // plantes, os et cadavres : couleurs de l'image, et balancement selon aMotion.w
 
 out vec2 vUv;
 out vec3 vColor;
@@ -224,9 +225,13 @@ void main() {
     }
   }
   vFur = uFur > 0.5 ? aMotion.w : 1.0;
+  // Le vent ne plie que le haut de la plante.
+  if (uProp > 0.5 && uShadow < 0.5 && aCorner.y < 0.0) world.x += sin(uTime * 1.2 + aMotion.x) * abs(aPlacement.w) * 0.05 * aMotion.w;
 
   vec2 clip = (world + scaled - uView.xy) / uView.zw * 2.0 - 1.0;
-  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+  // Plus le pied est bas sur l'écran, plus l'objet est proche : un arbre cache ce qui est derrière lui.
+  float depth = clamp(1.0 - 2.0 * (aPlacement.y + abs(aPlacement.w) - uView.y) / uView.w, -1.0, 1.0);
+  gl_Position = vec4(clip.x, -clip.y, depth, 1.0);
 
   // En entiers : en flottants, 48.0 / 12.0 peut tomber juste sous 4 sur certaines cartes
   // graphiques, et la créature lit alors une case vide de l'atlas.
@@ -246,11 +251,18 @@ in float vFur;
 out vec4 outColor;
 uniform sampler2D uAtlas;
 uniform float uShadow;
+uniform float uProp;
 
 void main() {
   vec4 t = texture(uAtlas, vUv);
   if (uShadow > 0.5) {
     outColor = vec4(0.0, 0.0, 0.0, t.a * 0.42);
+    return;
+  }
+  if (uProp > 0.5) {
+    // Bord franc : seuls les pixels gardés cachent ce qui passe derrière.
+    if (t.a < 0.4) discard;
+    outColor = vec4(t.rgb * vColor, t.a);
     return;
   }
   // Les parties colorées de l'atlas (bec, pattes) gardent leur couleur. La teinte de

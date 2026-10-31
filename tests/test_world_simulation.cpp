@@ -863,3 +863,22 @@ TEST_CASE("eating depletes the plants of inhabited cells", "[worldsim][foodweb]"
             lowest = std::min(lowest, region.plants);
     CHECK(lowest < 1.0);
 }
+
+TEST_CASE("the dead stay where they fell, then disappear", "[worldsim][foodweb]") {
+    UnifiedWorldSimulator sim({}, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    const auto corpses = sim.getCorpseSnapshots();
+    REQUIRE(!corpses.empty());
+    const double width = sim.getGrid().getWidth() * sim.getCellSize();
+    const double height = sim.getGrid().getHeight() * sim.getCellSize();
+    for (const auto &corpse : corpses) {
+        CHECK(corpse.age <= 300);
+        CHECK(corpse.x >= 0.0);
+        CHECK(corpse.x <= width);
+        CHECK(corpse.y >= 0.0);
+        CHECK(corpse.y <= height);
+    }
+}

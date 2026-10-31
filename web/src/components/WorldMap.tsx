@@ -183,6 +183,25 @@ export function WorldMap() {
     renderer.current.setCreatures(showIndividuals ? creatures : []);
   }, [individualList, lineageHues, showIndividuals, canvas]);
 
+  // Après setWorld : les plantes évitent les rivages connus par le terrain.
+  useEffect(() => {
+    if (!renderer.current || !regionCells) return;
+    renderer.current.setVegetation(
+      regionCells.map((r) => ({ gridX: r.gridX, gridY: r.gridY, layer: BIOME_LAYERS[r.environmentName] ?? 0, plants: r.plants ?? 1 }))
+    );
+  }, [regionCells, terrainKey, canvas]);
+
+  const corpseList = simulationData?.individuals.corpses;
+  useEffect(() => {
+    if (!renderer.current) return;
+    renderer.current.setCorpses(
+      (corpseList ?? []).map((c) => {
+        const [r, g, b] = hexToRgb(creatureColor(lineageHues.get(c.species) ?? 0, 0, FALLBACK_BIOME_COLOR));
+        return { id: c.id, x: c.x, y: c.y, biologicalType: c.biologicalType, sizeScale: c.sizeScale, age: c.age, eaten: c.eaten, color: [r / 255, g / 255, b / 255] as [number, number, number] };
+      })
+    );
+  }, [corpseList, lineageHues, canvas]);
+
   useEffect(() => {
     if (!renderer.current || !regionsData || !regionCells) return;
     const metric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;

@@ -1,4 +1,5 @@
 import { ATLAS_COLUMNS, ATLAS_ROWS, buildCreatureAtlas, creatureFrame, furFrame, hasFur, RING_FRAME, SHADOW_FRAME } from './creatureAtlas';
+import { buildPropAtlas, PROP_COLUMNS, PROP_ROWS, PropFrame } from './propAtlas';
 import { CREATURE_FRAGMENT, CREATURE_VERTEX, TERRAIN_FRAGMENT, TERRAIN_VERTEX } from './shaders';
 import type { ViewBox } from '../utils/mapCamera';
 
@@ -25,6 +26,53 @@ export interface MapCreature {
   patternTier: number;
   insulation: number;
   color: [number, number, number];
+}
+
+/** Une case vue par le moteur : couche de sol et plantes restantes [0,1]. */
+export interface MapVegetationCell {
+  gridX: number;
+  gridY: number;
+  layer: number;
+  plants: number;
+}
+
+export interface MapCorpse {
+  id: number;
+  x: number;
+  y: number;
+  biologicalType: number;
+  sizeScale: number;
+  age: number;
+  eaten: boolean;
+  color: [number, number, number];
+}
+
+/** [image, chances, demi-taille en unités, balancement] */
+type PlantKind = [number, number, number, number];
+/** Ce qui pousse dans chaque couche de sol : combien de plantes pour une case pleine, et lesquelles. */
+const FLORA: Record<number, { slots: number; kinds: PlantKind[] }> = {
+  0: { slots: 34, kinds: [[PropFrame.TUFT, 0.84, 0.75, 1], [PropFrame.BUSH, 0.12, 1.0, 0.4], [PropFrame.BROADLEAF, 0.04, 1.9, 0.25]] },
+  1: { slots: 30, kinds: [[PropFrame.BROADLEAF, 0.3, 2.0, 0.25], [PropFrame.CONIFER, 0.2, 2.0, 0.2], [PropFrame.BUSH, 0.2, 0.9, 0.4], [PropFrame.TUFT, 0.3, 0.65, 1]] },
+  2: { slots: 32, kinds: [[PropFrame.PALM, 0.22, 2.1, 0.45], [PropFrame.BROADLEAF, 0.2, 2.1, 0.25], [PropFrame.BUSH, 0.3, 1.0, 0.4], [PropFrame.TUFT, 0.28, 0.7, 1]] },
+  3: { slots: 30, kinds: [[PropFrame.REED, 0.72, 1.0, 1], [PropFrame.TUFT, 0.2, 0.7, 1], [PropFrame.BUSH, 0.08, 1.0, 0.4]] },
+  4: { slots: 12, kinds: [[PropFrame.DRY_SHRUB, 0.42, 0.75, 0.5], [PropFrame.CONIFER, 0.28, 1.6, 0.2], [PropFrame.TUFT, 0.3, 0.55, 1]] },
+  5: { slots: 8, kinds: [[PropFrame.DRY_SHRUB, 0.68, 0.75, 0.5], [PropFrame.CACTUS, 0.32, 1.2, 0]] },
+  6: { slots: 8, kinds: [[PropFrame.LICHEN, 0.62, 0.8, 0], [PropFrame.CONIFER, 0.38, 1.4, 0.15]] }
+};
+/** Couleur d'une plante affamée : la case broutée jaunit avant de se vider. */
+const GRAZED_TINT: [number, number, number] = [0.86, 0.72, 0.42];
+/** Part de la vie d'un cadavre après laquelle il ne reste que les os. */
+const FLESH_LIFETIME_TICKS = 180;
+/** Distance au bord d'une case d'eau, en part de case, en deçà de laquelle rien ne pousse. */
+const SHORE_MARGIN = 0.42;
+
+/** Hachage stable : une plante garde sa place et son espèce d'un instantané à l'autre. */
+function hash(x: number, y: number, k: number, salt: number): number {
+  let h = Math.imul(x + 1, 73856093) ^ Math.imul(y + 1, 19349663) ^ Math.imul(k + 1, 83492791) ^ Math.imul(salt + 1, 2654435761);
+  h ^= h >>> 13;
+  h = Math.imul(h, 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 }
 
 const WORLD_IMAGE_WIDTH = 352;
@@ -77,6 +125,13 @@ export class MapRenderer {
   private colorArray!: WebGLTexture;
   private normalArray!: WebGLTexture;
   private atlas!: WebGLTexture;
+  private propAtlas!: WebGLTexture;
+  private propVao!: WebGLVertexArrayObject;
+  private propBuffer!: WebGLBuffer;
+  private corpseVao!: WebGLVertexArrayObject;
+  private corpseBuffer!: WebGLBuffer;
+  private boneVao!: WebGLVertexArrayObject;
+  private boneBuffer!: WebGLBuffer;
   private cellTexture!: WebGLTexture;
   private overlayTexture!: WebGLTexture;
 
@@ -95,6 +150,12 @@ export class MapRenderer {
   private lastSnapshotMs = 0;
   private snapshotIntervalMs = 500;
   private instanceData = new Float32Array(0);
+
+  private vegetation: MapVegetationCell[] = [];
+  private vegetationKey = '';
+  private propCount = 0;
+  private fleshCount = 0;
+  private boneCount = 0;
 
   private frameHandle = 0;
   private startMs = performance.now();
@@ -158,21 +219,34 @@ export class MapRenderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
+    const instancedVao = (buffer: WebGLBuffer) => {
+      const vao = gl.createVertexArray()!;
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuffer);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      const stride = FLOATS_PER_INSTANCE * 4;
+      ['aPlacement', 'aColorFrame', 'aMotion'].forEach((name, i) => {
+        const location = gl.getAttribLocation(this.creatureProgram, name);
+        gl.enableVertexAttribArray(location);
+        gl.vertexAttribPointer(location, 4, gl.FLOAT, false, stride, i * 16);
+        gl.vertexAttribDivisor(location, 1);
+      });
+      gl.bindVertexArray(null);
+      return vao;
+    };
     this.instanceBuffer = gl.createBuffer()!;
-    this.creatureVao = gl.createVertexArray()!;
-    gl.bindVertexArray(this.creatureVao);
-    gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuffer);
-    gl.enableVertexAttribArray(0);
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.instanceBuffer);
-    const stride = FLOATS_PER_INSTANCE * 4;
-    ['aPlacement', 'aColorFrame', 'aMotion'].forEach((name, i) => {
-      const location = gl.getAttribLocation(this.creatureProgram, name);
-      gl.enableVertexAttribArray(location);
-      gl.vertexAttribPointer(location, 4, gl.FLOAT, false, stride, i * 16);
-      gl.vertexAttribDivisor(location, 1);
-    });
-    gl.bindVertexArray(null);
+    this.creatureVao = instancedVao(this.instanceBuffer);
+    this.propBuffer = gl.createBuffer()!;
+    this.propVao = instancedVao(this.propBuffer);
+    this.corpseBuffer = gl.createBuffer()!;
+    this.corpseVao = instancedVao(this.corpseBuffer);
+    this.boneBuffer = gl.createBuffer()!;
+    this.boneVao = instancedVao(this.boneBuffer);
+    // Contexte WebGL neuf : les plantes doivent repartir dans leur nouveau tampon.
+    this.vegetationKey = '';
+    this.propCount = this.fleshCount = this.boneCount = 0;
 
     this.cellTexture = this.dataTexture(1, 1, new Uint8Array([0, 0, 0, 255]));
     this.overlayTexture = this.dataTexture(1, 1, new Uint8Array([0, 0, 0, 0]));
@@ -190,8 +264,19 @@ export class MapRenderer {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
+    this.propAtlas = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, this.propAtlas);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, buildPropAtlas());
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.generateMipmap(gl.TEXTURE_2D);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
     // Monde reçu pendant le chargement, ou perdu avec le contexte WebGL.
     if (this.world) this.setWorld(this.world);
+    if (this.vegetation.length > 0) this.setVegetation(this.vegetation);
     this.resourcesReady = true;
     this.worldImageDirty = true;
   }
@@ -327,6 +412,108 @@ export class MapRenderer {
     if (this.instanceData.length < needed) this.instanceData = new Float32Array(Math.ceil(needed * 1.5));
   }
 
+  /**
+   * Plantes dessinées d'après l'état réel des cases. Chaque case a des emplacements fixes :
+   * le niveau du moteur dit combien sont occupés, donc une case broutée perd vraiment des plantes.
+   */
+  setVegetation(cells: MapVegetationCell[]) {
+    this.vegetation = cells;
+    const world = this.world;
+    if (!world) return;
+    // Par paliers de 2,5 % : pas de reconstruction à chaque tick.
+    const key = cells.map((c) => `${c.layer}.${Math.round(c.plants * 40)}`).join(',');
+    if (key === this.vegetationKey) return;
+    this.vegetationKey = key;
+
+    const layerAt = (x: number, y: number) =>
+      x < 0 || y < 0 || x >= world.gridWidth || y >= world.gridHeight ? -1 : world.layers[y * world.gridWidth + x];
+
+    const placed: { y: number; values: number[] }[] = [];
+    for (const cell of cells) {
+      const flora = FLORA[cell.layer];
+      if (!flora) continue;
+      const level = Math.max(0, Math.min(1, cell.plants));
+      const visible = Math.round(flora.slots * level);
+      const hunger = 1 - level;
+      for (let k = 0; k < visible; k++) {
+        const u = hash(cell.gridX, cell.gridY, k, 1);
+        const v = hash(cell.gridX, cell.gridY, k, 2);
+        // Pas de plante au bord d'une case d'eau : le rivage dessiné ondule autour de ce bord.
+        if (u < SHORE_MARGIN && layerAt(cell.gridX - 1, cell.gridY) >= 7) continue;
+        if (u > 1 - SHORE_MARGIN && layerAt(cell.gridX + 1, cell.gridY) >= 7) continue;
+        if (v < SHORE_MARGIN && layerAt(cell.gridX, cell.gridY - 1) >= 7) continue;
+        if (v > 1 - SHORE_MARGIN && layerAt(cell.gridX, cell.gridY + 1) >= 7) continue;
+
+        let pick = hash(cell.gridX, cell.gridY, k, 3);
+        let kind = flora.kinds[flora.kinds.length - 1];
+        for (const candidate of flora.kinds) {
+          if (pick < candidate[1]) {
+            kind = candidate;
+            break;
+          }
+          pick -= candidate[1];
+        }
+        const scale = 0.8 + hash(cell.gridX, cell.gridY, k, 4) * 0.45;
+        const half = kind[2] * scale;
+        const shade = 0.82 + hash(cell.gridX, cell.gridY, k, 5) * 0.28;
+        const x = (cell.gridX + u) * world.cellSize;
+        const footY = (cell.gridY + v) * world.cellSize;
+        const y = footY - half;
+        const flip = hash(cell.gridX, cell.gridY, k, 6) < 0.5 ? -1 : 1;
+        placed.push({
+          y: footY,
+          values: [
+            x, y, half * flip, half,
+            shade * (1 + (GRAZED_TINT[0] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[0] * 0.5,
+            shade * (1 + (GRAZED_TINT[1] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[1] * 0.25,
+            shade * (1 - hunger * 0.45),
+            kind[0],
+            u * 37.0, 0, 0, kind[3]
+          ]
+        });
+      }
+    }
+    placed.sort((a, b) => a.y - b.y);
+    const data = new Float32Array(placed.length * FLOATS_PER_INSTANCE);
+    placed.forEach((p, i) => data.set(p.values, i * FLOATS_PER_INSTANCE));
+    const gl = this.gl;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.propBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+    this.propCount = placed.length;
+  }
+
+  /** Les morts : la chair se fonce, puis il ne reste que les os ; une proie mangée n'en laisse que les os. */
+  setCorpses(corpses: MapCorpse[]) {
+    const gl = this.gl;
+    const flesh: number[] = [];
+    const bones: number[] = [];
+    for (const c of corpses) {
+      const half = 0.7 + c.sizeScale * 1.1;
+      const flip = c.id % 2 === 0 ? 1 : -1;
+      if (c.eaten || c.age > FLESH_LIFETIME_TICKS) {
+        const fade = 0.85 - 0.25 * Math.min(1, c.age / 300);
+        bones.push(c.x, c.y, half * 0.8 * flip, half * 0.8, fade, fade, fade * 0.95, PropFrame.BONES, 0, 0, 0, 0);
+        continue;
+      }
+      const rot = c.age / FLESH_LIFETIME_TICKS;
+      // Le corps se couche sur le dos et vire au brun sombre en pourrissant.
+      const dark = 1 - rot * 0.55;
+      const decayed = (channel: number, brown: number) => (channel * 0.8 * (1 - rot) + brown * rot) * dark;
+      flesh.push(
+        c.x, c.y, half * flip, -half * 0.72,
+        decayed(c.color[0], 0.42), decayed(c.color[1], 0.31), decayed(c.color[2], 0.2),
+        creatureFrame(c.biologicalType, 0, 0),
+        0, 0, 0, 0
+      );
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.corpseBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flesh), gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.boneBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(bones), gl.DYNAMIC_DRAW);
+    this.fleshCount = flesh.length / FLOATS_PER_INSTANCE;
+    this.boneCount = bones.length / FLOATS_PER_INSTANCE;
+  }
+
   private interpolation(now: number): number {
     if (this.lastSnapshotMs === 0) return 1;
     return Math.min(1, (now - this.lastSnapshotMs) / this.snapshotIntervalMs);
@@ -390,7 +577,10 @@ export class MapRenderer {
     if (this.worldImageDirty && this.resourcesReady) this.renderWorldImage();
     const time = (now - this.startMs) / 1000;
     this.drawTerrain(time);
+    this.gl.clear(this.gl.DEPTH_BUFFER_BIT);
+    this.drawNature(time);
     this.drawCreatures(time, now);
+    this.gl.disable(this.gl.DEPTH_TEST);
   };
 
   /** Dessine tout le monde hors écran, pour la minicarte : le vrai terrain, sans créatures. */
@@ -460,6 +650,54 @@ export class MapRenderer {
     bind(2, gl.TEXTURE_2D, this.cellTexture, 'uCells');
     bind(3, gl.TEXTURE_2D, this.overlayTexture, 'uOverlay');
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  /** Morts et plantes, avant les créatures : ce qu'ils cachent reste caché grâce à la profondeur. */
+  private drawNature(time: number) {
+    const gl = this.gl;
+    const p = this.creatureProgram;
+    gl.useProgram(p);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(gl.getUniformLocation(p, 'uAtlas'), 0);
+    gl.uniform4f(gl.getUniformLocation(p, 'uView'), this.view.x, this.view.y, this.view.w, this.view.h);
+    gl.uniform1f(gl.getUniformLocation(p, 'uTime'), time);
+    gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 0);
+    gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 0);
+    gl.uniform1f(gl.getUniformLocation(p, 'uProp'), 1);
+    gl.disable(gl.DEPTH_TEST);
+
+    const bindPropAtlas = () => {
+      gl.bindTexture(gl.TEXTURE_2D, this.propAtlas);
+      gl.uniform2f(gl.getUniformLocation(p, 'uAtlasGrid'), PROP_COLUMNS, PROP_ROWS);
+      gl.uniform1f(gl.getUniformLocation(p, 'uShadowFrame'), PropFrame.SHADOW);
+    };
+    bindPropAtlas();
+    if (this.boneCount > 0) {
+      gl.bindVertexArray(this.boneVao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.boneCount);
+    }
+    if (this.fleshCount > 0) {
+      gl.bindTexture(gl.TEXTURE_2D, this.atlas);
+      gl.uniform2f(gl.getUniformLocation(p, 'uAtlasGrid'), ATLAS_COLUMNS, ATLAS_ROWS);
+      gl.bindVertexArray(this.corpseVao);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.fleshCount);
+      bindPropAtlas();
+    }
+
+    if (this.propCount > 0) {
+      gl.bindVertexArray(this.propVao);
+      gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 1);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.propCount);
+      gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 0);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthFunc(gl.LEQUAL);
+      gl.depthMask(true);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.propCount);
+    }
+    gl.uniform1f(gl.getUniformLocation(p, 'uProp'), 0);
+    gl.bindVertexArray(null);
   }
 
   private drawCreatures(time: number, now: number) {
@@ -533,6 +771,9 @@ export class MapRenderer {
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    // Les créatures passent derrière les plantes plus proches, sans se cacher entre elles.
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(false);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.atlas);
     gl.uniform1i(gl.getUniformLocation(p, 'uAtlas'), 0);
@@ -555,6 +796,7 @@ export class MapRenderer {
     }
     gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 0);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, withRing);
+    gl.depthMask(true);
     gl.bindVertexArray(null);
   }
 }
