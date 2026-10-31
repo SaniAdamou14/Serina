@@ -823,3 +823,43 @@ TEST_CASE("colder climates call for more insulation", "[worldsim][habitat]") {
     CHECK(Habitat::idealInsulation(-20.0) == 1.0);
     CHECK(Habitat::idealInsulation(5.0) > Habitat::idealInsulation(25.0));
 }
+
+TEST_CASE("moving costs less by swimming than flying, and by flying than walking", "[worldsim][habitat]") {
+    using Group = Taxonomy::BiologicalType;
+    CHECK(Habitat::locomotionCostFactor(Group::FISH) < Habitat::locomotionCostFactor(Group::BIRD));
+    CHECK(Habitat::locomotionCostFactor(Group::BIRD) < Habitat::locomotionCostFactor(Group::ARTHROPOD));
+}
+
+TEST_CASE("predators kill only when they hunt and are hungry", "[worldsim][foodweb]") {
+    const auto killsWith = [](WorldSimulationParameters params) {
+        UnifiedWorldSimulator sim(params, 7);
+        sim.seedFounderSpecies(40);
+        for (int i = 0; i < 1500; ++i)
+            sim.step();
+        return sim.getLifeEventCounters().predationKills;
+    };
+
+    CHECK(killsWith({}) > 0);
+
+    WorldSimulationParameters noHunting;
+    noHunting.huntRate = 0.0;
+    CHECK(killsWith(noHunting) == 0);
+
+    // Personne n'a jamais assez faim : aucune chasse, même si des proies abondent.
+    WorldSimulationParameters alwaysSated;
+    alwaysSated.huntSatiety = 0.0;
+    CHECK(killsWith(alwaysSated) == 0);
+}
+
+TEST_CASE("eating depletes the plants of inhabited cells", "[worldsim][foodweb]") {
+    UnifiedWorldSimulator sim({}, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    double lowest = 1.0;
+    for (const auto &region : sim.getRegionSnapshots())
+        if (region.population > 0)
+            lowest = std::min(lowest, region.plants);
+    CHECK(lowest < 1.0);
+}

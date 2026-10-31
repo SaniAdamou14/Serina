@@ -74,6 +74,7 @@ namespace Serina::Ecology
             {Genetics::TraitType::CAMOUFLAGE, {a.camouflage, b.camouflage}},
             {Genetics::TraitType::SOCIAL_BEHAVIOR, {a.socialBehavior, b.socialBehavior}},
             {Genetics::TraitType::INSULATION, {a.insulation, b.insulation}},
+            {Genetics::TraitType::DIET, {a.diet, b.diet}},
         };
 
         double sumSquares = 0.0;
@@ -84,7 +85,7 @@ namespace Serina::Ecology
             double diff = na - nb;
             sumSquares += diff * diff;
         }
-        return std::sqrt(sumSquares / 13.0);
+        return std::sqrt(sumSquares / 14.0);
     }
 
     /// @brief Compare deux échantillons successifs de la même paire de

@@ -51,8 +51,24 @@ namespace
             p.movementNoise = value;
         else if (key == "movementCost")
             p.movementCost = value;
-        else if (key == "predationKillChance")
-            p.predationKillChance = value;
+        else if (key == "dietSpecialization")
+            p.dietSpecialization = value;
+        else if (key == "carryingCapacityPerResource")
+            p.carryingCapacityPerResource = value;
+        else if (key == "preyDietGap")
+            p.preyDietGap = value;
+        else if (key == "huntSatiety")
+            p.huntSatiety = value;
+        else if (key == "huntRate")
+            p.huntRate = value;
+        else if (key == "assortativeMatingGap")
+            p.assortativeMatingGap = value;
+        else if (key == "nicheSplitGap")
+            p.nicheSplitGap = value;
+        else if (key == "plantGrowthRate")
+            p.plantGrowthRate = value;
+        else if (key == "plantCapacityPerResource")
+            p.plantCapacityPerResource = value;
         else if (key == "sizeCostRate")
             p.sizeCostRate = value;
         else if (key == "thermalCostRate")
@@ -177,6 +193,54 @@ int main(int argc, char **argv)
     const double varS = sumSS / n - (sumS / n) * (sumS / n);
     const double climateCorrelation = varR > 1e-9 && varS > 1e-9 ? (sumRS / n - (sumR / n) * (sumS / n)) / std::sqrt(varR * varS) : 0.0;
 
+    // Les niches occupées par les descendants du canari : tous les oiseaux en descendent.
+    bool birdGuild[3] = {false, false, false};
+    bool anyGuild[3] = {false, false, false};
+    double birdMinDiet = 1.0, birdMaxDiet = 0.0;
+    for (const auto &lineage : lineages)
+    {
+        if (lineage.population < 10)
+            continue;
+        const double d = lineage.averageTraits.diet;
+        const int guild = d < 0.33 ? 0 : (d < 0.66 ? 1 : 2);
+        anyGuild[guild] = true;
+        if (lineage.biologicalType == Taxonomy::BiologicalType::BIRD)
+        {
+            birdGuild[guild] = true;
+            birdMinDiet = std::min(birdMinDiet, d);
+            birdMaxDiet = std::max(birdMaxDiet, d);
+        }
+    }
+    // Part des individus qui croisent une autre espèce sur leur case, et étendue du régime
+    // des oiseaux pris un par un (la moyenne d'une lignée cache une population bimodale).
+    std::map<std::pair<int, int>, std::map<std::string, int>> speciesByCell;
+    std::vector<double> birdDiets;
+    for (const auto &ind : inds)
+    {
+        auto [cellX, cellY] = sim.getGrid().positionToGrid(ind.x, ind.y, W * cs, H * cs);
+        speciesByCell[{cellX, cellY}][ind.species]++;
+        if (ind.biologicalType == Taxonomy::BiologicalType::BIRD)
+            birdDiets.push_back(ind.diet);
+    }
+    double sympatric = 0.0;
+    for (const auto &[cell, bySpecies] : speciesByCell)
+        if (bySpecies.size() > 1)
+            for (const auto &[name, count] : bySpecies)
+                sympatric += count;
+    std::sort(birdDiets.begin(), birdDiets.end());
+    const double birdDietRange = birdDiets.size() >= 10 ? birdDiets[birdDiets.size() * 9 / 10] - birdDiets[birdDiets.size() / 10] : 0.0;
+    double dietSum = 0.0, plantSum = 0.0;
+    for (const auto &ind : inds)
+        dietSum += ind.diet;
+    int inhabited = 0;
+    for (const auto &r : regions)
+    {
+        if (r.population == 0)
+            continue;
+        plantSum += r.plants;
+        inhabited++;
+    }
+
     int occupied = 0;
     size_t inBorderCells = 0;
     for (const auto &r : regions)
@@ -190,13 +254,15 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
                 byGroup[Taxonomy::BiologicalType::MOLLUSC], fish ? 100.0 * fishDry / fish : 0.0,
                 100.0 * forbidden / n, climateCorrelation, insulationVsClimate.value(),
-                withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills), (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
+                withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills),
+                int(birdGuild[0]) + int(birdGuild[1]) + int(birdGuild[2]), int(anyGuild[0]) + int(anyGuild[1]) + int(anyGuild[2]),
+                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;

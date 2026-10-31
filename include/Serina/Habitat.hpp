@@ -72,6 +72,34 @@ namespace Serina::Habitat
         }
     }
 
+    /// @brief Régime de départ des fondateurs : d'où part chaque groupe, jamais une limite.
+    /// Les canaris commencent granivores, et rien ne les empêche de devenir carnivores.
+    inline std::pair<double, double> founderDietRange(Taxonomy::BiologicalType group)
+    {
+        using Group = Taxonomy::BiologicalType;
+        switch (group)
+        {
+        case Group::BIRD: return {0.0, 0.3};
+        case Group::FISH: return {0.0, 0.2};
+        case Group::ARTHROPOD: return {0.0, 0.2};
+        default: return {0.0, 0.15};
+        }
+    }
+
+    /// @brief Coût du déplacement selon le mode de locomotion, par rapport à la marche. Le
+    /// classement est celui du vivant : à masse égale, nager coûte moins que voler, et voler
+    /// moins que marcher sur la même distance. Les valeurs elles-mêmes sont des réglages.
+    inline double locomotionCostFactor(Taxonomy::BiologicalType group)
+    {
+        using Group = Taxonomy::BiologicalType;
+        switch (group)
+        {
+        case Group::FISH: return 0.25;
+        case Group::BIRD: return 0.4;
+        default: return 1.0;
+        }
+    }
+
     /// @brief Isolation thermique idéale [0,1] pour une température en °C : aucune à
     /// 28 °C et au-dessus, complète à -12 °C et au-dessous.
     inline double idealInsulation(double temperature)

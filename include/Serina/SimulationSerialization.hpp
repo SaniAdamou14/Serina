@@ -324,7 +324,18 @@ namespace Serina::Simulation
             {"reflectAtBorders", params_.reflectAtBorders},
             {"climateCostRate", params_.climateCostRate},
             {"thermalCostRate", params_.thermalCostRate},
-            {"predationKillChance", params_.predationKillChance},
+            {"plantHalfSaturation", params_.plantHalfSaturation},
+            {"carrionHalfSaturation", params_.carrionHalfSaturation},
+            {"dietSpecialization", params_.dietSpecialization},
+            {"huntRate", params_.huntRate},
+            {"huntSatiety", params_.huntSatiety},
+            {"preyDietGap", params_.preyDietGap},
+            {"assortativeMatingGap", params_.assortativeMatingGap},
+            {"nicheSplitGap", params_.nicheSplitGap},
+            {"nicheSplitDuration", params_.nicheSplitDuration},
+            {"plantCapacityPerResource", params_.plantCapacityPerResource},
+            {"plantGrowthRate", params_.plantGrowthRate},
+            {"carrionDecayRate", params_.carrionDecayRate},
             {"sizeCostRate", params_.sizeCostRate},
             {"speciationMinCellPopulation", params_.speciationMinCellPopulation},
             {"speciationMinPopulation", params_.speciationMinPopulation}};
@@ -374,6 +385,12 @@ namespace Serina::Simulation
                                {"bySpecies", h.bySpecies}});
         j["history"] = history;
         j["historyInterval"] = historyInterval_;
+        j["plants"] = plants_;
+        j["carrion"] = carrion_;
+        json nicheStreak = json::object();
+        for (const auto &[name, streak] : nicheStreak_)
+            nicheStreak[name] = streak;
+        j["nicheStreak"] = nicheStreak;
 
         // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
         // génération avant la sauvegarde -- lue par buildBrainInputs() au
@@ -475,7 +492,18 @@ namespace Serina::Simulation
             params.reflectAtBorders = pj.value("reflectAtBorders", params.reflectAtBorders);
             params.climateCostRate = pj.value("climateCostRate", params.climateCostRate);
             params.thermalCostRate = pj.value("thermalCostRate", params.thermalCostRate);
-            params.predationKillChance = pj.value("predationKillChance", params.predationKillChance);
+            params.plantHalfSaturation = pj.value("plantHalfSaturation", params.plantHalfSaturation);
+            params.carrionHalfSaturation = pj.value("carrionHalfSaturation", params.carrionHalfSaturation);
+            params.dietSpecialization = pj.value("dietSpecialization", params.dietSpecialization);
+            params.huntRate = pj.value("huntRate", params.huntRate);
+            params.huntSatiety = pj.value("huntSatiety", params.huntSatiety);
+            params.preyDietGap = pj.value("preyDietGap", params.preyDietGap);
+            params.assortativeMatingGap = pj.value("assortativeMatingGap", params.assortativeMatingGap);
+            params.nicheSplitGap = pj.value("nicheSplitGap", params.nicheSplitGap);
+            params.nicheSplitDuration = pj.value("nicheSplitDuration", params.nicheSplitDuration);
+            params.plantCapacityPerResource = pj.value("plantCapacityPerResource", params.plantCapacityPerResource);
+            params.plantGrowthRate = pj.value("plantGrowthRate", params.plantGrowthRate);
+            params.carrionDecayRate = pj.value("carrionDecayRate", params.carrionDecayRate);
             params.sizeCostRate = pj.value("sizeCostRate", params.sizeCostRate);
             params.speciationMinCellPopulation = pj.value("speciationMinCellPopulation", params.speciationMinCellPopulation);
             params.speciationMinPopulation = pj.value("speciationMinPopulation", params.speciationMinPopulation);
@@ -532,6 +560,11 @@ namespace Serina::Simulation
             sim->history_.push_back(std::move(sample));
         }
         sim->historyInterval_ = j.value("historyInterval", sim->historyInterval_);
+        sim->plants_ = j.value("plants", std::vector<double>{});
+        sim->carrion_ = j.value("carrion", std::vector<double>{});
+        const json savedNicheStreak = j.value("nicheStreak", json::object());
+        for (const auto &[name, streak] : savedNicheStreak.items())
+            sim->nicheStreak_[name] = streak.get<uint32_t>();
 
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))

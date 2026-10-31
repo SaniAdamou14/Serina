@@ -53,7 +53,9 @@ namespace Serina::Daemon
             {"predationPressure", r.predationPressure},
             {"competitionIntensity", r.competitionIntensity},
             {"climaticStress", r.climaticStress},
-            {"population", r.population}};
+            {"population", r.population},
+            {"plants", r.plants},
+            {"carrion", r.carrion}};
     }
 
     inline json individualToJson(const Simulation::IndividualSnapshot &ind)
@@ -72,7 +74,8 @@ namespace Serina::Daemon
             {"ornamentTier", ind.ornamentTier},
             {"sensoryProminence", ind.sensoryProminence},
             {"patternTier", ind.patternTier},
-                    {"insulation", ind.insulation}};
+                    {"insulation", ind.insulation},
+                    {"diet", ind.diet}};
     }
 
     inline json lineageToJson(const Simulation::LineageSnapshot &l, const Simulation::UnifiedWorldSimulator &sim)
@@ -106,7 +109,8 @@ namespace Serina::Daemon
                                 {"hearingAcuity", t.hearingAcuity},
                                 {"camouflage", t.camouflage},
                                 {"socialBehavior", t.socialBehavior},
-                                {"insulation", t.insulation}}}};
+                                {"insulation", t.insulation},
+                                {"diet", t.diet}}}};
     }
 
     inline json speciationEventToJson(const Simulation::SpeciationEvent &e)

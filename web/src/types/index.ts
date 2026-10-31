@@ -44,6 +44,7 @@ export interface AverageTraits {
   camouflage: number
   socialBehavior: number
   insulation: number
+  diet: number
 }
 
 /** Mirrors Genetics::TRAIT_BOUNDS (include/Serina/AdvancedGenetics.hpp) --
@@ -63,7 +64,8 @@ export const TRAIT_BOUNDS: Record<keyof AverageTraits, { min: number; max: numbe
   hearingAcuity: { min: 0.1, max: 3.0, label: 'Acuité auditive' },
   camouflage: { min: 0.0, max: 1.0, label: 'Camouflage' },
   socialBehavior: { min: 0.0, max: 1.0, label: 'Comportement social' },
-  insulation: { min: 0.0, max: 1.0, label: 'Isolation thermique' }
+  insulation: { min: 0.0, max: 1.0, label: 'Isolation thermique' },
+  diet: { min: 0.0, max: 1.0, label: 'Régime (herbivore à carnivore)' }
 }
 
 export interface LineageStatus {
@@ -110,6 +112,10 @@ export interface RegionInfo {
   climaticStress: number
   /** Real count of living organisms currently in this cell. */
   population: number
+  /** Plant biomass as a fraction of this cell's capacity. */
+  plants: number
+  /** Energy held in corpses in this cell. */
+  carrion: number
 }
 
 export interface RegionsResult {
