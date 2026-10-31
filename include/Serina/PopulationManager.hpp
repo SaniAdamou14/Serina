@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "AdvancedGenetics.hpp"
 #include <vector>
 #include <memory>
@@ -197,7 +198,7 @@ namespace Serina::Evolution
                 auto organism = std::make_unique<Organism>(std::move(genome), species);
 
                 // Position aléatoire
-                std::uniform_real_distribution<double> posDist(-100.0, 100.0);
+                Det::UniformReal posDist(-100.0, 100.0);
                 organism->setPosition(posDist(rng_), posDist(rng_));
 
                 population_.push_back(std::move(organism));
@@ -231,7 +232,7 @@ namespace Serina::Evolution
             std::vector<Organism *> selected;
             selected.reserve(count);
 
-            std::uniform_int_distribution<size_t> indexDist(0, population_.size() - 1);
+            Det::UniformInt<size_t> indexDist(0, population_.size() - 1);
 
             for (size_t i = 0; i < count; ++i)
             {
@@ -274,7 +275,7 @@ namespace Serina::Evolution
             std::vector<Organism *> selected;
             selected.reserve(count);
 
-            std::uniform_real_distribution<double> spinDist(0.0, totalFitness);
+            Det::UniformReal spinDist(0.0, totalFitness);
 
             for (size_t i = 0; i < count; ++i)
             {
@@ -307,7 +308,7 @@ namespace Serina::Evolution
             const auto &traits1 = parent1.getTraits();
             const auto &traits2 = parent2.getTraits();
 
-            std::uniform_real_distribution<double> blendDist(0.0, 1.0);
+            Det::UniformReal blendDist(0.0, 1.0);
 
             for (size_t i = 0; i < traits1.size() && i < traits2.size(); ++i)
             {
@@ -320,7 +321,7 @@ namespace Serina::Evolution
                 double min1 = std::min(trait1.alleles.first.value, trait2.alleles.first.value) - range1;
                 double max1 = std::max(trait1.alleles.first.value, trait2.alleles.first.value) + range1;
 
-                std::uniform_real_distribution<double> alleleDist1(
+                Det::UniformReal alleleDist1(
                     std::max(0.0, min1), std::min(1.0, max1));
 
                 // BLX-α pour les allèles paternels
@@ -329,7 +330,7 @@ namespace Serina::Evolution
                 double min2 = std::min(trait1.alleles.second.value, trait2.alleles.second.value) - range2;
                 double max2 = std::max(trait1.alleles.second.value, trait2.alleles.second.value) + range2;
 
-                std::uniform_real_distribution<double> alleleDist2(
+                Det::UniformReal alleleDist2(
                     std::max(0.0, min2), std::min(1.0, max2));
 
                 // Création des nouveaux allèles
@@ -394,7 +395,7 @@ namespace Serina::Evolution
                 auto &parent1 = parents[i * 2]->getGenome();
                 auto &parent2 = parents[i * 2 + 1]->getGenome();
 
-                std::uniform_real_distribution<double> crossoverDist(0.0, 1.0);
+                Det::UniformReal crossoverDist(0.0, 1.0);
 
                 if (crossoverDist(rng_) < crossoverConfig_.crossoverRate)
                 {
@@ -409,7 +410,7 @@ namespace Serina::Evolution
                         parents[i * 2]->getSpecies() + "_child");
 
                     // Position aléatoire proche des parents
-                    std::normal_distribution<double> positionNoise(0.0, 5.0);
+                    Det::Normal positionNoise(0.0, 5.0);
                     double newX = (parents[i * 2]->getX() + parents[i * 2 + 1]->getX()) * 0.5 + positionNoise(rng_);
                     double newY = (parents[i * 2]->getY() + parents[i * 2 + 1]->getY()) * 0.5 + positionNoise(rng_);
 

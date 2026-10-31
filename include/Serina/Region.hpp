@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "SerinaEcosystem.hpp"
 #include <vector>
 #include <random>
@@ -104,9 +105,9 @@ namespace Serina::Spatial
             std::mt19937 rng(seed);
             int centerCount = std::max(3, std::min(kBiomeCount, (width_ * height_) / 12));
 
-            std::uniform_int_distribution<int> xDist(0, width_ - 1);
-            std::uniform_int_distribution<int> yDist(0, height_ - 1);
-            std::uniform_int_distribution<int> biomeDist(0, kBiomeCount - 1);
+            Det::UniformInt<int> xDist(0, width_ - 1);
+            Det::UniformInt<int> yDist(0, height_ - 1);
+            Det::UniformInt<int> biomeDist(0, kBiomeCount - 1);
 
             struct Center { int x, y; Ecosystem::EnvironmentType type; };
             std::vector<Center> centers;

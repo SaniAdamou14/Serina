@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include <vector>
 #include <unordered_map>
 #include <memory>
@@ -41,9 +42,9 @@ namespace Serina::NEAT
             switch (type)
             {
             case ActivationType::SIGMOID:
-                return 1.0 / (1.0 + std::exp(-4.9 * x));
+                return 1.0 / (1.0 + Det::exp(-4.9 * x));
             case ActivationType::TANH:
-                return std::tanh(x);
+                return Det::tanh(x);
             case ActivationType::RELU:
                 return std::max(0.0, x);
             case ActivationType::LEAKY_RELU:
@@ -68,7 +69,7 @@ namespace Serina::NEAT
             }
             case ActivationType::TANH:
             {
-                double tanh_val = std::tanh(x);
+                double tanh_val = Det::tanh(x);
                 return 1.0 - tanh_val * tanh_val;
             }
             case ActivationType::RELU:
@@ -248,7 +249,7 @@ namespace Serina::NEAT
             }
 
             // Connexions initiales (entrées → sorties)
-            std::uniform_real_distribution<double> weightDist(-1.0, 1.0);
+            Det::UniformReal weightDist(-1.0, 1.0);
             for (uint32_t i = 0; i < inputCount_; ++i)
             {
                 for (uint32_t j = 0; j < outputCount_; ++j)
@@ -281,7 +282,7 @@ namespace Serina::NEAT
 
             // Trie les neurones par couche pour évaluation
             auto sortedNodes = nodeGenes_;
-            std::sort(sortedNodes.begin(), sortedNodes.end(),
+            std::stable_sort(sortedNodes.begin(), sortedNodes.end(),
                       [](const NodeGene &a, const NodeGene &b)
                       {
                           return a.layer < b.layer;
@@ -327,9 +328,9 @@ namespace Serina::NEAT
         /// @brief Mutation des poids
         void mutateWeights(const NEATConfig &config)
         {
-            std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
-            std::normal_distribution<double> perturbDist(0.0, config.weightPerturbationPower);
-            std::uniform_real_distribution<double> newWeightDist(-1.0, 1.0);
+            Det::UniformReal uniformDist(0.0, 1.0);
+            Det::Normal perturbDist(0.0, config.weightPerturbationPower);
+            Det::UniformReal newWeightDist(-1.0, 1.0);
 
             for (auto &conn : connectionGenes_)
             {
@@ -350,7 +351,7 @@ namespace Serina::NEAT
             }
 
             // Mutation des biais
-            std::normal_distribution<double> biasPerturbDist(0.0, config.biasPerturbationPower);
+            Det::Normal biasPerturbDist(0.0, config.biasPerturbationPower);
             for (auto &node : nodeGenes_)
             {
                 if (node.type != NodeType::INPUT && uniformDist(rng_) < config.weightMutationRate)
@@ -367,7 +368,7 @@ namespace Serina::NEAT
             if (connectionGenes_.empty() || nodeGenes_.size() >= config.maxNodes)
                 return;
 
-            std::uniform_int_distribution<size_t> connDist(0, connectionGenes_.size() - 1);
+            Det::UniformInt<size_t> connDist(0, connectionGenes_.size() - 1);
             size_t connIndex = connDist(rng_);
 
             auto &oldConn = connectionGenes_[connIndex];
@@ -399,7 +400,7 @@ namespace Serina::NEAT
             }
 
             // Choisit une fonction d'activation aléatoire
-            std::uniform_int_distribution<size_t> actDist(0, config.allowedActivations.size() - 1);
+            Det::UniformInt<size_t> actDist(0, config.allowedActivations.size() - 1);
             ActivationType activation = config.allowedActivations[actDist(rng_)];
 
             nodeGenes_.emplace_back(newNodeId, NodeType::HIDDEN, activation);
@@ -428,7 +429,7 @@ namespace Serina::NEAT
             if (connectionGenes_.size() >= config.maxConnections)
                 return;
 
-            std::uniform_int_distribution<size_t> nodeDist(0, nodeGenes_.size() - 1);
+            Det::UniformInt<size_t> nodeDist(0, nodeGenes_.size() - 1);
 
             // Essaie de trouver une connexion valide
             for (int attempts = 0; attempts < 50; ++attempts)
@@ -449,7 +450,7 @@ namespace Serina::NEAT
 
                 if (!exists)
                 {
-                    std::uniform_real_distribution<double> weightDist(-1.0, 1.0);
+                    Det::UniformReal weightDist(-1.0, 1.0);
                     double weight = weightDist(rng_);
                     uint32_t innovation = InnovationCounter::getConnectionInnovation(inNodeId, outNodeId);
 
@@ -558,7 +559,7 @@ namespace Serina::NEAT
                 lessFitGenes[gene.innovation] = &gene;
             }
 
-            std::uniform_real_distribution<double> uniformDist(0.0, 1.0);
+            Det::UniformReal uniformDist(0.0, 1.0);
 
             for (const auto &fitterGene : fitterParent.connectionGenes_)
             {

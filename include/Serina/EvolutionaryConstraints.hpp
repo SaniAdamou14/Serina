@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "AdvancedGenetics.hpp"
 #include "SerinaEcosystem.hpp"
 #include "EnvironmentalAdaptation.hpp"
@@ -409,7 +410,7 @@ namespace Serina::Evolution
             // Vérifier les contraintes spécifiques
             for (const auto& constraint : rules.constraints)
             {
-                std::uniform_real_distribution<double> probDist(0.0, 1.0);
+                Det::UniformReal probDist(0.0, 1.0);
                 if (probDist(const_cast<std::mt19937&>(rng_)) < constraint.activationProbability)
                 {
                     if (!constraint.validator(mutatedTraits))
@@ -476,7 +477,7 @@ namespace Serina::Evolution
             if (innovIt != acquiredInnovations_.end())
             {
                 double innovationCount = static_cast<double>(innovIt->second.size());
-                baseProbability *= std::exp(-innovationCount * 0.3);
+                baseProbability *= Det::exp(-innovationCount * 0.3);
             }
 
             return std::clamp(baseProbability, 0.0, 0.01);

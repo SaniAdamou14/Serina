@@ -577,7 +577,7 @@ TEST_CASE("a slow command for one simulation does not block a concurrent command
     // a line and dispatches its handling to its own thread immediately,
     // never blocking the next read.
     Daemon::SimulationRegistry registry;
-    uint16_t port = 17332;
+    uint16_t port = 17333;
 
     std::atomic<bool> ready{false};
     std::thread serverThread([&]()

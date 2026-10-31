@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "SerinaEcosystem.hpp"
 #include "EcologicalInteractions.hpp"
 #include "AdvancedGenetics.hpp"
@@ -44,10 +45,10 @@ namespace Serina::Environment
         double shelter;          ///< Abris disponibles [0-1]
         double nestingSites;     ///< Sites de nidification [0-1]
         
-        ResourceAvailability(double plants = 0.7, double det = 0.5, double small = 0.4,
-                           double large = 0.2, double min = 0.6, double water = 0.8,
+        ResourceAvailability(double plants = 0.7, double det = 0.5, double smallP = 0.4,
+                           double largeP = 0.2, double min = 0.6, double water = 0.8,
                            double shel = 0.6, double nest = 0.5)
-            : primaryProducers(plants), detritus(det), smallPrey(small), largePrey(large),
+            : primaryProducers(plants), detritus(det), smallPrey(smallP), largePrey(largeP),
               minerals(min), waterQuality(water), shelter(shel), nestingSites(nest) {}
     };
 
@@ -497,7 +498,7 @@ namespace Serina::Environment
             // Facteurs climatiques
             double tempOptimum = getSpeciesTemperatureOptimum(characteristics);
             double tempStress = std::abs(env.climate.temperature - tempOptimum) / 30.0;
-            fitness *= std::exp(-tempStress);
+            fitness *= Det::exp(-tempStress);
 
             // Disponibilité des ressources selon le régime alimentaire
             double resourceFitness = getResourceFitness(characteristics.diet, env.resources);
@@ -532,14 +533,14 @@ namespace Serina::Environment
             // Changements climatiques graduels
             for (auto& [envType, env] : environments_)
             {
-                std::uniform_real_distribution<double> changeDist(-0.01, 0.01);
+                Det::UniformReal changeDist(-0.01, 0.01);
                 
                 // Dérive climatique lente
                 env.climate.temperature += changeDist(rng_) * years;
                 env.climate.precipitation *= (1.0 + changeDist(rng_) * years * 0.1);
                 
                 // Événements stochastiques
-                std::uniform_real_distribution<double> eventDist(0.0, 1.0);
+                Det::UniformReal eventDist(0.0, 1.0);
                 if (eventDist(rng_) < env.stochasticEvents * years * 0.01)
                 {
                     // Événement majeur (sécheresse, inondation, etc.)
@@ -608,7 +609,7 @@ namespace Serina::Environment
 
         void simulateStochasticEvent(EnvironmentDefinition& env)
         {
-            std::uniform_int_distribution<int> eventType(0, 3);
+            Det::UniformInt<int> eventType(0, 3);
             
             switch (eventType(rng_))
             {

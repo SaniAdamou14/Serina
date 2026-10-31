@@ -1,5 +1,6 @@
 #pragma once
 
+#include "DeterministicRandom.hpp"
 #include "EcosystemTaxonomy.hpp"
 #include "AdvancedGenetics.hpp"
 #include <memory>
@@ -506,7 +507,7 @@ namespace Serina::Ecosystem
                                     EnvironmentType environment)
         {
             // Mutations adaptatives basées sur l'environnement
-            std::uniform_real_distribution<double> mutationDist(-0.2, 0.2);
+            Det::UniformReal mutationDist(-0.2, 0.2);
 
             for (const auto& trait : traits)
             {
