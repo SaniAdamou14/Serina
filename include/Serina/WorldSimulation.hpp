@@ -18,6 +18,7 @@
 #include "EnvironmentalAdaptation.hpp"
 #include "NEAT.hpp"
 
+#include <deque>
 #include <vector>
 #include <unordered_map>
 #include <map>
@@ -153,6 +154,20 @@ namespace Serina::Simulation
     /// docs/UNIFIED_ENGINE_DESIGN.md, "créatures procédurales"), la
     /// formule de correspondance vit ici, une seule fois ; le frontend ne
     /// fait que dessiner à partir de ces valeurs déjà calculées.
+    /// @brief Un mort récent, là où il est tombé. Sert à l'affichage : l'énergie qu'il
+    /// laisse est dans carrion_, par case.
+    struct CorpseSnapshot
+    {
+        uint64_t id = 0;
+        std::string species;
+        double x = 0.0;
+        double y = 0.0;
+        Taxonomy::BiologicalType biologicalType = Taxonomy::BiologicalType::BIRD;
+        double sizeScale = 0.5; ///< SIZE normalisé [0,1]
+        uint32_t age = 0;       ///< ticks depuis la mort
+        bool eaten = false;     ///< tué et mangé : il ne reste que les os
+    };
+
     struct IndividualSnapshot
     {
         uint64_t id = 0;
@@ -535,6 +550,20 @@ namespace Serina::Simulation
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
         /// ce qu'un signal représente réellement et ne représente pas.
         const std::vector<ConvergenceSignal> &getConvergenceSignals() const { return convergenceSignals_; }
+        /// @brief Morts encore visibles, du plus ancien au plus récent.
+        std::vector<CorpseSnapshot> getCorpseSnapshots() const
+        {
+            std::vector<CorpseSnapshot> result;
+            result.reserve(corpses_.size());
+            for (const auto &corpse : corpses_)
+            {
+                CorpseSnapshot snap = corpse;
+                snap.age = generation_ - corpse.age;
+                result.push_back(std::move(snap));
+            }
+            return result;
+        }
+
         const LifeEventCounters &getLifeEventCounters() const { return lifeEvents_; }
 
         /// @brief Un instantané par espèce vivante, calculé depuis les
@@ -673,8 +702,14 @@ namespace Serina::Simulation
         std::set<uint64_t> killedThisTick_;
         std::vector<double> plants_;  ///< biomasse végétale par case
         std::vector<double> carrion_; ///< énergie des cadavres par case
+        /// Morts récents pour l'affichage ; age y garde le tick de la mort. Hors sauvegarde
+        /// et sans effet sur la simulation : ils repartent de zéro au rechargement.
+        std::deque<CorpseSnapshot> corpses_;
         /// Énergie que contient un corps par unité de taille.
         static constexpr double BODY_ENERGY_PER_SIZE = 30.0;
+        /// À 1 % de décomposition par tick, il ne reste presque rien d'un cadavre après 300 ticks.
+        static constexpr uint32_t CORPSE_VISIBLE_TICKS = 300;
+        static constexpr size_t MAX_VISIBLE_CORPSES = 1500;
         std::map<std::string, uint32_t> lastCounts_; ///< effectifs du tick précédent
         std::vector<HistorySample> history_;
         uint32_t historyInterval_ = 20; ///< ticks entre deux points, double quand l'historique est plein
@@ -1267,6 +1302,7 @@ namespace Serina::Simulation
             {
                 if (o.isAlive())
                     continue;
+                recordCorpse(o, killedThisTick_.count(o.getId()) > 0);
                 if (killedThisTick_.count(o.getId()))
                     continue; // déjà mangée
                 auto [cellX, cellY] = regionOf(o);
@@ -1282,6 +1318,26 @@ namespace Serina::Simulation
                                 [](const Evolution::Organism &o) { return !o.isAlive(); }),
                 population_.end());
             killedThisTick_.clear();
+            while (!corpses_.empty() && generation_ - corpses_.front().age > CORPSE_VISIBLE_TICKS)
+                corpses_.pop_front();
+        }
+
+        void recordCorpse(const Evolution::Organism &o, bool eaten)
+        {
+            CorpseSnapshot corpse;
+            corpse.id = o.getId();
+            corpse.species = o.getSpecies();
+            corpse.x = o.getX();
+            corpse.y = o.getY();
+            auto group = biologicalTypeOf_.find(o.getSpecies());
+            if (group != biologicalTypeOf_.end())
+                corpse.biologicalType = group->second;
+            corpse.sizeScale = normalizeTrait(Genetics::TraitType::SIZE, o.getGenome().getTrait(Genetics::TraitType::SIZE));
+            corpse.age = generation_;
+            corpse.eaten = eaten;
+            corpses_.push_back(std::move(corpse));
+            if (corpses_.size() > MAX_VISIBLE_CORPSES)
+                corpses_.pop_front();
         }
 
         void reproduce()

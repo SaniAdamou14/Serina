@@ -62,13 +62,18 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-const apiLimiter = rateLimit({
+// Deux compteurs : le jeu lit l'historique toutes les 2,5 s, soit 360 lectures en 15 minutes.
+// Avec un seul, ces lectures épuisaient la limite et bloquaient le lancement d'une partie.
+const isRead = (req) => req.method === 'GET' || req.method === 'HEAD';
+const limiter = (max, skip) => rateLimit({
   windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
-  max: Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100),
-  standardHeaders: true,
+  max,
+  skip,
+  standardHeaders: false,
   legacyHeaders: false
 });
-app.use('/api', apiLimiter);
+app.use('/api', limiter(Number(process.env.RATE_LIMIT_MAX_REQUESTS || 100), isRead));
+app.use('/api', limiter(Number(process.env.RATE_LIMIT_MAX_READS || 3000), (req) => !isRead(req)));
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));

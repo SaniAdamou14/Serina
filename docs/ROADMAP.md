@@ -289,7 +289,13 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
     médiane, 2 au mieux). À 20 000 ticks, avant la règle de la faim, les 3 niches étaient
     occupées mais surtout par d'autres groupes, et les oiseaux ne survivaient que dans 3 mondes
     sur 6 (5 sans chasse). Ce résultat reste à refaire avec la règle de la faim.
-  - Reste à faire : dessiner plantes et cadavres à partir de ces données, puis feux et météo.
+  - Fait, côté carte : plantes dessinées selon le niveau réel de chaque case, qui jaunissent puis
+    disparaissent quand la case est broutée, et morts à leur vraie position, sur le dos, qui
+    brunissent puis deviennent des os ; une proie mangée ne laisse que ses os. 60 images/s sur
+    Radeon intégrée avec environ 500 individus et 900 plantes, sans mesure à 10 000 individus.
+  - Limites de la carte : quelles plantes poussent dans quel biome reste un choix d'affichage, le
+    moteur ne connaît qu'un niveau par case. Les morts visibles repartent de zéro au rechargement.
+  - Reste à faire : feux et météo.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
 - **I6, les créatures issues de leur génome (en cours)** :

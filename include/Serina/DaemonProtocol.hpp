@@ -423,6 +423,16 @@ namespace Serina::Daemon
                 r["individuals"] = json::array();
                 for (const auto &ind : m.sim->getIndividualSnapshots())
                     r["individuals"].push_back(individualToJson(ind));
+                r["corpses"] = json::array();
+                for (const auto &corpse : m.sim->getCorpseSnapshots())
+                    r["corpses"].push_back({{"id", corpse.id},
+                                            {"species", corpse.species},
+                                            {"x", corpse.x},
+                                            {"y", corpse.y},
+                                            {"biologicalType", static_cast<int>(corpse.biologicalType)},
+                                            {"sizeScale", corpse.sizeScale},
+                                            {"age", corpse.age},
+                                            {"eaten", corpse.eaten}});
                 return r; });
         }
         else if (command == "lineages")
