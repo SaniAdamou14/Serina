@@ -43,6 +43,7 @@ export interface AverageTraits {
   hearingAcuity: number
   camouflage: number
   socialBehavior: number
+  insulation: number
 }
 
 /** Mirrors Genetics::TRAIT_BOUNDS (include/Serina/AdvancedGenetics.hpp) --
@@ -61,7 +62,8 @@ export const TRAIT_BOUNDS: Record<keyof AverageTraits, { min: number; max: numbe
   visionRange: { min: 0.5, max: 5.0, label: 'Portée visuelle' },
   hearingAcuity: { min: 0.1, max: 3.0, label: 'Acuité auditive' },
   camouflage: { min: 0.0, max: 1.0, label: 'Camouflage' },
-  socialBehavior: { min: 0.0, max: 1.0, label: 'Comportement social' }
+  socialBehavior: { min: 0.0, max: 1.0, label: 'Comportement social' },
+  insulation: { min: 0.0, max: 1.0, label: 'Isolation thermique' }
 }
 
 export interface LineageStatus {

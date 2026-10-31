@@ -31,6 +31,7 @@ namespace Serina::Genetics
         HEARING_ACUITY,    ///< Acuité auditive [0.1-3.0]
         CAMOUFLAGE,        ///< Capacité de camouflage [0.0-1.0]
         SOCIAL_BEHAVIOR,   ///< Comportement social [0.0-1.0]
+        INSULATION,        ///< Isolation thermique : fourrure, plumes, graisse [0.0-1.0]
         TRAIT_COUNT        ///< Nombre total de traits
     };
 
@@ -49,6 +50,7 @@ namespace Serina::Genetics
         double hearingAcuity = 1.0;
         double camouflage = 1.0;
         double socialBehavior = 1.0;
+        double insulation = 0.5;
 
         // Extensions pour compatibilité avec le simulateur
         double fertility = 1.0;          // Alias pour reproductionRate
@@ -77,7 +79,8 @@ namespace Serina::Genetics
         {0.5, 5.0, 2.0}, // VISION_RANGE
         {0.1, 3.0, 1.0}, // HEARING_ACUITY
         {0.0, 1.0, 0.2}, // CAMOUFLAGE
-        {0.0, 1.0, 0.4}  // SOCIAL_BEHAVIOR
+        {0.0, 1.0, 0.4}, // SOCIAL_BEHAVIOR
+        {0.0, 1.0, 0.5}  // INSULATION
     }};
 
     /// @brief Allèle représentant une version d'un trait
