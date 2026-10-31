@@ -668,12 +668,12 @@ export class MapRenderer {
     gl.uniform1f(gl.getUniformLocation(p, 'uProp'), 1);
     gl.disable(gl.DEPTH_TEST);
 
-    const useProps = () => {
+    const bindPropAtlas = () => {
       gl.bindTexture(gl.TEXTURE_2D, this.propAtlas);
       gl.uniform2f(gl.getUniformLocation(p, 'uAtlasGrid'), PROP_COLUMNS, PROP_ROWS);
       gl.uniform1f(gl.getUniformLocation(p, 'uShadowFrame'), PropFrame.SHADOW);
     };
-    useProps();
+    bindPropAtlas();
     if (this.boneCount > 0) {
       gl.bindVertexArray(this.boneVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.boneCount);
@@ -683,7 +683,7 @@ export class MapRenderer {
       gl.uniform2f(gl.getUniformLocation(p, 'uAtlasGrid'), ATLAS_COLUMNS, ATLAS_ROWS);
       gl.bindVertexArray(this.corpseVao);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.fleshCount);
-      useProps();
+      bindPropAtlas();
     }
 
     if (this.propCount > 0) {
