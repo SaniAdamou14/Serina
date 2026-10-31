@@ -91,8 +91,6 @@ namespace Serina::Ecology
         inline constexpr double PREDATOR_AGGRESSION_WEIGHT = 0.45;
         inline constexpr double PREDATOR_SIZE_WEIGHT = 0.30;
         inline constexpr double PREDATOR_VISION_WEIGHT = 0.25;
-        inline constexpr double PREY_SPEED_WEIGHT = 0.55;
-        inline constexpr double PREY_RESISTANCE_WEIGHT = 0.45;
 
         /// À quel point une espèce est équipée pour chasser (agressivité,
         /// taille, vision) -- dans [0,1] si les traits d'entrée le sont.
@@ -103,12 +101,14 @@ namespace Serina::Ecology
                    p.avgVision * PREDATOR_VISION_WEIGHT;
         }
 
-        /// À quel point une espèce est équipée pour échapper à un prédateur
-        /// (vitesse de fuite, résistance) -- dans [0,1] si les traits
-        /// d'entrée le sont.
+        /// À quel point une espèce échappe à un prédateur, dans [0,1] si les traits
+        /// d'entrée le sont. Fuir ou être blindé sont deux stratégies distinctes : on
+        /// retient la meilleure. Avec une moyenne pondérée, un escargot, lent par nature,
+        /// restait une proie facile malgré sa coquille (survie dans 7 mondes sur 12, contre
+        /// 12 sur 12 sans prédation).
         inline double preyDefenseScore(const RegionalSpeciesProfile &p)
         {
-            return p.avgSpeed * PREY_SPEED_WEIGHT + p.avgResistance * PREY_RESISTANCE_WEIGHT;
+            return std::max(p.avgSpeed, p.avgResistance);
         }
     }
 

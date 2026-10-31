@@ -467,9 +467,14 @@ TEST_CASE("two independently-constructed simulators with the same seed stay bit-
     // au hasard). Verifie ici qu'ils restent identiques generation apres
     // generation, individu par individu (espece/position/energie), a
     // travers de vraies reproductions ET de vraies speciations.
-    UnifiedWorldSimulator simA({}, 777);
+    // Critère rapide : ce test porte sur la reproductibilité à travers une spéciation.
+    WorldSimulationParameters params;
+    params.speciationDistanceThreshold = 0.05;
+    params.speciationDivergenceMargin = -1.0;
+    params.speciationIsolationGenerations = 3;
+    UnifiedWorldSimulator simA(params, 777);
     simA.seedFounderSpecies(20);
-    UnifiedWorldSimulator simB({}, 777);
+    UnifiedWorldSimulator simB(params, 777);
     simB.seedFounderSpecies(20);
 
     bool sawReproduction = false;
@@ -774,5 +779,20 @@ TEST_CASE("every map contains the founders' home biomes", "[worldsim][habitat]")
         CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::GRASSLAND).empty());
         CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::FOREST).empty());
         CHECK_FALSE(grid.regionsOfType(Ecosystem::EnvironmentType::WETLAND).empty());
+    }
+}
+
+TEST_CASE("a species only splits after a long real isolation", "[worldsim][speciation]") {
+    // Sans ce critère, des écarts d'échantillonnage entre cases voisines créaient des
+    // dizaines d'espèces en quelques durées de vie.
+    WorldSimulationParameters params;
+    params.speciationIsolationGenerations = 400;
+    for (uint32_t seed : {3u, 8u}) {
+        UnifiedWorldSimulator sim(params, seed);
+        sim.seedFounderSpecies(30);
+        for (int i = 0; i < 1200; ++i)
+            sim.step();
+        for (const auto &event : sim.getSpeciationEvents())
+            CHECK(event.generation >= params.speciationIsolationGenerations);
     }
 }

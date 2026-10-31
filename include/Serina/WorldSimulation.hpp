@@ -180,13 +180,15 @@ namespace Serina::Simulation
         /// sous-groupes régionaux d'une même espèce sont considérés en
         /// divergence.
         double speciationDistanceThreshold = 0.30;
-        /// Nombre de générations consécutives de divergence soutenue
-        /// avant qu'une scission d'espèce ne soit déclenchée. Une
-        /// approximation volontairement simple de l'isolement
-        /// reproducteur (voir docs/UNIFIED_ENGINE_DESIGN.md) : on ne
-        /// modélise pas de graphe de migration individuel, seulement la
-        /// persistance mesurée de la divergence.
-        uint32_t speciationIsolationGenerations = 10;
+        /// Ticks consécutifs pendant lesquels deux populations d'une espèce doivent rester
+        /// sans contact avant de pouvoir se scinder (voir checkSpeciation()). Une durée de
+        /// vie fait environ 1000 ticks.
+        uint32_t speciationIsolationGenerations = 1000;
+        /// Une case ne relie deux populations que si elle compte au moins ce nombre
+        /// d'individus de l'espèce : un migrant isolé ne fait pas un flux de gènes.
+        uint32_t speciationMinCellPopulation = 3;
+        /// Taille minimale d'une population isolée pour devenir une espèce.
+        uint32_t speciationMinPopulation = 20;
 
         /// Si >= 0 : critère de divergence RELATIF (défaut) -- deux
         /// sous-groupes ne divergent que si leur distance moyenne ENTRE eux
@@ -1240,65 +1242,131 @@ namespace Serina::Simulation
             return std::nullopt; // toutes les tentatives ont violé les contraintes : pas de descendance ce tour-ci
         }
 
-        /// @brief Vérifie, pour chaque espèce présente dans plusieurs
-        /// régions, si ses deux plus grands sous-groupes régionaux ont
-        /// divergé génétiquement au-delà du seuil de façon soutenue, et
-        /// scinde une nouvelle espèce le cas échéant, avec un vrai nom
-        /// taxonomique.
+        /// @brief Une espèce ne se scinde que par isolement réel : deux populations sans
+        /// aucun contact géographique, restées séparées assez longtemps, et génétiquement
+        /// divergentes. Sans ces conditions, de simples écarts d'échantillonnage entre
+        /// cases voisines créaient des dizaines d'espèces en quelques durées de vie.
         void checkSpeciation()
         {
             auto byRegionAndSpecies = groupByRegionAndSpecies();
 
             for (auto &[species, regionGroups] : bySpeciesRegionIndex(byRegionAndSpecies))
             {
-                if (regionGroups.size() < 2)
+                // Critère absolu historique, encore utilisé par certains tests.
+                if (params_.speciationDivergenceMargin < 0.0)
+                {
+                    checkAbsoluteSpeciation(species, regionGroups);
+                    continue;
+                }
+
+                auto populations = isolatedPopulations(regionGroups);
+                if (populations.size() < 2 || populations[1].size() < params_.speciationMinPopulation)
                 {
                     divergentStreak_[species] = 0;
                     continue;
                 }
 
-                // Les deux plus grands sous-groupes régionaux.
-                std::vector<std::pair<long long, std::vector<size_t>>> sorted(regionGroups.begin(), regionGroups.end());
-                std::sort(sorted.begin(), sorted.end(),
-                          [](const auto &a, const auto &b) {
-                              // À taille égale, la clé de région départage : le résultat
-                              // de std::sort sur des égalités dépend du compilateur.
-                              if (a.second.size() != b.second.size())
-                                  return a.second.size() > b.second.size();
-                              return a.first < b.first;
-                          });
-
-                const auto &groupA = sorted[0].second;
-                const auto &groupB = sorted[1].second;
-                if (groupA.size() < 3 || groupB.size() < 3)
-                {
-                    divergentStreak_[species] = 0;
+                uint32_t streak = ++divergentStreak_[species];
+                // La divergence coûte cher à mesurer : pas à chaque tick.
+                if (streak < params_.speciationIsolationGenerations || streak % 50 != 0)
                     continue;
-                }
 
-                double distance = averageInterGroupDistance(groupA, groupB);
-
-                bool divergent;
-                if (params_.speciationDivergenceMargin >= 0.0)
+                const auto sampleA = evenSample(populations[0], 15);
+                const auto sampleB = evenSample(populations[1], 15);
+                const double distance = averageInterGroupDistance(sampleA, sampleB);
+                const double within = 0.5 * (averageWithinGroupDistance(sampleA) + averageWithinGroupDistance(sampleB));
+                if (distance - within >= params_.speciationDivergenceMargin)
                 {
-                    double within = 0.5 * (averageWithinGroupDistance(groupA) + averageWithinGroupDistance(groupB));
-                    divergent = (distance - within) >= params_.speciationDivergenceMargin;
-                }
-                else
-                {
-                    divergent = distance >= params_.speciationDistanceThreshold;
-                }
-
-                if (divergent)
-                    divergentStreak_[species]++;
-                else
-                    divergentStreak_[species] = 0;
-
-                if (divergentStreak_[species] >= params_.speciationIsolationGenerations)
-                {
-                    performSpeciation(species, groupB, distance);
+                    performSpeciation(species, populations[1], distance);
                     divergentStreak_[species] = 0;
                 }
+            }
+        }
+
+        /// @brief Populations d'une espèce sans contact entre elles : composantes connexes
+        /// de ses cases assez peuplées, de la plus grande à la plus petite.
+        std::vector<std::vector<size_t>> isolatedPopulations(const std::map<long long, std::vector<size_t>> &regionGroups) const
+        {
+            std::vector<std::vector<size_t>> populations;
+            std::set<long long> visited;
+            const auto occupied = [&](long long key) {
+                auto it = regionGroups.find(key);
+                return it != regionGroups.end() && it->second.size() >= params_.speciationMinCellPopulation;
+            };
+
+            for (const auto &[start, unused] : regionGroups)
+            {
+                if (!occupied(start) || visited.count(start))
+                    continue;
+
+                std::vector<size_t> population;
+                std::vector<long long> frontier{start};
+                visited.insert(start);
+                while (!frontier.empty())
+                {
+                    const long long key = frontier.back();
+                    frontier.pop_back();
+                    const auto &members = regionGroups.at(key);
+                    population.insert(population.end(), members.begin(), members.end());
+                    const int gx = static_cast<int>(key / 100000);
+                    const int gy = static_cast<int>(key % 100000);
+                    for (const auto &[nx, ny] : grid_.neighbors(gx, gy))
+                    {
+                        const long long next = regionKey(nx, ny);
+                        if (occupied(next) && visited.insert(next).second)
+                            frontier.push_back(next);
+                    }
+                }
+                populations.push_back(std::move(population));
+            }
+
+            std::stable_sort(populations.begin(), populations.end(),
+                             [](const auto &a, const auto &b) { return a.size() > b.size(); });
+            return populations;
+        }
+
+        /// @brief Échantillon réparti sur tout le groupe, pour ne pas mesurer une seule case.
+        static std::vector<size_t> evenSample(const std::vector<size_t> &group, size_t count)
+        {
+            if (group.size() <= count)
+                return group;
+            std::vector<size_t> sample;
+            sample.reserve(count);
+            for (size_t i = 0; i < count; ++i)
+                sample.push_back(group[i * group.size() / count]);
+            return sample;
+        }
+
+        void checkAbsoluteSpeciation(const std::string &species, const std::map<long long, std::vector<size_t>> &regionGroups)
+        {
+            if (regionGroups.size() < 2)
+            {
+                divergentStreak_[species] = 0;
+                return;
+            }
+
+            std::vector<std::pair<long long, std::vector<size_t>>> sorted(regionGroups.begin(), regionGroups.end());
+            std::stable_sort(sorted.begin(), sorted.end(),
+                             [](const auto &a, const auto &b) { return a.second.size() > b.second.size(); });
+
+            const auto &groupA = sorted[0].second;
+            const auto &groupB = sorted[1].second;
+            if (groupA.size() < 3 || groupB.size() < 3)
+            {
+                divergentStreak_[species] = 0;
+                return;
+            }
+
+            const double distance = averageInterGroupDistance(groupA, groupB);
+            if (distance >= params_.speciationDistanceThreshold)
+                divergentStreak_[species]++;
+            else
+                divergentStreak_[species] = 0;
+
+            if (divergentStreak_[species] >= params_.speciationIsolationGenerations)
+            {
+                performSpeciation(species, groupB, distance);
+                divergentStreak_[species] = 0;
             }
         }
 

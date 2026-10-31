@@ -126,13 +126,16 @@ Fait (mesuré sur 16 graines, 4 000 ticks) :
 - Habitat par groupe biologique (`Habitat.hpp`) : 0 % d'individus hors habitat, oiseaux qui
   survolent l'eau sans s'y nourrir, biomes d'origine présents sur toutes les cartes.
 - Coût énergétique du climat (`climateCostRate`) : effet de dose mesuré, mais encore faible.
+- Spéciation par isolement réel : deux populations sans contact pendant 1 000 ticks et
+  divergentes. 2 spéciations en 6 000 ticks contre 84, 5 espèces contre 24.
+- Défense des proies : la meilleure de la vitesse et de la résistance, au lieu de leur moyenne.
+  Mollusques vivants dans 12 mondes sur 12 contre 7 : la prédation les éliminait.
 
 Reste à faire :
 
-- Adaptation au climat trop faible : corrélation résistance/climat de 0,045 sur 12 graines
-  inédites à 5 000 ticks (0,022 sans coût). Critère non atteint.
-- Mollusques vivants dans seulement 5 mondes sur 12 à 5 000 ticks : trouver pourquoi.
-- Spéciations encore trop rapides (46 en 4 000 ticks).
+- Adaptation au climat encore modeste : corrélation résistance/climat de 0,12 à 0,16 sur des
+  graines inédites à 6 000 ticks. Un seul trait est trop grossier : voir I6.
+- Peu d'espèces (5 ou 6) : une carte de 12 cases sur 9 offre peu de vraies barrières.
 - Introduire le coût du déplacement et de la taille ; donner un effet ou retirer
   chacun des 5 traits inertes.
 - Ajouter l'habitat selon le groupe biologique (poissons dans l'eau, jusqu'à ce
