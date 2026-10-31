@@ -30,6 +30,8 @@ namespace
             p.movementCost = value;
         else if (key == "climateCostRate")
             p.climateCostRate = value;
+        else if (key == "speciationIsolation")
+            p.speciationIsolationGenerations = static_cast<uint32_t>(value);
         else if (key == "reflectAtBorders")
             p.reflectAtBorders = value != 0.0;
         else

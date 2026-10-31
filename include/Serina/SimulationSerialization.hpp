@@ -318,7 +318,13 @@ namespace Serina::Simulation
             {"convergenceCheckInterval", params_.convergenceCheckInterval},
             {"carryingCapacityPerResource", params_.carryingCapacityPerResource},
             {"speciationDivergenceMargin", params_.speciationDivergenceMargin},
-            {"movementScale", params_.movementScale}};
+            {"movementScale", params_.movementScale},
+            {"movementNoise", params_.movementNoise},
+            {"movementCost", params_.movementCost},
+            {"reflectAtBorders", params_.reflectAtBorders},
+            {"climateCostRate", params_.climateCostRate},
+            {"speciationMinCellPopulation", params_.speciationMinCellPopulation},
+            {"speciationMinPopulation", params_.speciationMinPopulation}};
 
         json population = json::array();
         for (const auto &org : population_)
@@ -440,6 +446,12 @@ namespace Serina::Simulation
             params.carryingCapacityPerResource = pj.value("carryingCapacityPerResource", params.carryingCapacityPerResource);
             params.speciationDivergenceMargin = pj.value("speciationDivergenceMargin", params.speciationDivergenceMargin);
             params.movementScale = pj.value("movementScale", params.movementScale);
+            params.movementNoise = pj.value("movementNoise", params.movementNoise);
+            params.movementCost = pj.value("movementCost", params.movementCost);
+            params.reflectAtBorders = pj.value("reflectAtBorders", params.reflectAtBorders);
+            params.climateCostRate = pj.value("climateCostRate", params.climateCostRate);
+            params.speciationMinCellPopulation = pj.value("speciationMinCellPopulation", params.speciationMinCellPopulation);
+            params.speciationMinPopulation = pj.value("speciationMinPopulation", params.speciationMinPopulation);
         }
 
         uint32_t seed = j.at("seed").get<uint32_t>();
