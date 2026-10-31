@@ -47,7 +47,7 @@ async function main() {
   );
   console.log(
     `  au mur ${med('wallPct')}% | en bordure ${med('borderPct')}% (35% des cases) | ` +
-      `poissons hors de l'eau ${med('fishDryPct')}% | âge moyen ${med('meanAge')}`
+      `hors habitat ${med('forbiddenPct')}% | corrélation résistance/climat ${med('climateCorrelation')} | âge moyen ${med('meanAge')}`
   );
   console.log(
     `  groupes vivants /${n} : oiseaux ${alive('bird')}, poissons ${alive('fish')}, ` +

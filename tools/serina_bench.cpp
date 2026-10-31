@@ -4,6 +4,7 @@
 //   serina_bench <graine> <ticks> [cle=valeur ...]
 #include "Serina/WorldSimulation.hpp"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -27,6 +28,8 @@ namespace
             p.movementNoise = value;
         else if (key == "movementCost")
             p.movementCost = value;
+        else if (key == "climateCostRate")
+            p.climateCostRate = value;
         else if (key == "reflectAtBorders")
             p.reflectAtBorders = value != 0.0;
         else
@@ -73,8 +76,20 @@ int main(int argc, char **argv)
     size_t wall = 0, fish = 0, fishDry = 0;
     std::map<Taxonomy::BiologicalType, size_t> byGroup;
     double meanAge = 0.0;
+    size_t forbidden = 0;
+    // Corrélation entre la résistance d'un individu et le stress climatique de sa case.
+    double sumR = 0.0, sumS = 0.0, sumRR = 0.0, sumSS = 0.0, sumRS = 0.0;
     for (const auto &ind : inds)
     {
+        auto [cellX, cellY] = sim.getGrid().positionToGrid(ind.x, ind.y, W * cs, H * cs);
+        if (!Habitat::suitabilityOf(ind.biologicalType, sim.getGrid().at(cellX, cellY).environmentType).passable)
+            forbidden++;
+        const double stress = regions[static_cast<size_t>(cellY) * W + cellX].climaticStress;
+        sumR += ind.resistance;
+        sumS += stress;
+        sumRR += ind.resistance * ind.resistance;
+        sumSS += stress * stress;
+        sumRS += ind.resistance * stress;
         if (ind.x < 0.5 || ind.y < 0.5 || ind.x > W * cs - 0.5 || ind.y > H * cs - 0.5)
             wall++;
         byGroup[ind.biologicalType]++;
@@ -88,6 +103,9 @@ int main(int argc, char **argv)
         }
     }
     const double n = inds.empty() ? 1.0 : static_cast<double>(inds.size());
+    const double varR = sumRR / n - (sumR / n) * (sumR / n);
+    const double varS = sumSS / n - (sumS / n) * (sumS / n);
+    const double climateCorrelation = varR > 1e-9 && varS > 1e-9 ? (sumRS / n - (sumR / n) * (sumS / n)) / std::sqrt(varR * varS) : 0.0;
 
     int occupied = 0;
     size_t inBorderCells = 0;
@@ -102,11 +120,12 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
                 byGroup[Taxonomy::BiologicalType::MOLLUSC], fish ? 100.0 * fishDry / fish : 0.0,
+                100.0 * forbidden / n, climateCorrelation,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;
