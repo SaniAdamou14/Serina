@@ -191,16 +191,18 @@ export const CREATURE_VERTEX = `#version 300 es
 in vec2 aCorner;
 in vec4 aPlacement;   // x, y, demi-largeur (négative : regarde à gauche), demi-hauteur
 in vec4 aColorFrame;  // r, g, b, image de l'atlas
-in vec4 aMotion;      // phase, en mouvement, image fixe (ne marche pas), inutilisé
+in vec4 aMotion;      // phase, en mouvement, image des poils, opacité des poils
 
 uniform vec4 uView;
 uniform vec2 uAtlasGrid;
 uniform float uTime;
 uniform float uShadow;
 uniform float uShadowFrame;
+uniform float uFur;
 
 out vec2 vUv;
 out vec3 vColor;
+out float vFur;
 
 void main() {
   vec2 scaled = aCorner * aPlacement.zw;
@@ -212,16 +214,25 @@ void main() {
     scaled = aCorner * vec2(abs(aPlacement.z) * 0.72, aPlacement.w * 0.2);
     world.y += aPlacement.w * 0.8;
     frame = uShadowFrame;
-  } else if (aMotion.y > 0.5) {
-    float step = floor(uTime * 7.0 + aMotion.x);
-    frame += mod(step, 2.0) * uAtlasGrid.x;
-    world.y -= abs(sin((uTime * 7.0 + aMotion.x) * 3.14159)) * aPlacement.w * 0.05;
+  } else {
+    if (uFur > 0.5) frame = aMotion.z;
+    if (aMotion.y > 0.5) {
+      float walk = mod(floor(uTime * 7.0 + aMotion.x), 2.0);
+      // Les images de marche du corps sont l'une sous l'autre, celles des poils côte à côte.
+      frame += uFur > 0.5 ? walk : walk * uAtlasGrid.x;
+      world.y -= abs(sin((uTime * 7.0 + aMotion.x) * 3.14159)) * aPlacement.w * 0.05;
+    }
   }
+  vFur = uFur > 0.5 ? aMotion.w : 1.0;
 
   vec2 clip = (world + scaled - uView.xy) / uView.zw * 2.0 - 1.0;
   gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
 
-  vec2 cellIndex = vec2(mod(frame, uAtlasGrid.x), floor(frame / uAtlasGrid.x));
+  // En entiers : en flottants, 48.0 / 12.0 peut tomber juste sous 4 sur certaines cartes
+  // graphiques, et la créature lit alors une case vide de l'atlas.
+  int frameIndex = int(frame + 0.5);
+  int columns = int(uAtlasGrid.x + 0.5);
+  vec2 cellIndex = vec2(frameIndex % columns, frameIndex / columns);
   vUv = (cellIndex + aCorner * 0.5 + 0.5) / uAtlasGrid;
   vColor = aColorFrame.rgb;
 }
@@ -231,6 +242,7 @@ export const CREATURE_FRAGMENT = `#version 300 es
 precision highp float;
 in vec2 vUv;
 in vec3 vColor;
+in float vFur;
 out vec4 outColor;
 uniform sampler2D uAtlas;
 uniform float uShadow;
@@ -247,6 +259,7 @@ void main() {
   float chroma = max(rgb.r, max(rgb.g, rgb.b)) - min(rgb.r, min(rgb.g, rgb.b));
   float luminance = dot(vColor, vec3(0.3, 0.59, 0.11));
   vec3 tint = mix(vec3(luminance), vColor, 0.72) * 1.15;
-  outColor = vec4(mix(rgb * tint, rgb, smoothstep(0.05, 0.14, chroma)) * t.a, t.a);
+  float alpha = t.a * vFur;
+  outColor = vec4(mix(rgb * tint, rgb, smoothstep(0.05, 0.14, chroma)) * alpha, alpha);
 }
 `;

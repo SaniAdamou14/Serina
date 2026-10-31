@@ -158,26 +158,14 @@ export function WorldMap() {
 
   const individualList = simulationData?.individuals.individuals;
   useEffect(() => {
-    if (!renderer.current || !individualList || !regionsData || !regionCells) return;
-    const { gridWidth, gridHeight, cellSize } = regionsData;
-    const biomeNames: string[] = new Array(gridWidth * gridHeight);
-    for (const r of regionCells) biomeNames[r.gridY * gridWidth + r.gridX] = r.environmentName;
-
-    // Le camouflage mélange la teinte de la lignée à la couleur du biome : mis en cache,
-    // car la même combinaison revient des milliers de fois.
+    if (!renderer.current || !individualList) return;
     const colors = new Map<string, [number, number, number]>();
     const creatures: MapCreature[] = individualList.map((ind) => {
-      const gx = Math.max(0, Math.min(gridWidth - 1, Math.floor(ind.x / cellSize)));
-      const gy = Math.max(0, Math.min(gridHeight - 1, Math.floor(ind.y / cellSize)));
-      const biome = biomeNames[gy * gridWidth + gx];
-      const hue = lineageHues.get(ind.species) ?? 0;
-      const camouflage = Math.round(ind.camouflage * 20) / 20;
-      const key = `${hue}|${camouflage}|${biome}`;
-      let color = colors.get(key);
+      let color = colors.get(ind.species);
       if (!color) {
-        const [r, g, b] = hexToRgb(creatureColor(hue, camouflage, BIOME_COLORS[biome] ?? FALLBACK_BIOME_COLOR));
+        const [r, g, b] = hexToRgb(creatureColor(lineageHues.get(ind.species) ?? 0, 0, FALLBACK_BIOME_COLOR));
         color = [r / 255, g / 255, b / 255];
-        colors.set(key, color);
+        colors.set(ind.species, color);
       }
       return {
         id: ind.id,
@@ -188,11 +176,12 @@ export function WorldMap() {
         elongation: ind.elongation,
         ornamentTier: ind.ornamentTier,
         patternTier: ind.patternTier,
+        insulation: ind.insulation,
         color
       };
     });
     renderer.current.setCreatures(showIndividuals ? creatures : []);
-  }, [individualList, regionsData, regionCells, lineageHues, showIndividuals, canvas]);
+  }, [individualList, lineageHues, showIndividuals, canvas]);
 
   useEffect(() => {
     if (!renderer.current || !regionsData || !regionCells) return;

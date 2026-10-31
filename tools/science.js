@@ -54,6 +54,7 @@ async function main() {
   );
   console.log(
     `  dans chaque espèce : résistance/climat ${med('resistanceWithin')} | isolation/température ${med('insulationWithin')}\n` +
+      `  taille moyenne ${med('meanSize')} | proies tuées ${med('kills')}\n` +
       `  isolation : écart à l'idéal ${med('insulationGap')} | avantage local ${med('localAdvantage')} | étendue climatique ${med('climateSpread')}`
   );
   console.log(

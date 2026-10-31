@@ -74,6 +74,7 @@ namespace Serina::Simulation
         uint64_t starvationDeaths = 0;
         uint64_t oldAgeDeaths = 0;
         uint64_t predationTransfers = 0;
+        uint64_t predationKills = 0;
         /// Individus éligibles à la reproduction (énergie/âge suffisants)
         /// mais seuls de leur espèce dans leur case cette génération-là :
         /// la mesure directe d'un effet Allee (pas de partenaire).
@@ -330,7 +331,7 @@ namespace Serina::Simulation
         /// Part aléatoire du déplacement [0,1] (0 = cerveau seul).
         double movementNoise = 0.5;
         /// Énergie dépensée par unité de taille et par unité de distance parcourue.
-        double movementCost = 0.0;
+        double movementCost = 0.1;
         /// Rebondir sur le bord du monde plutôt que de s'y arrêter.
         bool reflectAtBorders = true;
         /// Énergie perdue par tick au maximum d'inadaptation au climat local : coût
@@ -345,6 +346,15 @@ namespace Serina::Simulation
         /// Mesuré sur 6 graines à 10000 ticks : écart moyen à l'isolation idéale de 0.31 sans
         /// coût, 0.14 à ce taux.
         double thermalCostRate = 0.15;
+        /// Chance qu'une attaque réussie tue la proie, au lieu de seulement lui voler de
+        /// l'énergie. Le prédateur gagne alors une part de l'énergie de sa proie. Désactivée :
+        /// à 0.1, poissons vivants dans 6 mondes sur 10 à 8000 ticks, sans aucun gain de
+        /// sélection mesuré. À reprendre avec une vraie chaîne alimentaire.
+        double predationKillChance = 0.0;
+        /// Énergie dépensée par tick par un corps de taille maximale : la taille aide à
+        /// chasser, ce coût l'empêche d'être gratuite. Mesuré sur 8 graines à 4000 ticks :
+        /// taille moyenne normalisée de 0.43 sans coût, 0.31 avec ce taux et movementCost.
+        double sizeCostRate = 0.05;
     };
 
     /// @brief Moteur de simulation unifié : individus réels, espace réel,
@@ -620,6 +630,7 @@ namespace Serina::Simulation
         std::map<std::string, LineageBrain> brains_;      ///< un cerveau NEAT par espèce vivante
         std::vector<SpeciationEvent> speciationEvents_;
         std::vector<ExtinctionEvent> extinctionEvents_;
+        std::set<uint64_t> killedThisTick_;
         std::map<std::string, uint32_t> lastCounts_; ///< effectifs du tick précédent
         std::vector<HistorySample> history_;
         uint32_t historyInterval_ = 20; ///< ticks entre deux points, double quand l'historique est plein
@@ -1040,6 +1051,12 @@ namespace Serina::Simulation
                     organism.setEnergy(organism.getEnergy() - params_.thermalCostRate * gap * gap);
                 }
 
+                if (params_.sizeCostRate > 0.0)
+                {
+                    double size = normalizeTrait(Genetics::TraitType::SIZE, organism.getGenome().getTrait(Genetics::TraitType::SIZE));
+                    organism.setEnergy(organism.getEnergy() - params_.sizeCostRate * size);
+                }
+
                 // Régulation par la densité : la case ne peut nourrir qu'un
                 // nombre borné d'individus (voir carryingCapacityPerResource).
                 uint32_t localPopulation = 0;
@@ -1163,6 +1180,16 @@ namespace Serina::Simulation
                         if (evasionRoll(rng_) < evasionEffort * WorldSimulationParameters::MAX_PERSONAL_EVASION_CHANCE)
                             continue; // la proie a évité l'attaque : aucun transfert, comme une chasse manquée
 
+                        if (params_.predationKillChance > 0.0 && evasionRoll(rng_) < params_.predationKillChance)
+                        {
+                            // Le prédateur assimile une part de l'énergie de sa proie.
+                            lifeEvents_.predationKills++;
+                            population_[predatorIdx].setEnergy(population_[predatorIdx].getEnergy() + population_[preyIdx].getEnergy() * 0.5);
+                            killedThisTick_.insert(population_[preyIdx].getId());
+                            population_[preyIdx].setAlive(false);
+                            continue;
+                        }
+
                         // Transfert à somme exactement nulle : la MÊME
                         // constante des deux côtés d'un événement unique et
                         // appairé (pas deux tirages indépendants qui
@@ -1183,6 +1210,8 @@ namespace Serina::Simulation
             {
                 if (o.isAlive())
                     continue;
+                if (killedThisTick_.count(o.getId()))
+                    continue; // déjà comptée comme proie
                 if (o.getEnergy() <= 0.0)
                     lifeEvents_.starvationDeaths++;
                 else
@@ -1192,6 +1221,7 @@ namespace Serina::Simulation
                 std::remove_if(population_.begin(), population_.end(),
                                 [](const Evolution::Organism &o) { return !o.isAlive(); }),
                 population_.end());
+            killedThisTick_.clear();
         }
 
         void reproduce()

@@ -51,6 +51,10 @@ namespace
             p.movementNoise = value;
         else if (key == "movementCost")
             p.movementCost = value;
+        else if (key == "predationKillChance")
+            p.predationKillChance = value;
+        else if (key == "sizeCostRate")
+            p.sizeCostRate = value;
         else if (key == "thermalCostRate")
             p.thermalCostRate = value;
         else if (key == "climateCostRate")
@@ -111,6 +115,7 @@ int main(int argc, char **argv)
     // corrélation à l'intérieur d'une espèce montre une adaptation locale.
     std::map<std::string, Correlation> insulationBySpecies, resistanceBySpecies;
     double meanInsulationGap = 0.0;
+    double meanSize = 0.0;
     // Moyenne d'isolation idéale de chaque espèce, pour comparer chaque individu à sa
     // case et à ce qu'exigerait le climat moyen de son espèce.
     std::map<std::string, std::pair<double, size_t>> idealBySpecies;
@@ -139,6 +144,7 @@ int main(int argc, char **argv)
         insulationBySpecies[ind.species].add(ind.insulation, Habitat::idealInsulation(region.temperature));
         resistanceBySpecies[ind.species].add(ind.resistance, stress);
         meanInsulationGap += std::abs(ind.insulation - Habitat::idealInsulation(region.temperature));
+        meanSize += ind.sizeScale;
         const auto &speciesIdeal = idealBySpecies[ind.species];
         const double speciesMean = speciesIdeal.first / static_cast<double>(speciesIdeal.second);
         gapToSpeciesMean += std::abs(ind.insulation - speciesMean);
@@ -184,13 +190,13 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
                 byGroup[Taxonomy::BiologicalType::MOLLUSC], fish ? 100.0 * fishDry / fish : 0.0,
                 100.0 * forbidden / n, climateCorrelation, insulationVsClimate.value(),
-                withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
+                withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills), (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;
