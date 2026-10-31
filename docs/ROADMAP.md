@@ -123,9 +123,15 @@ Fait (mesuré sur 16 graines, 4 000 ticks) :
   dans la plage de leur groupe. Arthropodes vivants dans 15 mondes sur 16, contre 0 à 2 :
   ils ne pouvaient presque pas se reproduire.
 
+- Habitat par groupe biologique (`Habitat.hpp`) : 0 % d'individus hors habitat, oiseaux qui
+  survolent l'eau sans s'y nourrir, biomes d'origine présents sur toutes les cartes.
+- Coût énergétique du climat (`climateCostRate`) : effet de dose mesuré, mais encore faible.
+
 Reste à faire :
 
-- Mollusques vivants dans seulement 6 mondes sur 16 : trouver pourquoi.
+- Adaptation au climat trop faible : corrélation résistance/climat de 0,045 sur 12 graines
+  inédites à 5 000 ticks (0,022 sans coût). Critère non atteint.
+- Mollusques vivants dans seulement 5 mondes sur 12 à 5 000 ticks : trouver pourquoi.
 - Spéciations encore trop rapides (46 en 4 000 ticks).
 - Introduire le coût du déplacement et de la taille ; donner un effet ou retirer
   chacun des 5 traits inertes.
