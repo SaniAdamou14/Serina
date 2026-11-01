@@ -51,6 +51,11 @@ export interface AverageTraits {
  * must stay in sync with that table. Used only to normalize a real trait
  * value into a bar width; the values themselves always come from the
  * backend. */
+/** Valeur d'un trait à afficher ; une valeur absente ne doit jamais faire planter la page. */
+export function formatTrait(value: number | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(2) : 'n/d'
+}
+
 export const TRAIT_BOUNDS: Record<keyof AverageTraits, { min: number; max: number; label: string }> = {
   size: { min: 0.1, max: 2.0, label: 'Taille' },
   speed: { min: 0.1, max: 3.0, label: 'Vitesse' },

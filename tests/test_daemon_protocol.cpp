@@ -171,6 +171,14 @@ TEST_CASE("lineages includes the real speciation event history shape", "[daemon]
     REQUIRE(response["convergenceSignals"].is_array());
 }
 
+TEST_CASE("ping reports the protocol version the API checks", "[daemon]")
+{
+    Daemon::SimulationRegistry registry;
+    auto response = Daemon::handleCommand(registry, makeRequest("ping", "", {}));
+    REQUIRE(response["status"] == "success");
+    REQUIRE(response["protocolVersion"] == Daemon::PROTOCOL_VERSION);
+}
+
 TEST_CASE("play and pause toggle the running flag reported by status", "[daemon]")
 {
     Daemon::SimulationRegistry registry;

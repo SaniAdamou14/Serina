@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
-import { AverageTraits, BIOLOGICAL_GROUP_LABELS, TRAIT_BOUNDS } from '../types'
+import { AverageTraits, BIOLOGICAL_GROUP_LABELS, formatTrait, TRAIT_BOUNDS } from '../types'
 import { useLineageHues } from '../hooks/useLineageHues'
 import { creatureColor } from '../utils/lineageColor'
 import { GameWindow } from './GameWindow'
@@ -66,11 +66,11 @@ export function SpeciesComparisonPanel() {
                     <td className="px-2 py-1 text-slate-400" title={`De ${bounds.min} à ${bounds.max}`}>{bounds.label}</td>
                     {entries.map((l) => {
                       const value = l.averageTraits[key]
-                      const fraction = Math.max(0, Math.min(1, (value - bounds.min) / (bounds.max - bounds.min)))
+                      const fraction = Math.max(0, Math.min(1, ((value ?? bounds.min) - bounds.min) / (bounds.max - bounds.min)))
                       return (
                         <td key={l.speciesName} className="px-2 py-1">
                           <div className="flex items-center gap-2">
-                            <span className="w-8 text-right shrink-0 tabular-nums">{value.toFixed(2)}</span>
+                            <span className="w-8 text-right shrink-0 tabular-nums">{formatTrait(value)}</span>
                             <div className="flex-1 bg-slate-950 border border-slate-700 h-2">
                               <div className="bg-primary-500 h-full" style={{ width: `${fraction * 100}%` }} />
                             </div>

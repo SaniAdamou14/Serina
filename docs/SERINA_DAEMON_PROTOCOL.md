@@ -51,7 +51,7 @@ explaining why) plus the echoed `id`.
 | `regions` | - | `gridWidth`, `gridHeight`, `regions`: one entry per cell (`gridX`, `gridY`, `environmentType`, `environmentName`, `temperature`, `primaryProducers`, `predationPressure`, `competitionIntensity`, `climaticStress`, `population`, the real count of living organisms in that cell right now). |
 | `individuals` | - | `individuals`: one real entry per living organism (`id`, `species`, `x`, `y`, `energy`, `age`), no genome internals, just enough to place and inspect it. |
 | `lineages` | - | `lineages` (see below) plus `speciationEvents`: the **full array** of real speciation events (`parentSpecies`, `newSpecies`, `generation`, `geneticDistanceAtSplit`). |
-| `ping` | - | Liveness check; always succeeds if the daemon is up. |
+| `ping` | - | Liveness check; always succeeds if the daemon is up. Returns `protocolVersion`, which the API checks before starting a game. |
 
 A lineage entry (used by both `status` and `lineages`):
 

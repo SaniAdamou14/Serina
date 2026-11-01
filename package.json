@@ -11,6 +11,7 @@
     "install:all": "npm install && cd api && npm install && cd ../web && npm install",
     "start:api": "cd api && npm start",
     "start:web": "cd web && npm run dev",
+    "predev": "node tools/ensure-daemon.js",
     "dev": "concurrently \"npm run start:api\" \"npm run start:web\"",
     "start:both": "concurrently \"npm run start:api\" \"npm run start:web\"",
     "build": "cd web && npm run build",

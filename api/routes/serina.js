@@ -36,6 +36,10 @@ router.post('/start', async (req, res) => {
       });
     }
 
+    if (simulationEngine.staleEngine) {
+      return res.status(503).json({ error: simulationEngine.staleEngine });
+    }
+
     const result = await simulationEngine.startSimulation({
       simulationId: req.body.simulationId,
       name: req.body.name,

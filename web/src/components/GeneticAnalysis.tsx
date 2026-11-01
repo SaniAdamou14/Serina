@@ -1,6 +1,6 @@
 import { useSimulation } from '@services/SimulationContext'
 import { useSelection } from '@services/SelectionContext'
-import { AverageTraits, LineageStatus, TRAIT_BOUNDS } from '../types'
+import { AverageTraits, formatTrait, LineageStatus, TRAIT_BOUNDS } from '../types'
 import { GameColumn, GameTable } from './GameTable'
 
 const TRAIT_KEYS = Object.keys(TRAIT_BOUNDS) as (keyof AverageTraits)[]
@@ -23,9 +23,9 @@ const SHORT_LABELS: Record<keyof AverageTraits, string> = {
   diet: 'Régime'
 }
 
-function normalized(key: keyof AverageTraits, value: number): number {
+function normalized(key: keyof AverageTraits, value: number | undefined): number {
   const { min, max } = TRAIT_BOUNDS[key]
-  return Math.max(0, Math.min(1, (value - min) / (max - min)))
+  return Math.max(0, Math.min(1, ((value ?? min) - min) / (max - min)))
 }
 
 /** Onglet Génétique : chaque espèce et ses traits moyens, plus la case est sable plus le trait est haut. */
@@ -53,9 +53,9 @@ export function GeneticAnalysis() {
           <span
             className="block px-1 -mx-1"
             style={{ background: `rgb(197 165 87 / ${(level * 0.55).toFixed(2)})` }}
-            title={`${TRAIT_BOUNDS[key].label} : ${l.averageTraits[key].toFixed(2)}`}
+            title={`${TRAIT_BOUNDS[key].label} : ${formatTrait(l.averageTraits[key])}`}
           >
-            {l.averageTraits[key].toFixed(2)}
+            {formatTrait(l.averageTraits[key])}
           </span>
         )
       }

@@ -57,6 +57,8 @@ namespace
             p.carryingCapacityPerResource = value;
         else if (key == "preyDietGap")
             p.preyDietGap = value;
+        else if (key == "plantHalfSaturation")
+            p.plantHalfSaturation = value;
         else if (key == "huntSatiety")
             p.huntSatiety = value;
         else if (key == "huntRate")

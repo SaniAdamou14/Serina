@@ -24,6 +24,10 @@
 
 namespace Serina::Daemon
 {
+    /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
+    /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
+    inline constexpr int PROTOCOL_VERSION = 2;
+
     using json = nlohmann::json;
 
     inline json errorJson(const std::string &msg)
@@ -472,6 +476,7 @@ namespace Serina::Daemon
         else if (command == "ping")
         {
             result = successJson();
+            result["protocolVersion"] = PROTOCOL_VERSION;
         }
         else
         {
