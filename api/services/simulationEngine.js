@@ -225,6 +225,10 @@ class SimulationEngine extends EventEmitter {
       this.client.send('lineages', simulationId)
     ]);
 
+    // Le moteur peut se mettre en pause tout seul (extinction totale) : sans ça, la reprise serait ignorée.
+    if (status.running === false) instance.isRunning = false;
+    status.ticksPerSecond = instance.ticksPerSecond || DEFAULT_TICKS_PER_SECOND;
+
     const data = { timestamp: Date.now(), status, regions, individuals, lineages };
     instance.lastData = data;
 
@@ -302,8 +306,6 @@ class SimulationEngine extends EventEmitter {
   resumeSimulation(simulationId) {
     const instance = this.simulations.get(simulationId);
     if (!instance) return { success: false, error: `Simulation ${simulationId} not found` };
-    if (instance.isRunning) return { success: true };
-
     instance.isRunning = true;
     this.client.send('play', simulationId, { ticksPerSecond: instance.ticksPerSecond || DEFAULT_TICKS_PER_SECOND }).catch((err) => {
       console.error(`Failed to resume simulation ${simulationId}:`, err.message);

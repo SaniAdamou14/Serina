@@ -12,6 +12,31 @@ evolution, on the real Earth, with the interface and robustness of RimWorld or
 better. The project is far from that today. [`docs/ROADMAP.md`](docs/ROADMAP.md) has the measured
 starting point and the plan.
 
+
+## Screenshots
+
+All captured from the running game, with real engine data.
+
+![A world seen from above: biomes, plants, creatures and a fire started by lightning](docs/images/map.jpg)
+
+*The whole map. Each creature is a real individual, and plants follow each cell's real level.*
+
+![Canaries, ants, trees and the dead up close](docs/images/creatures.jpg)
+
+*Up close: the dead stay where they fell, turn brown, then leave bones.*
+
+![A fire burning through a cell](docs/images/fire.jpg)
+
+*A fire lit by lightning, not scripted. It burns the plants of the cell and hurts creatures on the ground.*
+
+![The Genetics window and the genome of the canary](docs/images/genome.jpg)
+
+*Genome of a species: the average of its real diploid traits.*
+
+![Population of each species over time](docs/images/graphs.jpg)
+
+*Population by species, recorded by the engine.*
+
 ## What works today
 
 **The engine** (`UnifiedWorldSimulator`, `include/Serina/WorldSimulation.hpp`):

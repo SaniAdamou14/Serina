@@ -22,6 +22,9 @@ interface SimulationContextType {
   disconnect: () => void
 }
 
+/** Temps laissé au moteur pour appliquer une pause ou une reprise. */
+const COMMAND_SETTLE_MS = 2000
+
 const SimulationContext = createContext<SimulationContextType | undefined>(undefined)
 
 const CURRENT_SIMULATION_KEY = 'serina.currentSimulation'
@@ -51,6 +54,8 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
   const [simulationData, setSimulationData] = useState<SimulationTick | null>(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  // Dernière commande de pause ou reprise : une réponse déjà en route ne doit pas l'annuler à l'écran.
+  const pendingRunning = useRef<{ value: boolean; until: number } | null>(null)
   const [connectionError, setConnectionError] = useState<string | null>(null)
   const [currentSimulationId, setCurrentSimulationId] = useState<SimulationId | null>(null)
   const [availableSimulations, setAvailableSimulations] = useState<SimulationSummary[]>([])
@@ -128,7 +133,12 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
       // l'état réel du daemon (ex. bouton Pause qui semblait ne rien
       // faire), et ne reflétaient jamais une mise en pause automatique
       // décidée côté serveur (ex. extinction totale, voir DaemonProtocol.hpp).
-      if (typeof tick.status.running === 'boolean') setIsRunning(tick.status.running)
+      if (typeof tick.status.running === 'boolean') {
+        const pending = pendingRunning.current
+        if (pending && Date.now() < pending.until && pending.value !== tick.status.running) return
+        pendingRunning.current = null
+        setIsRunning(tick.status.running)
+      }
     })
 
     socket.on('simulation-state', (state: { isRunning?: boolean; latestData?: SimulationTick | null }) => {
@@ -279,6 +289,12 @@ export function SimulationProvider({ children }: SimulationProviderProps) {
 
   const sendCommand = useCallback((command: SimulationCommand) => {
     const socket = socketRef.current
+
+    if (command === SimulationCommand.PAUSE || command === SimulationCommand.RESUME) {
+      const running = command === SimulationCommand.RESUME
+      pendingRunning.current = { value: running, until: Date.now() + COMMAND_SETTLE_MS }
+      setIsRunning(running)
+    }
 
     if (socket && socket.connected && currentSimulationId) {
       socket.emit('simulation-command', { command, simulationId: currentSimulationId })
