@@ -43,13 +43,14 @@ These are measured or read from the code. See the roadmap for the details.
   unseen seeds), but each species lives in a narrow range of climates, so there is no
   measurable local adaptation within a species. Biomes never change.
 - **Few species**: a split needs real geographic isolation, and a 12×9 map has few
-  real barriers, so worlds hold about 10 species. Founder groups are not always safe either: over 8000 ticks, birds survive
-  in about 8 worlds out of 10.
+  real barriers, so most splits come from diet. Worlds hold about 11 species after
+  20000 ticks. Founder groups are not always safe: fish survive in about half of
+  worlds at that length, birds and arthropods in about 5 out of 6.
 - **Several traits have no direct effect on survival** yet: intelligence, hearing,
   camouflage, social behavior and reproduction rate.
-- **The food chain is young**: plants, corpses and hunting exist, but plants stay
-  about 90% full, so food limits little. Canaries do not fill the food chain: they
-  hold 1 diet niche out of 3 in a typical world, 2 at best.
+- **The food chain is young**: plants limit each cell, though they stay about 80%
+  full. Canaries radiate into about 2 bird species over 20000 ticks, up to 3, holding
+  2 diet niches out of 3, never all three.
 - **The engine does not scale to a planet**: about 5 µs per individual per tick
   on one core, and 2.7 KB of memory per individual.
 - **The API has no authentication**, so it should only run locally.

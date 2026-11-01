@@ -338,7 +338,9 @@ namespace Serina::Simulation
         /// s'applique qu'ENTRE espèces), une lignée seule dans son biome
         /// croissait exponentiellement sans plafond (534 000 individus à la
         /// génération 9900, sur les trois graines testées).
-        double carryingCapacityPerResource = 400.0;
+        // Assez haut pour ne plus agir : c'est le manque de plantes qui limite une case. À 400, ce
+        // plafond coupait le revenu avant que les plantes ne manquent, et elles restaient pleines.
+        double carryingCapacityPerResource = 100000.0;
 
         /// Échelle du déplacement par pas (1 = jusqu'à cellSize × vitesse par pas).
         /// Mesuré sur 6 graines à 10000 ticks, avec le coût thermique : à 0.03, poissons
@@ -366,7 +368,7 @@ namespace Serina::Simulation
         double thermalCostRate = 0.15;
         /// Part de la capacité à laquelle une case de plantes ne donne plus que la moitié de
         /// ce qu'elle donne pleine : plus la case est broutée, plus manger y rapporte peu.
-        double plantHalfSaturation = 0.3;
+        double plantHalfSaturation = 1.0;
         /// Énergie de cadavres sur une case pour laquelle un charognard mange à moitié.
         double carrionHalfSaturation = 30.0;
         /// Prix du généraliste [0,1] : à 0 le rendement suit le régime en ligne droite, à 1 il
@@ -383,13 +385,13 @@ namespace Serina::Simulation
         double preyDietGap = 0.1;
         /// Écart de régime au-delà duquel deux individus ne s'accouplent pas : ils ne
         /// partagent plus le même mode de vie. C'est ce qui rend possible une divergence sur place.
-        double assortativeMatingGap = 0.3;
+        double assortativeMatingGap = 0.15;
         /// Écart de régime entre deux groupes d'une espèce à partir duquel elle peut se scinder.
-        double nicheSplitGap = 0.12;
+        double nicheSplitGap = 0.06;
         /// Ticks pendant lesquels cet écart doit durer avant la scission.
         uint32_t nicheSplitDuration = 500;
         /// Biomasse végétale maximale d'une case, par unité de ressource du biome.
-        double plantCapacityPerResource = 2000.0;
+        double plantCapacityPerResource = 1000.0;
         /// Croissance logistique des plantes par tick.
         double plantGrowthRate = 0.05;
         /// Fraction des cadavres décomposée par tick ; une part revient au sol et aux plantes.
