@@ -111,7 +111,10 @@ int main(int argc, char **argv)
 
     Simulation::UnifiedWorldSimulator sim(params, seed);
     sim.seedFounderSpecies(40);
-    for (int t = 0; t < ticks; ++t)
+    // Un monde sans limite de population saturerait la mémoire de la machine : on s'arrête et on le dit.
+    constexpr size_t POPULATION_GUARD = 30000;
+    int ranTicks = 0;
+    for (int t = 0; t < ticks && sim.getPopulationCount() <= POPULATION_GUARD; ++t, ++ranTicks)
         sim.step();
 
     const auto inds = sim.getIndividualSnapshots();
@@ -198,6 +201,7 @@ int main(int argc, char **argv)
     // Les niches occupées par les descendants du canari : tous les oiseaux en descendent.
     bool birdGuild[3] = {false, false, false};
     bool anyGuild[3] = {false, false, false};
+    int birdSpecies = 0;
     double birdMinDiet = 1.0, birdMaxDiet = 0.0;
     for (const auto &lineage : lineages)
     {
@@ -209,6 +213,7 @@ int main(int argc, char **argv)
         if (lineage.biologicalType == Taxonomy::BiologicalType::BIRD)
         {
             birdGuild[guild] = true;
+            birdSpecies++;
             birdMinDiet = std::min(birdMinDiet, d);
             birdMaxDiet = std::max(birdMaxDiet, d);
         }
@@ -256,7 +261,7 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
@@ -264,7 +269,7 @@ int main(int argc, char **argv)
                 100.0 * forbidden / n, climateCorrelation, insulationVsClimate.value(),
                 withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills),
                 int(birdGuild[0]) + int(birdGuild[1]) + int(birdGuild[2]), int(anyGuild[0]) + int(anyGuild[1]) + int(anyGuild[2]),
-                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
+                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, ranTicks, birdSpecies, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;

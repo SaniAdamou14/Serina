@@ -55,8 +55,8 @@ Constats issus de la lecture du code :
 - **Traits sans coût** : taille, agressivité et vision n'ont aucun coût.
 - **Traits sans effet** : 5 traits sur 12 n'ont aucun effet direct sur la survie
   (intelligence, ouïe, camouflage, comportement social, taux de reproduction).
-- **Chaîne alimentaire encore jeune** : plantes, cadavres et chasse existent, mais les plantes
-  restent presque pleines (0,9 de leur capacité), donc la nourriture limite peu.
+- **Chaîne alimentaire encore jeune** : plantes, cadavres et chasse existent, et le manque de
+  plantes limite désormais les cases, mais elles restent à 0,8 de leur capacité en moyenne.
 - **Fondateurs fragiles** : sur 120 graines et 4 000 ticks, les arthropodes
   disparaissent dans plus de 9 mondes sur 10 (cause à chercher en M1).
 - **Dette** : aucun test web ni API.
@@ -285,10 +285,12 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
     10 (9 avant), poissons dans 10 (8 avant), population de 4445 au lieu de 6957. 2 niches sur 3
     sont occupées (1 sur 3 à 20 000 ticks sans chasse). La part des scissions dues au régime
     n'est pas mesurée.
-  - Objectif pas encore atteint : les canaris n'occupent pas toute la chaîne (1 niche sur 3 en
-    médiane, 2 au mieux). À 20 000 ticks, avant la règle de la faim, les 3 niches étaient
-    occupées mais surtout par d'autres groupes, et les oiseaux ne survivaient que dans 3 mondes
-    sur 6 (5 sans chasse). Ce résultat reste à refaire avec la règle de la faim.
+  - Radiation des canaris, en partie atteinte. Le plafond de densité par case est retiré : c'est
+    le manque de plantes qui limite, et l'accouplement est plus sélectif selon le régime. Mesuré
+    sur 6 graines nouvelles à 20 000 ticks : 2 espèces d'oiseaux issues du canari en médiane, 3 au
+    mieux, sur 2 niches de régime sur 3, avec un écart de régime de 0,50 entre elles. Les 3 niches
+    sont occupées toutes espèces confondues, mais les oiseaux n'occupent pas encore les 3. Oiseaux
+    vivants dans 5 mondes sur 6, arthropodes 5, mollusques 6, poissons 3 seulement.
   - Fait, côté carte : plantes dessinées selon le niveau réel de chaque case, qui jaunissent puis
     disparaissent quand la case est broutée, et morts à leur vraie position, sur le dos, qui
     brunissent puis deviennent des os ; une proie mangée ne laisse que ses os. 60 images/s sur
