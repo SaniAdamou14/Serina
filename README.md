@@ -91,7 +91,8 @@ npm install   # at the repository root, this installs the api and web workspaces
 npm run dev   # api on port 3001, web on port 3000
 ```
 
-The API starts `build/bin/serina_daemon` itself if it is not already running.
+`npm run dev` rebuilds `serina_daemon` when the C++ code is newer than the executable, and the
+API starts it if it is not already running. An engine with the wrong protocol version is refused.
 
 PostgreSQL is optional. Without it, live simulation still works, but history
 and saved simulations are unavailable. Connection settings are in

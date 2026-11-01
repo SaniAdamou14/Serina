@@ -25,6 +25,8 @@ const POLL_INTERVAL_MS = 500;
 const DEFAULT_TICKS_PER_SECOND = 4;
 const CONNECT_RETRIES = 20;
 const CONNECT_RETRY_DELAY_MS = 250;
+/** PROTOCOL_VERSION de include/Serina/DaemonProtocol.hpp. */
+const REQUIRED_PROTOCOL = 2;
 
 class SimulationEngine extends EventEmitter {
   constructor() {
@@ -33,6 +35,7 @@ class SimulationEngine extends EventEmitter {
     this.daemonExecutablePath = null;
     this.daemonProcess = null;
     this.client = null;
+    this.staleEngine = null;
   }
 
   async initialize() {
@@ -62,6 +65,18 @@ class SimulationEngine extends EventEmitter {
     }
 
     console.log(`✅ Connected to serina_daemon on 127.0.0.1:${DAEMON_PORT}${alreadyRunning ? ' (already running)' : ''}`);
+    await this.checkProtocol(alreadyRunning);
+  }
+
+  /** Un ancien moteur enverrait des données incomplètes : autant le dire tout de suite. */
+  async checkProtocol(alreadyRunning) {
+    const reply = await this.client.send('ping').catch(() => null);
+    const version = reply && reply.protocolVersion;
+    if (version === REQUIRED_PROTOCOL) return;
+    this.staleEngine = alreadyRunning
+      ? 'Un ancien moteur serina_daemon tourne encore. Arrête-le puis relance "npm run dev".'
+      : 'Le moteur est périmé. Relance "npm run dev" pour le recompiler, ou lance "cmake --build build --target serina_daemon".';
+    console.error(`❌ serina_daemon protocol ${version ?? 'inconnu'}, attendu ${REQUIRED_PROTOCOL}. ${this.staleEngine}`);
   }
 
   isAvailable() {

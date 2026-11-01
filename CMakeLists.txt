@@ -16,6 +16,11 @@ endif()
 
 option(BUILD_TESTS "Build test executables" ON)
 
+# Sans type de compilation, GCC n'optimise rien et le moteur tourne bien plus lentement.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 include_directories(include)
 
 add_subdirectory(src)
