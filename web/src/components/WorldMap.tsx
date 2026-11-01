@@ -187,9 +187,14 @@ export function WorldMap() {
   useEffect(() => {
     if (!renderer.current || !regionCells) return;
     renderer.current.setVegetation(
-      regionCells.map((r) => ({ gridX: r.gridX, gridY: r.gridY, layer: BIOME_LAYERS[r.environmentName] ?? 0, plants: r.plants ?? 1 }))
+      regionCells.map((r) => ({ gridX: r.gridX, gridY: r.gridY, layer: BIOME_LAYERS[r.environmentName] ?? 0, plants: r.plants ?? 1, rain: r.rain ?? 0, fire: r.fire ?? 0, scorch: r.scorch ?? 0 }))
     );
   }, [regionCells, terrainKey, canvas]);
+
+  const lightning = simulationData?.regions.lightning;
+  useEffect(() => {
+    renderer.current?.setLightning(lightning ?? []);
+  }, [lightning, canvas]);
 
   const corpseList = simulationData?.individuals.corpses;
   useEffect(() => {

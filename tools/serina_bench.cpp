@@ -61,6 +61,12 @@ namespace
             p.plantHalfSaturation = value;
         else if (key == "huntSatiety")
             p.huntSatiety = value;
+        else if (key == "stormCount")
+            p.stormCount = static_cast<int>(value);
+        else if (key == "fireDamage")
+            p.fireDamage = value;
+        else if (key == "lightningChance")
+            p.lightningChance = value;
         else if (key == "huntRate")
             p.huntRate = value;
         else if (key == "assortativeMatingGap")
@@ -261,7 +267,7 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ignitions\":%llu,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
@@ -269,7 +275,7 @@ int main(int argc, char **argv)
                 100.0 * forbidden / n, climateCorrelation, insulationVsClimate.value(),
                 withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills),
                 int(birdGuild[0]) + int(birdGuild[1]) + int(birdGuild[2]), int(anyGuild[0]) + int(anyGuild[1]) + int(anyGuild[2]),
-                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, ranTicks, birdSpecies, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
+                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, static_cast<unsigned long long>(sim.getIgnitionCount()), ranTicks, birdSpecies, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;

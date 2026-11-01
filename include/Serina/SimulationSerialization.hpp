@@ -327,6 +327,12 @@ namespace Serina::Simulation
             {"plantHalfSaturation", params_.plantHalfSaturation},
             {"carrionHalfSaturation", params_.carrionHalfSaturation},
             {"dietSpecialization", params_.dietSpecialization},
+            {"stormCount", params_.stormCount},
+            {"stormRadius", params_.stormRadius},
+            {"lightningChance", params_.lightningChance},
+            {"fireMoistureLimit", params_.fireMoistureLimit},
+            {"fireDamage", params_.fireDamage},
+            {"fireSpreadChance", params_.fireSpreadChance},
             {"huntRate", params_.huntRate},
             {"huntSatiety", params_.huntSatiety},
             {"preyDietGap", params_.preyDietGap},
@@ -387,6 +393,15 @@ namespace Serina::Simulation
         j["historyInterval"] = historyInterval_;
         j["plants"] = plants_;
         j["carrion"] = carrion_;
+        j["rain"] = rain_;
+        j["moisture"] = moisture_;
+        j["fire"] = fire_;
+        j["scorch"] = scorch_;
+        j["ignitions"] = ignitions_;
+        json storms = json::array();
+        for (const auto &storm : storms_)
+            storms.push_back({{"x", storm.x}, {"y", storm.y}, {"vx", storm.vx}, {"vy", storm.vy}, {"life", storm.life}});
+        j["storms"] = storms;
         json nicheStreak = json::object();
         for (const auto &[name, streak] : nicheStreak_)
             nicheStreak[name] = streak;
@@ -495,6 +510,12 @@ namespace Serina::Simulation
             params.plantHalfSaturation = pj.value("plantHalfSaturation", params.plantHalfSaturation);
             params.carrionHalfSaturation = pj.value("carrionHalfSaturation", params.carrionHalfSaturation);
             params.dietSpecialization = pj.value("dietSpecialization", params.dietSpecialization);
+            params.stormCount = pj.value("stormCount", params.stormCount);
+            params.stormRadius = pj.value("stormRadius", params.stormRadius);
+            params.lightningChance = pj.value("lightningChance", params.lightningChance);
+            params.fireMoistureLimit = pj.value("fireMoistureLimit", params.fireMoistureLimit);
+            params.fireDamage = pj.value("fireDamage", params.fireDamage);
+            params.fireSpreadChance = pj.value("fireSpreadChance", params.fireSpreadChance);
             params.huntRate = pj.value("huntRate", params.huntRate);
             params.huntSatiety = pj.value("huntSatiety", params.huntSatiety);
             params.preyDietGap = pj.value("preyDietGap", params.preyDietGap);
@@ -562,6 +583,22 @@ namespace Serina::Simulation
         sim->historyInterval_ = j.value("historyInterval", sim->historyInterval_);
         sim->plants_ = j.value("plants", std::vector<double>{});
         sim->carrion_ = j.value("carrion", std::vector<double>{});
+        sim->rain_ = j.value("rain", std::vector<double>{});
+        sim->moisture_ = j.value("moisture", std::vector<double>{});
+        sim->fire_ = j.value("fire", std::vector<double>{});
+        sim->scorch_ = j.value("scorch", std::vector<double>{});
+        sim->ignitions_ = j.value("ignitions", uint64_t{0});
+        const json savedStorms = j.value("storms", json::array());
+        for (const auto &saved : savedStorms)
+        {
+            Storm storm;
+            storm.x = saved.at("x").get<double>();
+            storm.y = saved.at("y").get<double>();
+            storm.vx = saved.at("vx").get<double>();
+            storm.vy = saved.at("vy").get<double>();
+            storm.life = saved.at("life").get<int>();
+            sim->storms_.push_back(storm);
+        }
         const json savedNicheStreak = j.value("nicheStreak", json::object());
         for (const auto &[name, streak] : savedNicheStreak.items())
             sim->nicheStreak_[name] = streak.get<uint32_t>();

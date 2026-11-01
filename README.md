@@ -48,6 +48,8 @@ These are measured or read from the code. See the roadmap for the details.
   worlds at that length, birds and arthropods in about 5 out of 6.
 - **Several traits have no direct effect on survival** yet: intelligence, hearing,
   camouflage, social behavior and reproduction rate.
+- **Weather and fire are not measured**: storms, lightning and fire are simulated and
+  drawn, but their effect on survival and on radiation has not been benched yet.
 - **The food chain is young**: plants limit each cell, though they stay about 80%
   full. Canaries radiate into about 2 bird species over 20000 ticks, up to 3, holding
   2 diet niches out of 3, never all three.

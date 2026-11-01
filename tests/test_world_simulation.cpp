@@ -882,3 +882,37 @@ TEST_CASE("the dead stay where they fell, then disappear", "[worldsim][foodweb]"
         CHECK(corpse.y <= height);
     }
 }
+
+TEST_CASE("storms wet the ground, and lightning can set dry land on fire", "[worldsim][weather]") {
+    WorldSimulationParameters params;
+    params.lightningChance = 0.05;
+    UnifiedWorldSimulator sim(params, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    CHECK(sim.getIgnitionCount() > 0);
+    bool rained = false;
+    bool scorched = false;
+    for (const auto &region : sim.getRegionSnapshots()) {
+        rained = rained || region.rain > 0.0;
+        scorched = scorched || region.scorch > 0.0;
+        CHECK(region.moisture >= 0.0);
+        CHECK(region.moisture <= 1.0);
+        CHECK(region.fire >= 0.0);
+        CHECK(region.fire <= 1.0);
+    }
+    CHECK(rained);
+    CHECK(scorched);
+}
+
+TEST_CASE("without storms there is neither rain nor fire", "[worldsim][weather]") {
+    WorldSimulationParameters params;
+    params.stormCount = 0;
+    UnifiedWorldSimulator sim(params, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 300; ++i)
+        sim.step();
+    CHECK(sim.getIgnitionCount() == 0);
+    CHECK(sim.getLightningSnapshots().empty());
+}

@@ -1,6 +1,6 @@
 import { ATLAS_COLUMNS, ATLAS_ROWS, buildCreatureAtlas, creatureFrame, furFrame, hasFur, RING_FRAME, SHADOW_FRAME } from './creatureAtlas';
 import { buildPropAtlas, PROP_COLUMNS, PROP_ROWS, PropFrame } from './propAtlas';
-import { CREATURE_FRAGMENT, CREATURE_VERTEX, TERRAIN_FRAGMENT, TERRAIN_VERTEX } from './shaders';
+import { CREATURE_FRAGMENT, CREATURE_VERTEX, TERRAIN_FRAGMENT, TERRAIN_VERTEX, WEATHER_FRAGMENT } from './shaders';
 import type { ViewBox } from '../utils/mapCamera';
 
 /** Couches de sol, dans l'ordre de leurs textures ; 7 et 8 sont l'eau, dessinée par le shader. */
@@ -34,7 +34,19 @@ export interface MapVegetationCell {
   gridY: number;
   layer: number;
   plants: number;
+  rain: number;
+  fire: number;
+  scorch: number;
 }
+
+export interface MapLightning {
+  x: number;
+  y: number;
+  age: number;
+}
+
+/** Durée d'un éclair à l'écran. */
+const FLASH_MS = 260;
 
 export interface MapCorpse {
   id: number;
@@ -132,6 +144,10 @@ export class MapRenderer {
   private corpseBuffer!: WebGLBuffer;
   private boneVao!: WebGLVertexArrayObject;
   private boneBuffer!: WebGLBuffer;
+  private flameVao!: WebGLVertexArrayObject;
+  private flameBuffer!: WebGLBuffer;
+  private weatherProgram!: WebGLProgram;
+  private weatherTexture!: WebGLTexture;
   private cellTexture!: WebGLTexture;
   private overlayTexture!: WebGLTexture;
 
@@ -156,6 +172,12 @@ export class MapRenderer {
   private propCount = 0;
   private fleshCount = 0;
   private boneCount = 0;
+  private flameCount = 0;
+  private flameKey = '';
+  private anyRain = false;
+  private knownStrikes = new Set<string>();
+  private flashStartMs = -Infinity;
+  private bolt: [number, number] = [0, 0];
 
   private frameHandle = 0;
   private startMs = performance.now();
@@ -208,6 +230,7 @@ export class MapRenderer {
     const gl = this.gl;
     this.terrainProgram = compile(gl, TERRAIN_VERTEX, TERRAIN_FRAGMENT);
     this.creatureProgram = compile(gl, CREATURE_VERTEX, CREATURE_FRAGMENT);
+    this.weatherProgram = compile(gl, TERRAIN_VERTEX, WEATHER_FRAGMENT);
 
     const corners = new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]);
     const cornerBuffer = gl.createBuffer();
@@ -244,12 +267,16 @@ export class MapRenderer {
     this.corpseVao = instancedVao(this.corpseBuffer);
     this.boneBuffer = gl.createBuffer()!;
     this.boneVao = instancedVao(this.boneBuffer);
+    this.flameBuffer = gl.createBuffer()!;
+    this.flameVao = instancedVao(this.flameBuffer);
     // Contexte WebGL neuf : les plantes doivent repartir dans leur nouveau tampon.
     this.vegetationKey = '';
-    this.propCount = this.fleshCount = this.boneCount = 0;
+    this.propCount = this.fleshCount = this.boneCount = this.flameCount = 0;
+    this.flameKey = '';
 
     this.cellTexture = this.dataTexture(1, 1, new Uint8Array([0, 0, 0, 255]));
     this.overlayTexture = this.dataTexture(1, 1, new Uint8Array([0, 0, 0, 0]));
+    this.weatherTexture = this.dataTexture(1, 1, new Uint8Array([0, 0, 0, 0]));
 
     this.colorArray = await this.loadLayerArray('color');
     this.normalArray = await this.loadLayerArray('normal');
@@ -420,6 +447,7 @@ export class MapRenderer {
     this.vegetation = cells;
     const world = this.world;
     if (!world) return;
+    this.updateWeather(cells, world);
     // Par paliers de 2,5 % : pas de reconstruction à chaque tick.
     const key = cells.map((c) => `${c.layer}.${Math.round(c.plants * 40)}`).join(',');
     if (key === this.vegetationKey) return;
@@ -480,6 +508,54 @@ export class MapRenderer {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.propBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
     this.propCount = placed.length;
+  }
+
+  /** Pluie, feu et cendres par case, et flammes aux endroits qui brûlent vraiment. */
+  private updateWeather(cells: MapVegetationCell[], world: MapWorld) {
+    const gl = this.gl;
+    const pixels = new Uint8Array(world.gridWidth * world.gridHeight * 4);
+    let anyRain = false;
+    for (const c of cells) {
+      const at = (c.gridY * world.gridWidth + c.gridX) * 4;
+      pixels[at] = Math.round(c.rain * 255);
+      pixels[at + 1] = Math.round(c.fire * 255);
+      pixels[at + 2] = Math.round(c.scorch * 255);
+      pixels[at + 3] = 255;
+      anyRain = anyRain || c.rain > 0;
+    }
+    this.anyRain = anyRain;
+    gl.deleteTexture(this.weatherTexture);
+    this.weatherTexture = this.dataTexture(world.gridWidth, world.gridHeight, pixels, gl.LINEAR);
+
+    const key = cells.filter((c) => c.fire > 0).map((c) => `${c.gridX}.${c.gridY}.${Math.round(c.fire * 8)}`).join(',');
+    if (key === this.flameKey) return;
+    this.flameKey = key;
+    const flames: number[] = [];
+    for (const c of cells) {
+      const count = Math.round(c.fire * 18);
+      for (let k = 0; k < count; k++) {
+        const half = 0.8 + hash(c.gridX, c.gridY, k, 9) * 0.9;
+        const x = (c.gridX + hash(c.gridX, c.gridY, k, 7)) * world.cellSize;
+        const y = (c.gridY + hash(c.gridX, c.gridY, k, 8)) * world.cellSize - half;
+        flames.push(x, y, half, half, 1, 1, 1, PropFrame.FLAME, k * 1.7, 0, 0, 0);
+      }
+    }
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.flameBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flames), gl.DYNAMIC_DRAW);
+    this.flameCount = flames.length / FLOATS_PER_INSTANCE;
+  }
+
+  /** Un éclair neuf illumine la carte ; ceux déjà vus restent listés quelques ticks par le moteur. */
+  setLightning(strikes: MapLightning[]) {
+    const known = new Set<string>();
+    for (const strike of strikes) {
+      const key = `${strike.x.toFixed(2)},${strike.y.toFixed(2)}`;
+      known.add(key);
+      if (this.knownStrikes.has(key) || strike.age > 2) continue;
+      this.flashStartMs = performance.now();
+      this.bolt = [strike.x, strike.y];
+    }
+    this.knownStrikes = known;
   }
 
   /** Les morts : la chair se fonce, puis il ne reste que les os ; une proie mangée n'en laisse que les os. */
@@ -581,6 +657,8 @@ export class MapRenderer {
     this.drawNature(time);
     this.drawCreatures(time, now);
     this.gl.disable(this.gl.DEPTH_TEST);
+    this.drawFlames(time);
+    this.drawSky(time, now);
   };
 
   /** Dessine tout le monde hors écran, pour la minicarte : le vrai terrain, sans créatures. */
@@ -649,7 +727,54 @@ export class MapRenderer {
     bind(1, gl.TEXTURE_2D_ARRAY, this.normalArray, 'uNormals');
     bind(2, gl.TEXTURE_2D, this.cellTexture, 'uCells');
     bind(3, gl.TEXTURE_2D, this.overlayTexture, 'uOverlay');
+    bind(4, gl.TEXTURE_2D, this.weatherTexture, 'uWeather');
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+
+  private drawFlames(time: number) {
+    if (this.flameCount === 0) return;
+    const gl = this.gl;
+    const p = this.creatureProgram;
+    gl.useProgram(p);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.propAtlas);
+    gl.uniform1i(gl.getUniformLocation(p, 'uAtlas'), 0);
+    gl.uniform4f(gl.getUniformLocation(p, 'uView'), this.view.x, this.view.y, this.view.w, this.view.h);
+    gl.uniform2f(gl.getUniformLocation(p, 'uAtlasGrid'), PROP_COLUMNS, PROP_ROWS);
+    gl.uniform1f(gl.getUniformLocation(p, 'uTime'), time);
+    gl.uniform1f(gl.getUniformLocation(p, 'uFur'), 0);
+    gl.uniform1f(gl.getUniformLocation(p, 'uShadow'), 0);
+    gl.uniform1f(gl.getUniformLocation(p, 'uProp'), 2);
+    gl.bindVertexArray(this.flameVao);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.flameCount);
+    gl.uniform1f(gl.getUniformLocation(p, 'uProp'), 0);
+    gl.bindVertexArray(null);
+  }
+
+  /** Nuages, pluie et éclair, par-dessus tout le reste. */
+  private drawSky(time: number, now: number) {
+    const flash = Math.max(0, Math.min(1, 1 - (now - this.flashStartMs) / FLASH_MS));
+    if (!this.anyRain && flash <= 0) return;
+    const gl = this.gl;
+    const world = this.world!;
+    const p = this.weatherProgram;
+    gl.useProgram(p);
+    gl.bindVertexArray(this.quad);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.weatherTexture);
+    gl.uniform1i(gl.getUniformLocation(p, 'uWeather'), 0);
+    gl.uniform4f(gl.getUniformLocation(p, 'uView'), this.view.x, this.view.y, this.view.w, this.view.h);
+    gl.uniform2f(gl.getUniformLocation(p, 'uGrid'), world.gridWidth, world.gridHeight);
+    gl.uniform1f(gl.getUniformLocation(p, 'uCellSize'), world.cellSize);
+    gl.uniform1f(gl.getUniformLocation(p, 'uTime'), time);
+    gl.uniform1f(gl.getUniformLocation(p, 'uFlash'), flash);
+    gl.uniform2f(gl.getUniformLocation(p, 'uBolt'), this.bolt[0], this.bolt[1]);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindVertexArray(null);
   }
 
   /** Morts et plantes, avant les créatures : ce qu'ils cachent reste caché grâce à la profondeur. */
