@@ -143,6 +143,10 @@ namespace Serina::Simulation
         uint32_t population = 0;
         double plants = 0.0;  ///< biomasse végétale, fraction [0,1] de la capacité de la case
         double carrion = 0.0; ///< énergie des cadavres présents dans la case
+        double rain = 0.0;     ///< pluie en ce moment [0,1]
+        double moisture = 0.0; ///< humidité du sol [0,1]
+        double fire = 0.0;     ///< intensité du feu [0,1]
+        double scorch = 0.0;   ///< trace d'un incendie récent [0,1]
     };
 
     /// @brief Snapshot en lecture seule d'un individu réel : de quoi
@@ -154,6 +158,15 @@ namespace Serina::Simulation
     /// docs/UNIFIED_ENGINE_DESIGN.md, "créatures procédurales"), la
     /// formule de correspondance vit ici, une seule fois ; le frontend ne
     /// fait que dessiner à partir de ces valeurs déjà calculées.
+    /// @brief Un éclair récent, à l'endroit où il a frappé.
+    struct LightningSnapshot
+    {
+        double x = 0.0;
+        double y = 0.0;
+        uint32_t age = 0;     ///< ticks depuis l'éclair
+        bool ignited = false; ///< il a mis le feu
+    };
+
     /// @brief Un mort récent, là où il est tombé. Sert à l'affichage : l'énergie qu'il
     /// laisse est dans carrion_, par case.
     struct CorpseSnapshot
@@ -374,6 +387,18 @@ namespace Serina::Simulation
         /// Prix du généraliste [0,1] : à 0 le rendement suit le régime en ligne droite, à 1 il
         /// suit son carré, et un régime moyen rapporte moins que deux spécialistes.
         double dietSpecialization = 0.25;
+        /// Nombre d'orages qui traversent le monde en même temps ; 0 : ni pluie ni foudre.
+        int stormCount = 3;
+        /// Rayon d'un orage, en cases.
+        double stormRadius = 2.5;
+        /// Chances par tick qu'un orage lance un éclair.
+        double lightningChance = 0.004;
+        /// Humidité au-dessus de laquelle une case ne brûle pas.
+        double fireMoistureLimit = 0.45;
+        /// Énergie perdue par tick par un individu au sol, dans un feu à pleine intensité.
+        double fireDamage = 1.5;
+        /// Chances par tick qu'un feu à pleine intensité gagne une case voisine couverte de plantes.
+        double fireSpreadChance = 0.008;
         /// Chances par tick qu'un carnivore pur (régime 1) tente une chasse si des proies
         /// abondent ; proportionnel au régime, donc un herbivore ne chasse pas.
         double huntRate = 0.05;
@@ -503,8 +528,10 @@ namespace Serina::Simulation
         {
             ++generation_;
             updateFood();
+            updateWeather();
             moveOrganisms();
             applySurvivalAndInteractions();
+            burnOrganisms();
             removeDead();
             reproduce();
             checkSpeciation();
@@ -552,6 +579,22 @@ namespace Serina::Simulation
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
         /// ce qu'un signal représente réellement et ne représente pas.
         const std::vector<ConvergenceSignal> &getConvergenceSignals() const { return convergenceSignals_; }
+        /// @brief Éclairs récents, du plus ancien au plus récent.
+        std::vector<LightningSnapshot> getLightningSnapshots() const
+        {
+            std::vector<LightningSnapshot> result;
+            for (const auto &strike : strikes_)
+            {
+                LightningSnapshot snap = strike;
+                snap.age = generation_ - strike.age;
+                result.push_back(snap);
+            }
+            return result;
+        }
+
+        /// @brief Nombre de cases mises à feu par la foudre depuis le début du monde.
+        uint64_t getIgnitionCount() const { return ignitions_; }
+
         /// @brief Morts encore visibles, du plus ancien au plus récent.
         std::vector<CorpseSnapshot> getCorpseSnapshots() const
         {
@@ -622,6 +665,13 @@ namespace Serina::Simulation
                         const double capacity = plantCapacity(x, y);
                         snap.plants = capacity > 0.0 ? plants_[cellIndex] / capacity : 0.0;
                         snap.carrion = carrion_[cellIndex];
+                        if (!moisture_.empty())
+                        {
+                            snap.rain = rain_[cellIndex];
+                            snap.moisture = moisture_[cellIndex];
+                            snap.fire = fire_[cellIndex];
+                            snap.scorch = scorch_[cellIndex];
+                        }
                     }
                     result.push_back(std::move(snap));
                 }
@@ -704,6 +754,19 @@ namespace Serina::Simulation
         std::set<uint64_t> killedThisTick_;
         std::vector<double> plants_;  ///< biomasse végétale par case
         std::vector<double> carrion_; ///< énergie des cadavres par case
+        struct Storm
+        {
+            double x = 0.0, y = 0.0;   ///< position, en cases
+            double vx = 0.0, vy = 0.0; ///< cases par tick
+            int life = 0;              ///< ticks restants
+        };
+        std::vector<Storm> storms_;
+        std::vector<double> rain_;     ///< pluie en ce moment, par case
+        std::vector<double> moisture_; ///< humidité du sol, par case
+        std::vector<double> fire_;     ///< intensité du feu, par case
+        std::vector<double> scorch_;   ///< trace d'incendie, par case
+        std::deque<LightningSnapshot> strikes_; ///< age y garde le tick de l'éclair
+        uint64_t ignitions_ = 0;
         /// Morts récents pour l'affichage ; age y garde le tick de la mort. Hors sauvegarde
         /// et sans effet sur la simulation : ils repartent de zéro au rechargement.
         std::deque<CorpseSnapshot> corpses_;
@@ -1277,6 +1340,151 @@ namespace Serina::Simulation
                     plants_[static_cast<size_t>(y) * grid_.getWidth() + x] = plantCapacity(x, y);
         }
 
+        bool isWaterCell(int gx, int gy) const
+        {
+            const auto type = grid_.at(gx, gy).environmentType;
+            return type == Ecosystem::EnvironmentType::OCEAN || type == Ecosystem::EnvironmentType::FRESHWATER;
+        }
+
+        void spawnStorm(Storm &storm)
+        {
+            Det::UniformReal unit(0.0, 1.0);
+            storm.x = unit(rng_) * grid_.getWidth();
+            storm.y = unit(rng_) * grid_.getHeight();
+            storm.vx = (unit(rng_) - 0.5) * 0.05;
+            storm.vy = (unit(rng_) - 0.5) * 0.05;
+            storm.life = 300 + static_cast<int>(unit(rng_) * 500.0);
+        }
+
+        /// @brief Orages, humidité, foudre et feu : tout agit sur les vraies plantes.
+        void updateWeather()
+        {
+            if (params_.stormCount <= 0)
+                return;
+            const int width = grid_.getWidth();
+            const int height = grid_.getHeight();
+            const size_t cells = static_cast<size_t>(width) * height;
+            if (moisture_.size() != cells)
+            {
+                moisture_.assign(cells, 0.5);
+                rain_.assign(cells, 0.0);
+                fire_.assign(cells, 0.0);
+                scorch_.assign(cells, 0.0);
+            }
+            if (storms_.size() != static_cast<size_t>(params_.stormCount))
+            {
+                storms_.resize(params_.stormCount);
+                for (auto &storm : storms_)
+                    spawnStorm(storm);
+            }
+
+            Det::UniformReal unit(0.0, 1.0);
+            std::fill(rain_.begin(), rain_.end(), 0.0);
+            for (auto &storm : storms_)
+            {
+                storm.x += storm.vx;
+                storm.y += storm.vy;
+                if (--storm.life <= 0 || storm.x < -2.0 || storm.y < -2.0 || storm.x > width + 2.0 || storm.y > height + 2.0)
+                    spawnStorm(storm);
+                for (int y = 0; y < height; ++y)
+                {
+                    for (int x = 0; x < width; ++x)
+                    {
+                        const double dx = x + 0.5 - storm.x;
+                        const double dy = y + 0.5 - storm.y;
+                        const double reach = 1.0 - std::sqrt(dx * dx + dy * dy) / params_.stormRadius;
+                        double &rain = rain_[static_cast<size_t>(y) * width + x];
+                        rain = std::max(rain, std::clamp(reach * 1.4, 0.0, 1.0));
+                    }
+                }
+            }
+
+            // La foudre tombe surtout au bord de l'orage, là où il ne pleut pas encore fort.
+            for (const auto &storm : storms_)
+            {
+                if (unit(rng_) >= params_.lightningChance)
+                    continue;
+                const double strikeX = storm.x + (unit(rng_) - 0.5) * 2.0 * params_.stormRadius;
+                const double strikeY = storm.y + (unit(rng_) - 0.5) * 2.0 * params_.stormRadius;
+                if (strikeX < 0.0 || strikeY < 0.0 || strikeX >= width || strikeY >= height)
+                    continue;
+                const int gx = static_cast<int>(strikeX);
+                const int gy = static_cast<int>(strikeY);
+                const size_t cell = static_cast<size_t>(gy) * width + gx;
+                LightningSnapshot strike;
+                strike.x = strikeX * params_.cellSize;
+                strike.y = strikeY * params_.cellSize;
+                strike.age = generation_;
+                if (!isWaterCell(gx, gy) && moisture_[cell] < params_.fireMoistureLimit && plants_[cell] > 0.3 * plantCapacity(gx, gy))
+                {
+                    fire_[cell] = std::max(fire_[cell], 0.5);
+                    strike.ignited = true;
+                    ignitions_++;
+                }
+                strikes_.push_back(strike);
+            }
+            while (!strikes_.empty() && generation_ - strikes_.front().age > 8)
+                strikes_.pop_front();
+
+            std::vector<size_t> ignited;
+            for (int y = 0; y < height; ++y)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    const size_t cell = static_cast<size_t>(y) * width + x;
+                    moisture_[cell] = std::clamp(moisture_[cell] + rain_[cell] * 0.05 - 0.002, 0.0, 1.0);
+                    scorch_[cell] = std::max(0.0, scorch_[cell] - 0.002);
+                    double &fire = fire_[cell];
+                    if (fire <= 0.0)
+                        continue;
+
+                    const double capacity = std::max(plantCapacity(x, y), 1.0);
+                    plants_[cell] = std::max(0.0, plants_[cell] - capacity * 0.02 * fire);
+                    scorch_[cell] = 1.0;
+                    fire += 0.02;
+                    if (rain_[cell] > 0.3)
+                        fire -= 0.1;
+                    if (plants_[cell] < 0.08 * capacity)
+                        fire -= 0.05;
+                    fire = std::clamp(fire, 0.0, 1.0);
+
+                    const int neighbors[4][2] = {{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}};
+                    for (const auto &n : neighbors)
+                    {
+                        if (n[0] < 0 || n[1] < 0 || n[0] >= width || n[1] >= height || isWaterCell(n[0], n[1]))
+                            continue;
+                        const size_t next = static_cast<size_t>(n[1]) * width + n[0];
+                        if (fire_[next] > 0.0 || moisture_[next] >= params_.fireMoistureLimit)
+                            continue;
+                        const double level = plants_[next] / std::max(plantCapacity(n[0], n[1]), 1.0);
+                        if (unit(rng_) < params_.fireSpreadChance * fire * level)
+                            ignited.push_back(next);
+                    }
+                }
+            }
+            for (size_t cell : ignited)
+                fire_[cell] = std::max(fire_[cell], 0.3);
+        }
+
+        /// @brief Le feu brûle ce qui reste au sol ; un oiseau s'en sort mieux en s'envolant.
+        void burnOrganisms()
+        {
+            if (fire_.empty() || params_.fireDamage <= 0.0)
+                return;
+            for (auto &organism : population_)
+            {
+                if (!organism.isAlive())
+                    continue;
+                auto [gx, gy] = regionOf(organism);
+                const double fire = fire_[static_cast<size_t>(gy) * grid_.getWidth() + gx];
+                if (fire <= 0.0)
+                    continue;
+                auto group = biologicalTypeOf_.find(organism.getSpecies());
+                const bool flies = group != biologicalTypeOf_.end() && group->second == Taxonomy::BiologicalType::BIRD;
+                organism.setEnergy(organism.getEnergy() - params_.fireDamage * fire * (flies ? 0.3 : 1.0));
+            }
+        }
+
         /// @brief Les plantes repoussent, les cadavres se décomposent et nourrissent le sol.
         void updateFood()
         {
@@ -1291,7 +1499,9 @@ namespace Serina::Simulation
                     carrion_[cell] -= decayed;
                     double &plants = plants_[cell];
                     // Un minimum de repousse : une case rasée n'est jamais perdue pour toujours.
-                    const double growth = params_.plantGrowthRate * std::max(plants, capacity * 0.02) * (1.0 - plants / std::max(capacity, 1.0));
+                    // La pluie fait pousser : au sec, moitié moins vite ; sans orages, la vitesse de base.
+                    const double wetness = moisture_.empty() ? 1.0 : 0.5 + moisture_[cell];
+                    const double growth = params_.plantGrowthRate * wetness * std::max(plants, capacity * 0.02) * (1.0 - plants / std::max(capacity, 1.0));
                     plants = std::min(capacity, plants + std::max(0.0, growth) + decayed * 0.5);
                 }
             }

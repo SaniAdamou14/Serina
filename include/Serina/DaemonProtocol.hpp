@@ -26,7 +26,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 2;
+    inline constexpr int PROTOCOL_VERSION = 3;
 
     using json = nlohmann::json;
 
@@ -59,7 +59,11 @@ namespace Serina::Daemon
             {"climaticStress", r.climaticStress},
             {"population", r.population},
             {"plants", r.plants},
-            {"carrion", r.carrion}};
+            {"carrion", r.carrion},
+            {"rain", r.rain},
+            {"moisture", r.moisture},
+            {"fire", r.fire},
+            {"scorch", r.scorch}};
     }
 
     inline json individualToJson(const Simulation::IndividualSnapshot &ind)
@@ -417,6 +421,9 @@ namespace Serina::Daemon
                 r["regions"] = json::array();
                 for (const auto &region : m.sim->getRegionSnapshots())
                     r["regions"].push_back(regionToJson(region));
+                r["lightning"] = json::array();
+                for (const auto &strike : m.sim->getLightningSnapshots())
+                    r["lightning"].push_back({{"x", strike.x}, {"y", strike.y}, {"age", strike.age}, {"ignited", strike.ignited}});
                 return r; });
         }
         else if (command == "individuals")

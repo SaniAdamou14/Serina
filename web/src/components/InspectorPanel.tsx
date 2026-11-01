@@ -49,6 +49,9 @@ export function InspectorPanel() {
           <Row label="Producteurs primaires" value={`${(selectedRegion.primaryProducers * 100).toFixed(0)} %`} />
           <Row label="Plantes restantes" value={`${((selectedRegion.plants ?? 1) * 100).toFixed(0)} %`} />
           <Row label="Énergie des cadavres" value={(selectedRegion.carrion ?? 0).toFixed(0)} />
+          <Row label="Humidité du sol" value={`${((selectedRegion.moisture ?? 0) * 100).toFixed(0)} %`} />
+          <Row label="Pluie" value={`${((selectedRegion.rain ?? 0) * 100).toFixed(0)} %`} />
+          <Row label="Feu" value={`${((selectedRegion.fire ?? 0) * 100).toFixed(0)} %`} />
           <Row label="Prédation" value={`${(selectedRegion.predationPressure * 100).toFixed(0)} %`} />
           <Row label="Compétition" value={`${(selectedRegion.competitionIntensity * 100).toFixed(0)} %`} />
           <Row label="Stress climatique" value={`${(selectedRegion.climaticStress * 100).toFixed(0)} %`} />

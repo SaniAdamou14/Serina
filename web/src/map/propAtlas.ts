@@ -19,7 +19,8 @@ export const PropFrame = {
   CACTUS: 7,
   LICHEN: 8,
   BONES: 9,
-  SHADOW: 10
+  SHADOW: 10,
+  FLAME: 11
 } as const;
 
 type Ctx = CanvasRenderingContext2D;
@@ -255,6 +256,23 @@ function drawBones(ctx: Ctx) {
   ctx.fill();
 }
 
+function drawFlame(ctx: Ctx) {
+  const tongue = (x: number, width: number, top: number, color: string) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x - width, 0.96);
+    ctx.bezierCurveTo(x - width * 1.1, 0.3, x - width * 0.2, 0.1, x, top);
+    ctx.bezierCurveTo(x + width * 0.5, 0.1, x + width * 1.1, 0.35, x + width, 0.96);
+    ctx.closePath();
+    ctx.fill();
+  };
+  tongue(-0.3, 0.42, -0.2, 'rgba(214,60,14,0.9)');
+  tongue(0.28, 0.44, -0.45, 'rgba(226,74,16,0.92)');
+  tongue(-0.05, 0.56, -0.9, 'rgba(240,106,20,0.95)');
+  tongue(0.0, 0.36, -0.35, 'rgba(250,170,40,0.97)');
+  tongue(0.02, 0.2, 0.2, 'rgba(255,232,130,1)');
+}
+
 const DRAWERS: Record<number, (ctx: Ctx) => void> = {
   [PropFrame.TUFT]: drawTuft,
   [PropFrame.BUSH]: drawBush,
@@ -265,7 +283,8 @@ const DRAWERS: Record<number, (ctx: Ctx) => void> = {
   [PropFrame.DRY_SHRUB]: drawDryShrub,
   [PropFrame.CACTUS]: drawCactus,
   [PropFrame.LICHEN]: drawLichen,
-  [PropFrame.BONES]: drawBones
+  [PropFrame.BONES]: drawBones,
+  [PropFrame.FLAME]: drawFlame
 };
 
 export function buildPropAtlas(): HTMLCanvasElement {

@@ -22,6 +22,7 @@ uniform sampler2DArray uColors;
 uniform sampler2DArray uNormals;
 uniform sampler2D uCells;    // r : couche du biome de chaque case (0-255)
 uniform sampler2D uOverlay;  // calque de données par case, transparent si inactif
+uniform sampler2D uWeather;  // r : pluie, g : feu, b : trace d'incendie
 uniform vec2 uGrid;
 uniform float uCellSize;
 uniform float uTime;
@@ -156,6 +157,13 @@ void main() {
     color = landAlbedo * macro * (0.42 + 0.85 * diffuse);
     // Sol humide et sombre près de l'eau.
     color *= 1.0 - 0.42 * smoothstep(0.12, 0.47, waterField);
+
+    vec4 weather = texture(uWeather, (g + 0.5) / uGrid);
+    // Sol mouillé plus sombre, cendres par plaques, lueur là où ça brûle.
+    color *= 1.0 - 0.22 * weather.r;
+    float ash = weather.b * smoothstep(0.25, 0.6, fbm(p * 0.6 + 13.0) + weather.b * 0.35);
+    color = mix(color, vec3(0.075, 0.066, 0.06), ash * 0.85);
+    color += vec3(0.55, 0.2, 0.03) * weather.g * (0.35 + 0.55 * fbm(p * 0.9 + uTime * 0.7));
   }
 
   if (waterField > 0.0) {
@@ -225,6 +233,8 @@ void main() {
     }
   }
   vFur = uFur > 0.5 ? aMotion.w : 1.0;
+  // Les flammes montent et retombent.
+  if (uProp > 1.5 && aCorner.y < 0.0) world.y += scaled.y * 0.3 * sin(uTime * 11.0 + aMotion.x);
   // Le vent ne plie que le haut de la plante.
   if (uProp > 0.5 && uShadow < 0.5 && aCorner.y < 0.0) world.x += sin(uTime * 1.2 + aMotion.x) * abs(aPlacement.w) * 0.05 * aMotion.w;
 
@@ -259,6 +269,10 @@ void main() {
     outColor = vec4(0.0, 0.0, 0.0, t.a * 0.42);
     return;
   }
+  if (uProp > 1.5) {
+    outColor = t;
+    return;
+  }
   if (uProp > 0.5) {
     // Bord franc : seuls les pixels gardés cachent ce qui passe derrière.
     if (t.a < 0.4) discard;
@@ -273,5 +287,68 @@ void main() {
   vec3 tint = mix(vec3(luminance), vColor, 0.72) * 1.15;
   float alpha = t.a * vFur;
   outColor = vec4(mix(rgb * tint, rgb, smoothstep(0.05, 0.14, chroma)) * alpha, alpha);
+}
+`;
+
+export const WEATHER_FRAGMENT = `#version 300 es
+precision highp float;
+in vec2 vWorld;
+out vec4 outColor;
+
+uniform sampler2D uWeather;
+uniform vec2 uGrid;
+uniform float uCellSize;
+uniform float uTime;
+uniform float uFlash;  // éclair : 1 à l'instant de la frappe, puis retombe
+uniform vec2 uBolt;    // point d'impact, en unités du monde
+
+float hash(vec2 p) {
+  p = fract(p * vec2(127.1, 311.7));
+  p += dot(p, p + 34.23);
+  return fract(p.x * p.y);
+}
+
+float wiggle(float y) {
+  float i = floor(y);
+  float f = fract(y);
+  return mix(hash(vec2(i, uBolt.x)), hash(vec2(i + 1.0, uBolt.x)), f) - 0.5;
+}
+
+void main() {
+  vec2 p = vWorld;
+  vec2 world = uGrid * uCellSize;
+  if (p.x < 0.0 || p.y < 0.0 || p.x >= world.x || p.y >= world.y) discard;
+  float rain = texture(uWeather, p / world).r;
+
+  // Ombre des nuages, puis gouttes en biais : moins fines de loin, sinon elles scintillent.
+  vec3 color = vec3(0.16, 0.19, 0.25);
+  float alpha = rain * 0.3;
+  vec2 q = vec2(p.x * 2.4 + p.y * 0.35, p.y * 0.55 + uTime * 7.0);
+  float blur = fwidth(q.x);
+  if (rain > 0.02 && blur < 0.5) {
+    vec2 cell = floor(q);
+    vec2 f = fract(q);
+    float drop = step(1.0 - rain * 0.3, hash(cell));
+    float streak = drop * smoothstep(0.0, 0.05, f.x) * (1.0 - smoothstep(0.05, 0.12, f.x)) * (1.0 - f.y);
+    streak *= 1.0 - blur * 2.0;
+    color = mix(color, vec3(0.72, 0.8, 0.9), streak);
+    alpha = max(alpha, streak * 0.55);
+  }
+
+  vec3 result = color * alpha;
+  if (uFlash > 0.0) {
+    // Le ciel s'éclaire, et l'éclair descend en zigzag jusqu'au point d'impact.
+    float above = uBolt.y - p.y;
+    float glow = 0.0;
+    if (above > 0.0) {
+      float x = uBolt.x + (wiggle(above * 0.5) * 3.0 + wiggle(above * 2.1) * 0.8) * smoothstep(0.0, 4.0, above);
+      float width = max(0.12, fwidth(p.x) * 1.5);
+      glow = 1.0 - smoothstep(width, width * 3.0, abs(p.x - x));
+    }
+    float light = uFlash * uFlash * (0.22 + glow);
+    result += vec3(0.9, 0.93, 1.0) * light;
+    alpha = max(alpha, min(1.0, light));
+  }
+  outColor = vec4(result, alpha);
 }
 `;

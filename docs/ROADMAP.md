@@ -297,7 +297,12 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
     Radeon intégrée avec environ 500 individus et 900 plantes, sans mesure à 10 000 individus.
   - Limites de la carte : quelles plantes poussent dans quel biome reste un choix d'affichage, le
     moteur ne connaît qu'un niveau par case. Les morts visibles repartent de zéro au rechargement.
-  - Reste à faire : feux et météo.
+  - Feu et météo, simulés : des orages traversent le monde et mouillent le sol, l'humidité fait
+    pousser les plantes, la foudre embrase une case sèche, le feu brûle les vraies plantes, se
+    propage, blesse les créatures au sol et s'éteint sous la pluie. Pluie, cendres, flammes et
+    éclairs sont dessinés d'après ces données.
+  - À mesurer : l'effet du feu et de la météo sur la survie et sur la radiation. Le banc a été
+    arrêté par manque de mémoire, donc les chiffres de radiation ci-dessus datent d'avant eux.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
 - **I6, les créatures issues de leur génome (en cours)** :

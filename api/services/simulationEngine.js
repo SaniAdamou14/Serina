@@ -26,7 +26,7 @@ const DEFAULT_TICKS_PER_SECOND = 4;
 const CONNECT_RETRIES = 20;
 const CONNECT_RETRY_DELAY_MS = 250;
 /** PROTOCOL_VERSION de include/Serina/DaemonProtocol.hpp. */
-const REQUIRED_PROTOCOL = 2;
+const REQUIRED_PROTOCOL = 3;
 
 class SimulationEngine extends EventEmitter {
   constructor() {

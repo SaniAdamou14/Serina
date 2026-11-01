@@ -121,12 +121,22 @@ export interface RegionInfo {
   plants: number
   /** Energy held in corpses in this cell. */
   carrion: number
+  /** Pluie en ce moment [0,1] */
+  rain: number
+  /** Humidité du sol [0,1] */
+  moisture: number
+  /** Intensité du feu [0,1] */
+  fire: number
+  /** Trace d'un incendie récent [0,1] */
+  scorch: number
 }
 
 export interface RegionsResult {
   status: 'success' | 'error'
   gridWidth: number
   gridHeight: number
+  /** Éclairs récents */
+  lightning?: LightningInfo[]
   /** Continuous world units per grid cell -- multiply by gridWidth/gridHeight for the world's real size in the same units individuals' x/y use. */
   cellSize: number
   regions: RegionInfo[]
@@ -134,6 +144,15 @@ export interface RegionsResult {
 }
 
 // === individuals command -> latestData.individuals ===
+
+export interface LightningInfo {
+  x: number
+  y: number
+  /** Ticks depuis l'éclair */
+  age: number
+  /** Il a mis le feu */
+  ignited: boolean
+}
 
 export interface CorpseInfo {
   id: number
