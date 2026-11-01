@@ -95,6 +95,8 @@ export interface StatusResult {
   generation: number
   population: number
   running: boolean
+  /** Vitesse réelle, ajoutée par l'API */
+  ticksPerSecond?: number
   speciesCount: number
   lineages: LineageStatus[]
   /** A count -- see the `lineages` command for the full event history. */

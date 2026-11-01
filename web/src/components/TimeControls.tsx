@@ -23,14 +23,14 @@ export function TimeControls({ activeSpeed, onSpeed, onTogglePause, onStep, onSa
     <div className="game-panel absolute right-2 bottom-11 z-20 w-60 p-1.5 space-y-1.5">
       <div className="flex items-baseline justify-between px-1">
         <span className="text-sm font-semibold">Tick {(simulationData?.status.generation ?? 0).toLocaleString()}</span>
-        <span className={`text-xs ${isRunning ? 'text-slate-400' : 'text-primary-300 font-semibold'}`}>{isRunning ? 'En cours' : 'En pause'}</span>
+        <span className={`text-xs ${isRunning ? 'text-slate-400' : 'text-primary-300 font-semibold'}`}>{isRunning ? `En cours${activeSpeed ? `, ${activeSpeed} ticks/s` : ''}` : 'En pause'}</span>
       </div>
 
       <div className="flex items-center gap-0.5">
         <button className="game-button px-2 py-1" onClick={onTogglePause} disabled={disabled} title={isRunning ? 'Pause (Espace)' : 'Reprendre (Espace)'}>
           {isRunning ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
         </button>
-        <button className="game-button px-2 py-1" onClick={onStep} disabled={disabled || busy} title="Avancer d'un tick">
+        <button className="game-button px-2 py-1" onClick={onStep} disabled={disabled || busy || isRunning} title={isRunning ? "Mets en pause pour avancer tick par tick" : "Avancer d'un tick"}>
           <SkipForward className="w-3.5 h-3.5" />
         </button>
         {SPEED_TIERS.map((tier, index) => (

@@ -338,6 +338,14 @@ export function WorldMap() {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return;
+      // Ctrl + et Ctrl - restent le zoom du navigateur.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // La touche physique : sur un clavier AZERTY, le 0 sans Maj envoie « à ».
+      if (e.code === 'Digit0' || e.code === 'Numpad0') {
+        e.preventDefault();
+        resetView();
+        return;
+      }
 
       const actions: Record<string, () => void> = {
         ArrowLeft: () => pan(-PAN_STEP_FRACTION, 0),
@@ -348,7 +356,6 @@ export function WorldMap() {
         '=': () => zoomByFactor(1 / 1.25),
         '-': () => zoomByFactor(1.25),
         _: () => zoomByFactor(1.25),
-        '0': resetView,
         Home: resetView,
         i: () => setShowIndividuals((v) => !v),
         I: () => setShowIndividuals((v) => !v),
@@ -448,7 +455,11 @@ export function WorldMap() {
         )}
         <select
           value={overlayMode}
-          onChange={(e) => setOverlayMode(e.target.value as OverlayMode)}
+          onChange={(e) => {
+            setOverlayMode(e.target.value as OverlayMode);
+            // Sinon le menu garde le focus et tous les raccourcis restent bloqués.
+            e.target.blur();
+          }}
           className="input-field text-xs w-full"
           aria-label="Calque de la carte"
         >

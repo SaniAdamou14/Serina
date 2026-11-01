@@ -53,10 +53,9 @@ function tabContent(tab: MainTab) {
  * dessus. Sans simulation active, seul l'écran de création du monde est affiché.
  */
 export function SimulationDashboard() {
-  const { currentSimulationId, isRunning, isConnected, sendCommand, setSpeed, stepSimulation, saveSnapshot } = useSimulation()
+  const { currentSimulationId, isRunning, isConnected, simulationData, sendCommand, setSpeed, stepSimulation, saveSnapshot } = useSimulation()
   const { detailSpecies, showSpeciesDetail, compareOpen, setCompareOpen, clearSelection } = useSelection()
   const [activeTab, setActiveTab] = useState<MainTab | null>(null)
-  const [activeSpeed, setActiveSpeed] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
 
   const canControl = isConnected && !!currentSimulationId
@@ -65,10 +64,11 @@ export function SimulationDashboard() {
     sendCommand(isRunning ? SimulationCommand.PAUSE : SimulationCommand.RESUME)
   }, [isRunning, sendCommand])
 
-  const changeSpeed = useCallback((ticksPerSecond: number) => {
-    setActiveSpeed(ticksPerSecond)
-    setSpeed(ticksPerSecond)
-  }, [setSpeed])
+  // Comme dans RimWorld : choisir une vitesse relance le temps s'il était en pause.
+  const changeSpeed = useCallback(async (ticksPerSecond: number) => {
+    await setSpeed(ticksPerSecond)
+    if (!isRunning) sendCommand(SimulationCommand.RESUME)
+  }, [isRunning, sendCommand, setSpeed])
 
   const runExclusive = async (action: () => Promise<void>) => {
     setBusy(true)
@@ -88,6 +88,11 @@ export function SimulationDashboard() {
       const target = e.target as HTMLElement | null
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
+      // Une touche maintenue se répète : elle basculerait la pause en boucle.
+      if (e.repeat) return
+
+      // La touche physique : sur un clavier AZERTY, le 1 sans Maj envoie « & ».
+      const speedKey = /^(?:Digit|Numpad)([1-9])$/.exec(e.code)
 
       if (e.key === ' ') {
         e.preventDefault()
@@ -99,8 +104,9 @@ export function SimulationDashboard() {
         else if (detailSpecies) showSpeciesDetail(null)
         else if (activeTab) setActiveTab(null)
         else clearSelection()
-      } else if (e.key >= '1' && e.key <= String(SPEED_TIERS.length)) {
-        if (canControl) changeSpeed(SPEED_TIERS[Number(e.key) - 1])
+      } else if (speedKey) {
+        const tier = SPEED_TIERS[Number(speedKey[1]) - 1]
+        if (canControl && tier) changeSpeed(tier)
       } else {
         const tab = MAIN_TABS.find((t) => t.hotkey === e.key.toUpperCase())
         if (tab) setActiveTab((current) => (current === tab.id ? null : tab.id))
@@ -139,7 +145,7 @@ export function SimulationDashboard() {
         <InspectorPanel />
       </ErrorBoundary>
       <TimeControls
-        activeSpeed={activeSpeed}
+        activeSpeed={simulationData?.status.ticksPerSecond ?? null}
         onSpeed={changeSpeed}
         onTogglePause={togglePause}
         onStep={() => runExclusive(() => stepSimulation(1))}
