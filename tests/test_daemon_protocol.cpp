@@ -175,7 +175,7 @@ TEST_CASE("ping reports the protocol version the API checks", "[daemon]")
 {
     Daemon::SimulationRegistry registry;
     auto response = Daemon::handleCommand(registry, makeRequest("ping", "", {}));
-    REQUIRE(response["success"] == true);
+    REQUIRE(response["status"] == "success");
     REQUIRE(response["protocolVersion"] == Daemon::PROTOCOL_VERSION);
 }
 
