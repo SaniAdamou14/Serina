@@ -187,7 +187,7 @@ export function WorldMap() {
   useEffect(() => {
     if (!renderer.current || !regionCells) return;
     renderer.current.setVegetation(
-      regionCells.map((r) => ({ gridX: r.gridX, gridY: r.gridY, layer: BIOME_LAYERS[r.environmentName] ?? 0, plants: r.plants ?? 1, rain: r.rain ?? 0, fire: r.fire ?? 0, scorch: r.scorch ?? 0 }))
+      regionCells.map((r) => ({ gridX: r.gridX, gridY: r.gridY, layer: BIOME_LAYERS[r.environmentName] ?? 0, plants: r.plants ?? 1, rain: r.rain ?? 0, fire: r.fire ?? 0, scorch: r.scorch ?? 0, temperature: r.temperature }))
     );
   }, [regionCells, terrainKey, canvas]);
 
@@ -227,9 +227,10 @@ export function WorldMap() {
       rgba[at + 3] = OVERLAY_ALPHA;
     });
     renderer.current.setOverlay(rgba);
-    // Les valeurs par case ne changent pas d'un tick à l'autre, seul le mode ou la carte compte.
+    // Le climat change avec les saisons : on recalcule à chaque saison, pas à chaque tick,
+    // car ce calque redessine aussi la minicarte.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [overlayMode, terrainKey, worldWidth, worldHeight, canvas]);
+  }, [overlayMode, terrainKey, worldWidth, worldHeight, canvas, simulationData?.status.season]);
 
   const zoomByFactor = useCallback((factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
     setViewBox((current) => (current ? zoomCamera(current, factor, anchorXFrac, anchorYFrac, world, aspect) : current));

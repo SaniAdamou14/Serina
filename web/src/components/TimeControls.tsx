@@ -15,6 +15,15 @@ interface TimeControlsProps {
  * Temps de la simulation en bas à droite, façon RimWorld. Le temps est affiché en
  * ticks : le moteur ne compte pas encore de vraies générations biologiques.
  */
+const SEASONS = ['Printemps', 'Été', 'Automne', 'Hiver']
+
+function climateEra(offset: number | undefined): string | null {
+  if (offset === undefined) return null
+  if (offset <= -3) return `Âge froid (${offset.toFixed(1)} °C)`
+  if (offset >= 3) return `Âge chaud (+${offset.toFixed(1)} °C)`
+  return null
+}
+
 export function TimeControls({ activeSpeed, onSpeed, onTogglePause, onStep, onSave, busy }: TimeControlsProps) {
   const { simulationData, isConnected, isRunning, currentSimulationId, stopCurrentSimulation } = useSimulation()
   const disabled = !isConnected || !currentSimulationId
@@ -25,6 +34,13 @@ export function TimeControls({ activeSpeed, onSpeed, onTogglePause, onStep, onSa
         <span className="text-sm font-semibold">Tick {(simulationData?.status.generation ?? 0).toLocaleString()}</span>
         <span className={`text-xs ${isRunning ? 'text-slate-400' : 'text-primary-300 font-semibold'}`}>{isRunning ? `En cours${activeSpeed ? `, ${activeSpeed} ticks/s` : ''}` : 'En pause'}</span>
       </div>
+
+      {simulationData?.status.season !== undefined && (
+        <div className="flex items-baseline justify-between px-1 text-xs text-slate-400" title="Saison de l'hémisphère nord ; le sud vit la saison opposée">
+          <span>{SEASONS[simulationData.status.season]}, an {simulationData.status.year}</span>
+          <span>{climateEra(simulationData.status.climateOffset)}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-0.5">
         <button className="game-button px-2 py-1" onClick={onTogglePause} disabled={disabled} title={isRunning ? 'Pause (Espace)' : 'Reprendre (Espace)'}>

@@ -37,6 +37,8 @@ export interface MapVegetationCell {
   rain: number;
   fire: number;
   scorch: number;
+  /** °C */
+  temperature: number;
 }
 
 export interface MapLightning {
@@ -449,7 +451,7 @@ export class MapRenderer {
     if (!world) return;
     this.updateWeather(cells, world);
     // Par paliers de 2,5 % : pas de reconstruction à chaque tick.
-    const key = cells.map((c) => `${c.layer}.${Math.round(c.plants * 40)}`).join(',');
+    const key = cells.map((c) => `${c.layer}.${Math.round(c.plants * 40)}.${Math.round(c.temperature / 3)}`).join(',');
     if (key === this.vegetationKey) return;
     this.vegetationKey = key;
 
@@ -463,6 +465,8 @@ export class MapRenderer {
       const level = Math.max(0, Math.min(1, cell.plants));
       const visible = Math.round(flora.slots * level);
       const hunger = 1 - level;
+      // Le feuillage roussit quand le froid arrive.
+      const cold = Math.max(0, Math.min(1, (12 - cell.temperature) / 16));
       for (let k = 0; k < visible; k++) {
         const u = hash(cell.gridX, cell.gridY, k, 1);
         const v = hash(cell.gridX, cell.gridY, k, 2);
@@ -492,9 +496,9 @@ export class MapRenderer {
           y: footY,
           values: [
             x, y, half * flip, half,
-            shade * (1 + (GRAZED_TINT[0] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[0] * 0.5,
-            shade * (1 + (GRAZED_TINT[1] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[1] * 0.25,
-            shade * (1 - hunger * 0.45),
+            (shade * (1 + (GRAZED_TINT[0] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[0] * 0.5) * (1 + cold * 0.25),
+            (shade * (1 + (GRAZED_TINT[1] - 1) * hunger * 0.2) + hunger * GRAZED_TINT[1] * 0.25) * (1 - cold * 0.3),
+            shade * (1 - hunger * 0.45) * (1 - cold * 0.55),
             kind[0],
             u * 37.0, 0, 0, kind[3]
           ]
@@ -520,7 +524,8 @@ export class MapRenderer {
       pixels[at] = Math.round(c.rain * 255);
       pixels[at + 1] = Math.round(c.fire * 255);
       pixels[at + 2] = Math.round(c.scorch * 255);
-      pixels[at + 3] = 255;
+      // Neige de 0 à -8 °C.
+      pixels[at + 3] = Math.round(Math.max(0, Math.min(1, -c.temperature / 8)) * 255);
       anyRain = anyRain || c.rain > 0;
     }
     this.anyRain = anyRain;

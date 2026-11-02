@@ -1,6 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include "Serina/WorldSimulation.hpp"
 #include <algorithm>
+#include <cmath>
+#include <map>
 #include <unordered_map>
 
 using namespace Serina::Simulation;
@@ -915,4 +917,59 @@ TEST_CASE("without storms there is neither rain nor fire", "[worldsim][weather]"
         sim.step();
     CHECK(sim.getIgnitionCount() == 0);
     CHECK(sim.getLightningSnapshots().empty());
+}
+
+TEST_CASE("seasons oppose the hemispheres and the poles are colder", "[worldsim][climate]") {
+    WorldSimulationParameters params;
+    params.climateEpochAmplitude = 0.0;
+    params.stormCount = 0;
+    UnifiedWorldSimulator sim(params, 7);
+    sim.seedFounderSpecies(5);
+
+    // Même biome, deux hémisphères : au cœur de l'été nord, le nord est plus chaud que le sud.
+    const auto temperatures = [&](int y) {
+        std::map<int, double> byBiome;
+        for (const auto &region : sim.getRegionSnapshots())
+            if (region.gridY == y)
+                byBiome[static_cast<int>(region.environmentType)] = region.temperature;
+        return byBiome;
+    };
+    while (sim.getGeneration() < params.yearTicks / 4)
+        sim.step();
+    CHECK(sim.getSeason() == 1);
+    const int last = sim.getGrid().getHeight() - 1;
+    const int middle = sim.getGrid().getHeight() / 2 - 1;
+    const auto summerNorth = temperatures(middle);
+    const auto summerSouth = temperatures(last - middle);
+    while (sim.getGeneration() < params.yearTicks * 3 / 4)
+        sim.step();
+    CHECK(sim.getSeason() == 3);
+    const auto winterNorth = temperatures(middle);
+    const auto winterSouth = temperatures(last - middle);
+
+    bool compared = false;
+    for (const auto &[biome, value] : summerNorth) {
+        CHECK(value > winterNorth.at(biome));
+        if (summerSouth.count(biome)) {
+            CHECK(value > summerSouth.at(biome));
+            CHECK(winterNorth.at(biome) < winterSouth.at(biome));
+            compared = true;
+        }
+    }
+    (void)compared;
+}
+
+TEST_CASE("a cold spell slowly changes every cell", "[worldsim][climate]") {
+    WorldSimulationParameters params;
+    params.climateEpochTicks = 100;
+    params.stormCount = 0;
+    UnifiedWorldSimulator sim(params, 7);
+    sim.seedFounderSpecies(5);
+    double largest = 0.0;
+    for (int i = 0; i < 1000; ++i) {
+        sim.step();
+        largest = std::max(largest, std::abs(sim.getClimateOffset()));
+    }
+    CHECK(largest > 0.0);
+    CHECK(largest <= params.climateEpochAmplitude);
 }

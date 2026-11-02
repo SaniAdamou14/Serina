@@ -61,6 +61,12 @@ namespace
             p.plantHalfSaturation = value;
         else if (key == "huntSatiety")
             p.huntSatiety = value;
+        else if (key == "seasonAmplitude")
+            p.seasonAmplitude = value;
+        else if (key == "latitudeRange")
+            p.latitudeRange = value;
+        else if (key == "climateEpochAmplitude")
+            p.climateEpochAmplitude = value;
         else if (key == "stormCount")
             p.stormCount = static_cast<int>(value);
         else if (key == "fireDamage")

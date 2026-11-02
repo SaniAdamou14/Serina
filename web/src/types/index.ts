@@ -95,6 +95,12 @@ export interface StatusResult {
   generation: number
   population: number
   running: boolean
+  /** Année du monde */
+  year?: number
+  /** Saison de l'hémisphère nord : 0 printemps, 1 été, 2 automne, 3 hiver */
+  season?: number
+  /** Écart de la grande période froide ou chaude, en °C */
+  climateOffset?: number
   /** Vitesse réelle, ajoutée par l'API */
   ticksPerSecond?: number
   speciesCount: number
