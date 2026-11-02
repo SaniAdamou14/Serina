@@ -1,5 +1,9 @@
 # Serina : feuille de route vers le monde complet
 
+> **Le 2026-11-01, la cible de la V1 a changé** : une lune inventée plutôt que la Terre réelle.
+> Les critères sont dans [V1_SERINA.md](V1_SERINA.md). Les jalons M2 et I5 ci-dessous ne sont plus
+> nécessaires à la V1, le reste de ce document reste la référence sur le moteur.
+
 Rédigée le 2026-10-30, à partir de mesures faites sur `main` (`20a0df0e`).
 
 ## L'objectif, défini pour pouvoir être atteint
@@ -301,8 +305,11 @@ comme le reste du projet. Il faut donc simuler ce qu'on veut montrer :
     pousser les plantes, la foudre embrase une case sèche, le feu brûle les vraies plantes, se
     propage, blesse les créatures au sol et s'éteint sous la pluie. Pluie, cendres, flammes et
     éclairs sont dessinés d'après ces données.
-  - À mesurer : l'effet du feu et de la météo sur la survie et sur la radiation. Le banc a été
-    arrêté par manque de mémoire, donc les chiffres de radiation ci-dessus datent d'avant eux.
+  - Climat : température par case selon le biome, la latitude, la saison et de grandes périodes
+    froides ou chaudes. Pousse des plantes selon le modèle de Miami (Lieth, 1975), gel, sécheresse
+    d'été. Mesuré sur 6 graines à 20 000 ticks, qui ont servi au réglage : adaptation à la température
+    à l'intérieur d'une espèce de 0,168 (0,007 sans climat), 2 espèces d'oiseaux en médiane, 4 au mieux,
+    2 niches sur 3, 3 au mieux. Validation sur graines nouvelles à faire.
 - **I5, la planète** : globe 3D et carte 2D de la Terre, sélection d'une case qui ouvre sa
   carte locale. S'appuie sur M2.
 - **I6, les créatures issues de leur génome (en cours)** :

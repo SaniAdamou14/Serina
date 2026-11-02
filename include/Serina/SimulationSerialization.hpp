@@ -327,6 +327,11 @@ namespace Serina::Simulation
             {"plantHalfSaturation", params_.plantHalfSaturation},
             {"carrionHalfSaturation", params_.carrionHalfSaturation},
             {"dietSpecialization", params_.dietSpecialization},
+            {"yearTicks", params_.yearTicks},
+            {"latitudeRange", params_.latitudeRange},
+            {"seasonAmplitude", params_.seasonAmplitude},
+            {"climateEpochAmplitude", params_.climateEpochAmplitude},
+            {"climateEpochTicks", params_.climateEpochTicks},
             {"stormCount", params_.stormCount},
             {"stormRadius", params_.stormRadius},
             {"lightningChance", params_.lightningChance},
@@ -398,6 +403,8 @@ namespace Serina::Simulation
         j["fire"] = fire_;
         j["scorch"] = scorch_;
         j["ignitions"] = ignitions_;
+        j["climateOffset"] = climateOffset_;
+        j["climateTarget"] = climateTarget_;
         json storms = json::array();
         for (const auto &storm : storms_)
             storms.push_back({{"x", storm.x}, {"y", storm.y}, {"vx", storm.vx}, {"vy", storm.vy}, {"life", storm.life}});
@@ -510,6 +517,11 @@ namespace Serina::Simulation
             params.plantHalfSaturation = pj.value("plantHalfSaturation", params.plantHalfSaturation);
             params.carrionHalfSaturation = pj.value("carrionHalfSaturation", params.carrionHalfSaturation);
             params.dietSpecialization = pj.value("dietSpecialization", params.dietSpecialization);
+            params.yearTicks = pj.value("yearTicks", params.yearTicks);
+            params.latitudeRange = pj.value("latitudeRange", params.latitudeRange);
+            params.seasonAmplitude = pj.value("seasonAmplitude", params.seasonAmplitude);
+            params.climateEpochAmplitude = pj.value("climateEpochAmplitude", params.climateEpochAmplitude);
+            params.climateEpochTicks = pj.value("climateEpochTicks", params.climateEpochTicks);
             params.stormCount = pj.value("stormCount", params.stormCount);
             params.stormRadius = pj.value("stormRadius", params.stormRadius);
             params.lightningChance = pj.value("lightningChance", params.lightningChance);
@@ -588,6 +600,8 @@ namespace Serina::Simulation
         sim->fire_ = j.value("fire", std::vector<double>{});
         sim->scorch_ = j.value("scorch", std::vector<double>{});
         sim->ignitions_ = j.value("ignitions", uint64_t{0});
+        sim->climateOffset_ = j.value("climateOffset", 0.0);
+        sim->climateTarget_ = j.value("climateTarget", 0.0);
         const json savedStorms = j.value("storms", json::array());
         for (const auto &saved : savedStorms)
         {

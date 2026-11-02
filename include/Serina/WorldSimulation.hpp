@@ -387,14 +387,24 @@ namespace Serina::Simulation
         /// Prix du généraliste [0,1] : à 0 le rendement suit le régime en ligne droite, à 1 il
         /// suit son carré, et un régime moyen rapporte moins que deux spécialistes.
         double dietSpecialization = 0.25;
+        /// Ticks d'une année : le tour des saisons.
+        uint32_t yearTicks = 360;
+        /// Écart de température entre l'équateur et un pôle, en °C ; 0 : pas de latitude.
+        double latitudeRange = 24.0;
+        /// Écart saisonnier aux pôles, en °C, à multiplier par la saisonnalité du biome ; 0 : pas de saisons.
+        double seasonAmplitude = 30.0;
+        /// Écart maximal d'une grande période froide ou chaude, en °C ; 0 : climat stable.
+        double climateEpochAmplitude = 8.0;
+        /// Ticks entre deux changements de grande période.
+        uint32_t climateEpochTicks = 30000;
         /// Nombre d'orages qui traversent le monde en même temps ; 0 : ni pluie ni foudre.
         int stormCount = 3;
         /// Rayon d'un orage, en cases.
-        double stormRadius = 2.5;
+        double stormRadius = 2.0;
         /// Chances par tick qu'un orage lance un éclair.
         double lightningChance = 0.004;
         /// Humidité au-dessus de laquelle une case ne brûle pas.
-        double fireMoistureLimit = 0.45;
+        double fireMoistureLimit = 0.55;
         /// Énergie perdue par tick par un individu au sol, dans un feu à pleine intensité.
         double fireDamage = 1.5;
         /// Chances par tick qu'un feu à pleine intensité gagne une case voisine couverte de plantes.
@@ -412,7 +422,7 @@ namespace Serina::Simulation
         /// partagent plus le même mode de vie. C'est ce qui rend possible une divergence sur place.
         double assortativeMatingGap = 0.15;
         /// Écart de régime entre deux groupes d'une espèce à partir duquel elle peut se scinder.
-        double nicheSplitGap = 0.06;
+        double nicheSplitGap = 0.03;
         /// Ticks pendant lesquels cet écart doit durer avant la scission.
         uint32_t nicheSplitDuration = 500;
         /// Biomasse végétale maximale d'une case, par unité de ressource du biome.
@@ -527,6 +537,7 @@ namespace Serina::Simulation
         void step()
         {
             ++generation_;
+            updateClimate();
             updateFood();
             updateWeather();
             moveOrganisms();
@@ -579,6 +590,17 @@ namespace Serina::Simulation
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
         /// ce qu'un signal représente réellement et ne représente pas.
         const std::vector<ConvergenceSignal> &getConvergenceSignals() const { return convergenceSignals_; }
+        /// @brief Année en cours, à partir de 0.
+        uint32_t getYear() const { return generation_ / std::max<uint32_t>(params_.yearTicks, 1); }
+        /// @brief Saison de l'hémisphère nord : 0 printemps, 1 été, 2 automne, 3 hiver.
+        int getSeason() const
+        {
+            const uint32_t year = std::max<uint32_t>(params_.yearTicks, 1);
+            return static_cast<int>((generation_ % year) * 4 / year);
+        }
+        /// @brief Écart de température de la grande période en cours, en °C.
+        double getClimateOffset() const { return climateOffset_; }
+
         /// @brief Éclairs récents, du plus ancien au plus récent.
         std::vector<LightningSnapshot> getLightningSnapshots() const
         {
@@ -651,7 +673,7 @@ namespace Serina::Simulation
                     if (env)
                     {
                         snap.environmentName = env->name;
-                        snap.temperature = env->climate.temperature;
+                        snap.temperature = cellTemperature(x, y);
                         snap.primaryProducers = env->resources.primaryProducers;
                         snap.predationPressure = env->pressures.predationPressure;
                         snap.competitionIntensity = env->pressures.competitionIntensity;
@@ -765,6 +787,8 @@ namespace Serina::Simulation
         std::vector<double> moisture_; ///< humidité du sol, par case
         std::vector<double> fire_;     ///< intensité du feu, par case
         std::vector<double> scorch_;   ///< trace d'incendie, par case
+        double climateOffset_ = 0.0;   ///< écart de la grande période en cours, en °C
+        double climateTarget_ = 0.0;   ///< écart vers lequel le climat dérive
         std::deque<LightningSnapshot> strikes_; ///< age y garde le tick de l'éclair
         uint64_t ignitions_ = 0;
         /// Morts récents pour l'affichage ; age y garde le tick de la mort. Hors sauvegarde
@@ -1193,7 +1217,7 @@ namespace Serina::Simulation
 
                 if (params_.thermalCostRate > 0.0 && localEnv)
                 {
-                    double gap = organism.getGenome().getTrait(Genetics::TraitType::INSULATION) - Habitat::idealInsulation(localEnv->climate.temperature);
+                    double gap = organism.getGenome().getTrait(Genetics::TraitType::INSULATION) - Habitat::idealInsulation(cellTemperature(gx, gy));
                     organism.setEnergy(organism.getEnergy() - params_.thermalCostRate * gap * gap);
                 }
 
@@ -1340,6 +1364,84 @@ namespace Serina::Simulation
                     plants_[static_cast<size_t>(y) * grid_.getWidth() + x] = plantCapacity(x, y);
         }
 
+        /// @brief Position dans l'année [-1,1] : 1 au cœur de l'été de l'hémisphère nord.
+        /// Une parabole par demi-année, car std::sin diffère d'un compilateur à l'autre.
+        double seasonWave() const
+        {
+            const uint32_t year = std::max<uint32_t>(params_.yearTicks, 1);
+            const double t = static_cast<double>(generation_ % year) / year;
+            return t < 0.5 ? 16.0 * t * (0.5 - t) : -16.0 * (t - 0.5) * (1.0 - t);
+        }
+
+        /// @brief Été [-1,1] de cette case : les deux hémisphères sont en opposition.
+        double localSummer(int gy) const
+        {
+            return (gy + 0.5 < grid_.getHeight() * 0.5) ? seasonWave() : -seasonWave();
+        }
+
+        /// @brief Distance à l'équateur [0,1].
+        double latitude(int gy) const
+        {
+            const double half = grid_.getHeight() * 0.5;
+            return half > 0.0 ? std::abs(gy + 0.5 - half) / half : 0.0;
+        }
+
+        /// @brief Température réelle d'une case : biome, latitude, saison et grande période.
+        double cellTemperature(int gx, int gy) const
+        {
+            const auto *env = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
+            if (!env)
+                return 15.0;
+            const double lat = latitude(gy);
+            const double seasonal = params_.seasonAmplitude * env->climate.seasonality * (0.2 + 0.8 * lat) * localSummer(gy);
+            return env->climate.temperature + params_.latitudeRange * (0.5 - lat) + seasonal + climateOffset_;
+        }
+
+        /// @brief Pousse des plantes selon le modèle de Miami (Lieth, 1975) : la production est
+        /// limitée par le plus rare de la chaleur et de la pluie. Vaut 1 à 20 °C sous 1000 mm/an.
+        double plantGrowthFactor(int gx, int gy) const
+        {
+            const auto *env = environments_.getEnvironment(grid_.at(gx, gy).environmentType);
+            if (!env)
+                return 1.0;
+            const double temperature = cellTemperature(gx, gy);
+            const double fromHeat = 1.0 / (1.0 + Det::exp(1.315 - 0.119 * temperature));
+            double fromRain = 1.0;
+            if (!isWaterCell(gx, gy))
+            {
+                // L'humidité du sol vaut 0,5 en année normale : plus humide, plus de pluie utile.
+                const size_t cell = static_cast<size_t>(gy) * grid_.getWidth() + gx;
+                const double wetness = moisture_.empty() ? 0.5 : moisture_[cell];
+                fromRain = 1.0 - Det::exp(-0.000664 * env->climate.precipitation * (0.5 + wetness));
+            }
+            constexpr double REFERENCE = 0.485; // 1 - exp(-0.664) : la pluie limite à 20 °C sous 1000 mm
+            // Il ne pousse plus rien dans une terre gelée.
+            const double thaw = std::clamp((temperature + 5.0) / 10.0, 0.0, 1.0);
+            return std::min(fromHeat, fromRain) / REFERENCE * thaw;
+        }
+
+        /// @brief Assez de combustible pour brûler : une quantité réelle, pas une part de ce que
+        /// la case peut porter. Un désert à sa capacité reste presque nu.
+        double fuelLevel(int gx, int gy) const
+        {
+            const double plants = plants_[static_cast<size_t>(gy) * grid_.getWidth() + gx];
+            return plants / std::max(params_.plantCapacityPerResource, 1.0);
+        }
+
+        /// @brief Les grandes périodes froides et chaudes, qui s'installent lentement.
+        void updateClimate()
+        {
+            if (params_.climateEpochAmplitude <= 0.0 || params_.climateEpochTicks == 0)
+                return;
+            if (generation_ % params_.climateEpochTicks == 0)
+            {
+                Det::UniformReal unit(-1.0, 1.0);
+                climateTarget_ = unit(rng_) * params_.climateEpochAmplitude;
+            }
+            const double step = params_.climateEpochAmplitude * 4.0 / params_.climateEpochTicks;
+            climateOffset_ += std::clamp(climateTarget_ - climateOffset_, -step, step);
+        }
+
         bool isWaterCell(int gx, int gy) const
         {
             const auto type = grid_.at(gx, gy).environmentType;
@@ -1399,13 +1501,13 @@ namespace Serina::Simulation
                 }
             }
 
-            // La foudre tombe surtout au bord de l'orage, là où il ne pleut pas encore fort.
+            // La foudre sèche frappe en avant de l'orage, sur un sol que la pluie n'a pas encore atteint.
             for (const auto &storm : storms_)
             {
                 if (unit(rng_) >= params_.lightningChance)
                     continue;
-                const double strikeX = storm.x + (unit(rng_) - 0.5) * 2.0 * params_.stormRadius;
-                const double strikeY = storm.y + (unit(rng_) - 0.5) * 2.0 * params_.stormRadius;
+                const double strikeX = storm.x + (unit(rng_) - 0.5) * 4.0 * params_.stormRadius;
+                const double strikeY = storm.y + (unit(rng_) - 0.5) * 4.0 * params_.stormRadius;
                 if (strikeX < 0.0 || strikeY < 0.0 || strikeX >= width || strikeY >= height)
                     continue;
                 const int gx = static_cast<int>(strikeX);
@@ -1415,7 +1517,7 @@ namespace Serina::Simulation
                 strike.x = strikeX * params_.cellSize;
                 strike.y = strikeY * params_.cellSize;
                 strike.age = generation_;
-                if (!isWaterCell(gx, gy) && moisture_[cell] < params_.fireMoistureLimit && plants_[cell] > 0.3 * plantCapacity(gx, gy))
+                if (!isWaterCell(gx, gy) && moisture_[cell] < params_.fireMoistureLimit && fuelLevel(gx, gy) > 0.2 && cellTemperature(gx, gy) > 3.0)
                 {
                     fire_[cell] = std::max(fire_[cell], 0.5);
                     strike.ignited = true;
@@ -1432,7 +1534,10 @@ namespace Serina::Simulation
                 for (int x = 0; x < width; ++x)
                 {
                     const size_t cell = static_cast<size_t>(y) * width + x;
-                    moisture_[cell] = std::clamp(moisture_[cell] + rain_[cell] * 0.05 - 0.002, 0.0, 1.0);
+                    // Le sol tend vers l'humidité de son biome, plus sèche au cœur de l'été.
+                    const auto *env = environments_.getEnvironment(grid_.at(x, y).environmentType);
+                    const double normal = env ? env->climate.humidity * (1.0 - 0.5 * std::max(0.0, localSummer(y)) * env->climate.seasonality * 2.0) : 0.5;
+                    moisture_[cell] = std::clamp(moisture_[cell] + rain_[cell] * 0.012 + (normal - moisture_[cell]) * 0.012, 0.0, 1.0);
                     scorch_[cell] = std::max(0.0, scorch_[cell] - 0.002);
                     double &fire = fire_[cell];
                     if (fire <= 0.0)
@@ -1456,8 +1561,7 @@ namespace Serina::Simulation
                         const size_t next = static_cast<size_t>(n[1]) * width + n[0];
                         if (fire_[next] > 0.0 || moisture_[next] >= params_.fireMoistureLimit)
                             continue;
-                        const double level = plants_[next] / std::max(plantCapacity(n[0], n[1]), 1.0);
-                        if (unit(rng_) < params_.fireSpreadChance * fire * level)
+                        if (unit(rng_) < params_.fireSpreadChance * fire * std::min(1.0, fuelLevel(n[0], n[1]) * 2.0))
                             ignited.push_back(next);
                     }
                 }
@@ -1499,9 +1603,7 @@ namespace Serina::Simulation
                     carrion_[cell] -= decayed;
                     double &plants = plants_[cell];
                     // Un minimum de repousse : une case rasée n'est jamais perdue pour toujours.
-                    // La pluie fait pousser : au sec, moitié moins vite ; sans orages, la vitesse de base.
-                    const double wetness = moisture_.empty() ? 1.0 : 0.5 + moisture_[cell];
-                    const double growth = params_.plantGrowthRate * wetness * std::max(plants, capacity * 0.02) * (1.0 - plants / std::max(capacity, 1.0));
+                    const double growth = params_.plantGrowthRate * plantGrowthFactor(x, y) * std::max(plants, capacity * 0.02) * (1.0 - plants / std::max(capacity, 1.0));
                     plants = std::min(capacity, plants + std::max(0.0, growth) + decayed * 0.5);
                 }
             }

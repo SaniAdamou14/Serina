@@ -26,7 +26,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 3;
+    inline constexpr int PROTOCOL_VERSION = 4;
 
     using json = nlohmann::json;
 
@@ -397,6 +397,9 @@ namespace Serina::Daemon
                 r["generation"] = m.sim->getGeneration();
                 r["population"] = m.sim->getPopulationCount();
                 r["running"] = m.running.load();
+                r["year"] = m.sim->getYear();
+                r["season"] = m.sim->getSeason();
+                r["climateOffset"] = m.sim->getClimateOffset();
                 auto lineages = m.sim->getLineageSnapshots();
                 r["speciesCount"] = lineages.size();
                 r["lineages"] = json::array();

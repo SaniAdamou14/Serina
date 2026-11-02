@@ -22,7 +22,7 @@ uniform sampler2DArray uColors;
 uniform sampler2DArray uNormals;
 uniform sampler2D uCells;    // r : couche du biome de chaque case (0-255)
 uniform sampler2D uOverlay;  // calque de données par case, transparent si inactif
-uniform sampler2D uWeather;  // r : pluie, g : feu, b : trace d'incendie
+uniform sampler2D uWeather;  // r : pluie, g : feu, b : trace d'incendie, a : neige
 uniform vec2 uGrid;
 uniform float uCellSize;
 uniform float uTime;
@@ -161,6 +161,9 @@ void main() {
     vec4 weather = texture(uWeather, (g + 0.5) / uGrid);
     // Sol mouillé plus sombre, cendres par plaques, lueur là où ça brûle.
     color *= 1.0 - 0.22 * weather.r;
+    // La neige tient d'abord dans les creux, puis couvre tout.
+    float snow = smoothstep(0.55 - weather.a * 0.55, 0.75 - weather.a * 0.55, fbm(p * 0.35 + 7.0)) * step(0.02, weather.a);
+    color = mix(color, vec3(0.86, 0.89, 0.93) * (0.7 + 0.35 * diffuse), snow);
     float ash = weather.b * smoothstep(0.25, 0.6, fbm(p * 0.6 + 13.0) + weather.b * 0.35);
     color = mix(color, vec3(0.075, 0.066, 0.06), ash * 0.85);
     color += vec3(0.55, 0.2, 0.03) * weather.g * (0.35 + 0.55 * fbm(p * 0.9 + uTime * 0.7));
