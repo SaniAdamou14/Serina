@@ -26,7 +26,7 @@ const DEFAULT_TICKS_PER_SECOND = 4;
 const CONNECT_RETRIES = 20;
 const CONNECT_RETRY_DELAY_MS = 250;
 /** PROTOCOL_VERSION de include/Serina/DaemonProtocol.hpp. */
-const REQUIRED_PROTOCOL = 5;
+const REQUIRED_PROTOCOL = 6;
 
 class SimulationEngine extends EventEmitter {
   constructor() {
@@ -358,6 +358,21 @@ class SimulationEngine extends EventEmitter {
 
     await this.pull(simulationId);
     return { success: true, generation: stepResult.generation };
+  }
+
+  /** Le joueur agit sur le monde ; la réponse dit ce qui s'est vraiment passé. */
+  async intervene(simulationId, { kind, gridX, gridY, value, group }) {
+    const instance = this.simulations.get(simulationId);
+    if (!instance) return { success: false, error: `Simulation ${simulationId} not found` };
+    const reply = await this.client.send('intervene', simulationId, {
+      kind: String(kind || ''),
+      gridX: Number.isInteger(gridX) ? gridX : -1,
+      gridY: Number.isInteger(gridY) ? gridY : -1,
+      value: Number(value) || 0,
+      group: Number.isInteger(group) ? group : 0
+    });
+    await this.pull(simulationId);
+    return { success: reply.status === 'success', outcome: reply.outcome, error: reply.status === 'success' ? undefined : reply.error };
   }
 
   async stopSimulation(simulationId) {

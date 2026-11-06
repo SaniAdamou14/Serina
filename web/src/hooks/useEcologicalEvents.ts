@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ExtinctionEventInfo, SimulationTick, SpeciationEventInfo } from '../types'
+import { ExtinctionEventInfo, InterventionInfo, SimulationTick, SpeciationEventInfo } from '../types'
+
+/** Libellé, icône et teinte d'un type d'événement, partagés par les lettres et les chroniques. */
+export const EVENT_LABELS: Record<EcoEvent['type'], string> = {
+  speciation: 'Spéciation',
+  extinction: 'Extinction',
+  intervention: 'Intervention'
+}
 
 export interface EcoEvent {
   id: string
-  type: 'speciation' | 'extinction'
+  type: 'speciation' | 'extinction' | 'intervention'
   message: string
   generation: number
 }
@@ -18,6 +25,24 @@ function speciationEntry(e: SpeciationEventInfo): EcoEvent {
     type: 'speciation',
     generation: e.generation,
     message: `« ${e.newSpecies} » a divergé de « ${e.parentSpecies} » (distance génétique : ${e.geneticDistanceAtSplit.toFixed(3)}).`
+  }
+}
+
+const ACTION_LABELS: Record<string, string> = {
+  storm: 'Orage provoqué',
+  fire: 'Feu allumé',
+  meteor: 'Météorite',
+  climate: 'Climat poussé',
+  introduce: 'Introduction'
+}
+
+function interventionEntry(e: InterventionInfo, index: number): EcoEvent {
+  const where = e.gridX >= 0 ? ` (case ${e.gridX}, ${e.gridY})` : ''
+  return {
+    id: `intervention:${index}@${e.generation}`,
+    type: 'intervention',
+    generation: e.generation,
+    message: `${ACTION_LABELS[e.kind] ?? e.kind}${where} : ${e.outcome}`
   }
 }
 
@@ -41,9 +66,14 @@ export function useEcologicalEvents(tick: SimulationTick | null | undefined, sim
 
   const speciations = tick?.lineages.speciationEvents
   const extinctions = tick?.lineages.extinctionEvents
+  const interventions = tick?.lineages.interventions
   const chronicle = useMemo<EcoEvent[]>(
-    () => [...(speciations ?? []).map(speciationEntry), ...(extinctions ?? []).map(extinctionEntry)],
-    [speciations, extinctions]
+    () => [
+      ...(speciations ?? []).map(speciationEntry),
+      ...(extinctions ?? []).map(extinctionEntry),
+      ...(interventions ?? []).map(interventionEntry)
+    ],
+    [speciations, extinctions, interventions]
   )
 
   const dismiss = useCallback((id: string) => setLetters((current) => current.filter((e) => e.id !== id)), [])

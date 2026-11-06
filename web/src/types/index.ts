@@ -207,6 +207,16 @@ export interface IndividualsResult {
   error?: string
 }
 
+/** Une action du joueur, telle qu'elle a vraiment agi. */
+export interface InterventionInfo {
+  generation: number
+  kind: string
+  gridX: number
+  gridY: number
+  value: number
+  outcome: string
+}
+
 export interface ExtinctionEventInfo {
   species: string
   generation: number
@@ -256,6 +266,8 @@ export interface LineagesResult {
   lineages: LineageStatus[]
   speciationEvents: SpeciationEventInfo[]
   extinctionEvents: ExtinctionEventInfo[]
+  /** Absent d'un moteur plus ancien. */
+  interventions?: InterventionInfo[]
   convergenceSignals: ConvergenceSignalInfo[]
   error?: string
 }

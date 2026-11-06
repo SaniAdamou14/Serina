@@ -73,6 +73,13 @@ class ApiService {
     )
   }
 
+  intervene(simulationId: SimulationId, action: { kind: string; gridX: number; gridY: number; value: number; group: number }) {
+    return request<{ success: boolean; outcome?: string; error?: string }>(
+      `/api/serina/intervene/${simulationId}`,
+      { method: 'POST', body: JSON.stringify(action) }
+    )
+  }
+
   stepSimulation(simulationId: SimulationId, count = 1) {
     return request<{ success: boolean; generation?: number; error?: string }>(
       `/api/serina/step/${simulationId}`,

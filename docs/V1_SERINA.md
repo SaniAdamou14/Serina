@@ -153,7 +153,9 @@ Une case n'est cochée que si le banc l'a montré sur des graines non utilisées
 - [ ] Un monde complet, de la fondation à la fin, sans plantage ni fuite, avec une mémoire consultable.
 
 **Agir sur le monde**
-- [ ] Orage, feu, météorite, changement de climat et ajout d'espèces, reproductibles et consignés.
+- [x] Orage, feu, météorite, changement de climat et ajout d'espèces, depuis la fiche d'une case. Chaque action
+  dit ce qu'elle a vraiment fait, reste dans la chronique et la sauvegarde, et les morts d'une catastrophe ont leur
+  propre cause.
 
 **L'interface**
 - [x] Carte vivante : plantes, morts, feu, pluie, éclairs, neige et saisons.

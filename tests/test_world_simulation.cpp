@@ -1003,3 +1003,48 @@ TEST_CASE("the map goes round the planet: east meets west, the poles do not", "[
         CHECK(y >= 0);
     CHECK(grid.positionToGrid(-0.5, 5.0, 120.0, 90.0).first == 11);
 }
+
+TEST_CASE("the player acts on the world, and every action is recorded as it really happened", "[worldsim][actions]") {
+    UnifiedWorldSimulator sim({}, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 50; ++i)
+        sim.step();
+
+    // Une météorite au milieu d'un groupe tue, et ses morts ont leur propre cause.
+    const auto inds = sim.getIndividualSnapshots();
+    REQUIRE(!inds.empty());
+    const auto [gx, gy] = sim.getGrid().positionToGrid(inds.front().x, inds.front().y, sim.getGrid().getWidth() * sim.getCellSize(), sim.getGrid().getHeight() * sim.getCellSize());
+    const auto before = sim.getPopulationCount();
+    auto [ok, outcome] = sim.intervene("meteor", gx, gy, 1.5);
+    CHECK(ok);
+    CHECK(outcome.find("tués") != std::string::npos);
+    sim.step();
+    CHECK(sim.getPopulationCount() < before);
+    uint64_t struck = 0;
+    for (const auto &lineage : sim.getLineageSnapshots())
+        struck += lineage.tally.disaster;
+    CHECK(struck > 0);
+
+    // Le climat peut être poussé, l'eau ne brûle pas, un groupe ne vit que là où il peut.
+    CHECK(sim.intervene("climate", -1, -1, -3.0).first);
+    int water = -1, waterY = -1;
+    for (const auto &r : sim.getRegionSnapshots())
+        if (r.environmentType == Ecosystem::EnvironmentType::OCEAN || r.environmentType == Ecosystem::EnvironmentType::FRESHWATER) {
+            water = r.gridX;
+            waterY = r.gridY;
+        }
+    if (water >= 0) {
+        CHECK_FALSE(sim.intervene("fire", water, waterY, 0.0).first);
+        CHECK_FALSE(sim.intervene("introduce", water, waterY, 10.0, static_cast<int>(Taxonomy::BiologicalType::MOLLUSC)).first);
+        CHECK(sim.intervene("introduce", water, waterY, 10.0, static_cast<int>(Taxonomy::BiologicalType::FISH)).first);
+    }
+    CHECK(sim.intervene("storm", gx, gy, 0.0).first);
+    CHECK_FALSE(sim.intervene("nothing", gx, gy, 0.0).first);
+
+    // Seules les actions réussies sont consignées, dans l'ordre.
+    const auto &log = sim.getInterventions();
+    REQUIRE(log.size() >= 3);
+    CHECK(log.front().kind == "meteor");
+    for (const auto &entry : log)
+        CHECK(!entry.outcome.empty());
+}

@@ -133,6 +133,22 @@ router.post('/step/:simulationId', async (req, res) => {
 
 /**
  * @swagger
+ * /api/serina/intervene/{simulationId}:
+ *   post:
+ *     summary: Agit sur le monde (orage, feu, météorite, climat, introduction)
+ *     tags: [Serina]
+ */
+router.post('/intervene/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  const result = await simulationEngine.intervene(req.params.simulationId, req.body || {});
+  // Une action impossible ici n'est pas une erreur du serveur : on renvoie la raison.
+  res.status(200).json(result);
+});
+
+/**
+ * @swagger
  * /api/serina/save/{simulationId}:
  *   post:
  *     summary: Sauvegarde un instantané complet sans arrêter la simulation
