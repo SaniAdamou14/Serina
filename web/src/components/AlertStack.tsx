@@ -1,4 +1,5 @@
-import { RefreshCw, Rocket, Skull, WifiOff, X } from 'lucide-react'
+import { RefreshCw, Rocket, Skull, WifiOff, X, Hand } from 'lucide-react'
+import { EVENT_LABELS } from '../hooks/useEcologicalEvents'
 import { useSimulation } from '@services/SimulationContext'
 import { useGameLog } from '@services/GameLogContext'
 
@@ -31,11 +32,11 @@ export function AlertStack() {
       {events.map((event) => (
         <div
           key={event.id}
-          className={`game-panel pointer-events-auto w-full px-2 py-1.5 text-xs flex items-start gap-2 ${event.type === 'extinction' ? 'text-red-200' : 'text-primary-300'}`}
+          className={`game-panel pointer-events-auto w-full px-2 py-1.5 text-xs flex items-start gap-2 ${event.type === 'extinction' ? 'text-red-200' : event.type === 'intervention' ? 'text-amber-200' : 'text-primary-300'}`}
         >
-          {event.type === 'extinction' ? <Skull className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <Rocket className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+          {event.type === 'extinction' ? <Skull className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : event.type === 'intervention' ? <Hand className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <Rocket className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
           <div className="flex-1 min-w-0">
-            <div className="font-semibold">{event.type === 'extinction' ? 'Extinction' : 'Spéciation'}, tick {event.generation}</div>
+            <div className="font-semibold">{EVENT_LABELS[event.type]}, tick {event.generation}</div>
             <div className="text-slate-300 break-words">{event.message}</div>
           </div>
           <button className="opacity-60 hover:opacity-100 shrink-0" onClick={() => dismiss(event.id)} aria-label="Fermer la lettre">

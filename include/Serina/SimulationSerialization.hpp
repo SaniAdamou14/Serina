@@ -416,8 +416,12 @@ namespace Serina::Simulation
         j["nicheStreak"] = nicheStreak;
         json tallies = json::object();
         for (const auto &[name, t] : tallies_)
-            tallies[name] = {t.births, t.starved, t.oldAge, t.eaten, t.burned};
+            tallies[name] = {t.births, t.starved, t.oldAge, t.eaten, t.burned, t.disaster};
         j["tallies"] = tallies;
+        json interventions = json::array();
+        for (const auto &i : interventions_)
+            interventions.push_back({{"generation", i.generation}, {"kind", i.kind}, {"gridX", i.gridX}, {"gridY", i.gridY}, {"value", i.value}, {"outcome", i.outcome}});
+        j["interventions"] = interventions;
 
         // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
         // génération avant la sauvegarde -- lue par buildBrainInputs() au
@@ -625,10 +629,13 @@ namespace Serina::Simulation
         const json savedTallies = j.value("tallies", json::object());
         for (const auto &[name, t] : savedTallies.items())
         {
-            if (!t.is_array() || t.size() != 5)
+            if (!t.is_array() || t.size() < 5)
                 continue;
-            sim->tallies_[name] = {t[0].get<uint64_t>(), t[1].get<uint64_t>(), t[2].get<uint64_t>(), t[3].get<uint64_t>(), t[4].get<uint64_t>()};
+            // Les sauvegardes d'avant les catastrophes n'ont que 5 compteurs.
+            sim->tallies_[name] = {t[0].get<uint64_t>(), t[1].get<uint64_t>(), t[2].get<uint64_t>(), t[3].get<uint64_t>(), t[4].get<uint64_t>(), t.size() > 5 ? t[5].get<uint64_t>() : 0};
         }
+        for (const auto &i : j.value("interventions", json::array()))
+            sim->interventions_.push_back({i.value("generation", 0u), i.value("kind", std::string()), i.value("gridX", -1), i.value("gridY", -1), i.value("value", 0.0), i.value("outcome", std::string())});
 
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))

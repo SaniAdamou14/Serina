@@ -2,6 +2,7 @@ import { ClipboardList, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useSelection } from '@services/SelectionContext'
 import { useSimulation } from '@services/SimulationContext'
+import { WorldActions } from './WorldActions'
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -57,6 +58,7 @@ export function InspectorPanel() {
           <Row label="Stress climatique" value={`${(selectedRegion.climaticStress * 100).toFixed(0)} %`} />
         </div>
       )}
+      {selectedRegion && <WorldActions gridX={selectedRegion.gridX} gridY={selectedRegion.gridY} />}
 
       {individualDied && <p className="p-2 text-slate-400">Cet individu est mort.</p>}
 

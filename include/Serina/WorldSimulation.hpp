@@ -56,6 +56,18 @@ namespace Serina::Simulation
         uint64_t oldAge = 0;    ///< fin de sa durée de vie
         uint64_t eaten = 0;     ///< tuée par un prédateur
         uint64_t burned = 0;    ///< morte dans un feu
+        uint64_t disaster = 0;  ///< tuée par une catastrophe, comme une météorite
+    };
+
+    /// @brief Une action du joueur sur le monde, telle qu'elle a vraiment agi.
+    struct Intervention
+    {
+        uint32_t generation = 0;
+        std::string kind;    ///< storm, fire, meteor, climate, introduce
+        int gridX = -1;      ///< case visée, -1 pour tout le monde
+        int gridY = -1;
+        double value = 0.0;  ///< rayon, écart de température ou nombre d'individus
+        std::string outcome; ///< ce qui s'est vraiment passé
     };
 
     struct LineageSnapshot
@@ -490,6 +502,167 @@ namespace Serina::Simulation
         /// Serina, chacune placée dans un biome cohérent avec sa biologie,
         /// avec une population initiale de vrais individus à génome
         /// diploïde.
+        /// @brief Un individu fondateur au génome neuf, dans les limites de son groupe.
+        Evolution::Organism makeFounder(Taxonomy::BiologicalType type, const std::string &species)
+        {
+            // Graine dérivée du flux du simulateur : deux mondes de même graine ont les mêmes génomes.
+            auto genome = std::make_unique<Genetics::AdvancedGenome>(generation_, static_cast<uint32_t>(rng_()));
+            // Sinon presque tous les enfants violent les limites de leur groupe et la lignée ne se reproduit pas.
+            if (const auto *rules = constraints_.getBiologicalGroupRules(type))
+                for (const auto &[trait, limits] : rules->traitLimits)
+                    genome->rescaleAllelesToRange(trait, limits.first, limits.second);
+            const auto dietRange = Habitat::founderDietRange(type);
+            genome->rescaleAllelesToRange(Genetics::TraitType::DIET, dietRange.first, dietRange.second);
+            return Evolution::Organism(std::move(genome), species);
+        }
+
+        /// @brief Le nom fondateur d'un groupe, celui qu'on réintroduit.
+        static std::string founderNameOf(Taxonomy::BiologicalType type)
+        {
+            switch (type)
+            {
+            case Taxonomy::BiologicalType::BIRD: return "Serinus canaria";
+            case Taxonomy::BiologicalType::FISH: return "Xiphophorus hellerii";
+            case Taxonomy::BiologicalType::ARTHROPOD: return "Gryllus seriensis";
+            case Taxonomy::BiologicalType::MOLLUSC: return "Achatina fulica";
+            default: return "";
+            }
+        }
+
+        const std::vector<Intervention> &getInterventions() const { return interventions_; }
+
+        /// @brief Le joueur agit sur le monde. Renvoie ce qui s'est vraiment passé, ou une raison
+        /// claire si l'action ne peut pas se faire ici ; seule une action réussie est consignée.
+        std::pair<bool, std::string> intervene(const std::string &kind, int gx, int gy, double value, int group = 0)
+        {
+            const int width = grid_.getWidth();
+            const int height = grid_.getHeight();
+            const bool needsCell = kind != "climate";
+            if (needsCell && (gy < 0 || gy >= height))
+                return {false, "Case hors de la planète."};
+            if (needsCell)
+                gx = grid_.wrapX(gx);
+            ensureFood();
+            updateWeatherState();
+
+            Intervention record;
+            record.generation = generation_;
+            record.kind = kind;
+            record.gridX = needsCell ? gx : -1;
+            record.gridY = needsCell ? gy : -1;
+            record.value = value;
+            const size_t cell = needsCell ? static_cast<size_t>(gy) * width + gx : 0;
+
+            if (kind == "storm")
+            {
+                if (storms_.empty())
+                    return {false, "Les orages sont désactivés dans ce monde."};
+                // L'orage le plus près de sa fin se reforme sur la case.
+                auto storm = std::min_element(storms_.begin(), storms_.end(), [](const Storm &a, const Storm &b) { return a.life < b.life; });
+                storm->x = gx + 0.5;
+                storm->y = gy + 0.5;
+                storm->vx *= 0.3;
+                storm->vy *= 0.3;
+                storm->life = 400;
+                record.outcome = "Un orage se forme.";
+            }
+            else if (kind == "fire")
+            {
+                if (isWaterCell(gx, gy))
+                    return {false, "On ne met pas le feu à l'eau."};
+                if (fuelLevel(gx, gy) < 0.05)
+                    return {false, "Il n'y a presque rien à brûler ici."};
+                fire_[cell] = std::max(fire_[cell], 0.9);
+                record.outcome = "Le feu prend.";
+            }
+            else if (kind == "meteor")
+            {
+                const double radius = std::clamp(value > 0.0 ? value : 1.5, 0.5, 4.0);
+                const double cx = (gx + 0.5) * params_.cellSize;
+                const double cy = (gy + 0.5) * params_.cellSize;
+                const double reach = radius * params_.cellSize;
+                Det::UniformReal unit(0.0, 1.0);
+                uint32_t killed = 0;
+                for (auto &organism : population_)
+                {
+                    if (!organism.isAlive())
+                        continue;
+                    double dx = std::abs(organism.getX() - cx);
+                    dx = std::min(dx, worldWidth() - dx); // l'impact passe la ligne de changement de jour
+                    const double dy = organism.getY() - cy;
+                    const double d = std::sqrt(dx * dx + dy * dy);
+                    if (d >= reach)
+                        continue;
+                    // Mort certaine au centre, de plus en plus de survivants vers le bord.
+                    if (unit(rng_) < 1.0 - 0.7 * (d / reach))
+                    {
+                        organism.setEnergy(0.0);
+                        organism.setAlive(false);
+                        struckThisTick_.insert(organism.getId());
+                        killed++;
+                    }
+                }
+                const int span = static_cast<int>(std::ceil(radius));
+                for (int y = std::max(0, gy - span); y <= std::min(height - 1, gy + span); ++y)
+                {
+                    for (int x = gx - span; x <= gx + span; ++x)
+                    {
+                        const int wx = grid_.wrapX(x);
+                        const double ddx = std::min(std::abs(x - gx), width - std::abs(x - gx));
+                        if (std::sqrt(ddx * ddx + (y - gy) * (y - gy)) > radius)
+                            continue;
+                        const size_t c = static_cast<size_t>(y) * width + wx;
+                        plants_[c] *= 0.2;
+                        scorch_[c] = 1.0;
+                        if (!isWaterCell(wx, y))
+                            fire_[c] = std::max(fire_[c], 0.7);
+                    }
+                }
+                // La poussière cache le soleil un temps ; le climat revient ensuite vers sa tendance.
+                climateOffset_ -= 0.8 * radius;
+                record.outcome = "Météorite : " + std::to_string(killed) + " individus tués.";
+            }
+            else if (kind == "climate")
+            {
+                const double limit = 2.0 * std::max(params_.climateEpochAmplitude, 4.0);
+                climateTarget_ = std::clamp(climateTarget_ + value, -limit, limit);
+                char text[96];
+                std::snprintf(text, sizeof(text), "Le climat tend vers %+.1f °C.", climateTarget_);
+                record.outcome = text;
+            }
+            else if (kind == "introduce")
+            {
+                const auto type = static_cast<Taxonomy::BiologicalType>(group);
+                std::string species = founderNameOf(type);
+                if (species.empty())
+                    return {false, "Ce groupe ne peut pas être introduit."};
+                if (!Habitat::suitabilityOf(type, grid_.at(gx, gy).environmentType).passable)
+                    return {false, "Ce groupe ne peut pas vivre ici."};
+                const bool alive = std::any_of(population_.begin(), population_.end(), [&](const Evolution::Organism &o) { return o.isAlive() && o.getSpecies() == species; });
+                const bool extinct = std::any_of(extinctionEvents_.begin(), extinctionEvents_.end(), [&](const ExtinctionEvent &e) { return e.species == species; });
+                // Une espèce éteinte ne revient pas : c'est une nouvelle lignée, venue d'ailleurs.
+                if (!alive && extinct)
+                    species += " (introduit en " + std::to_string(generation_) + ")";
+                biologicalTypeOf_[species] = type;
+                ensureBrain(species);
+                const uint32_t count = static_cast<uint32_t>(std::clamp(value > 0.0 ? value : 20.0, 1.0, 200.0));
+                for (uint32_t i = 0; i < count; ++i)
+                {
+                    Evolution::Organism organism = makeFounder(type, species);
+                    placeInRegion(organism, gx, gy);
+                    organism.setEnergy(100.0);
+                    population_.push_back(std::move(organism));
+                }
+                record.outcome = std::to_string(count) + " individus de " + species + " introduits.";
+            }
+            else
+            {
+                return {false, "Action inconnue : " + kind};
+            }
+            interventions_.push_back(record);
+            return {true, record.outcome};
+        }
+
         void seedFounderSpecies(uint32_t individualsPerFounder = 40)
         {
             struct Founder
@@ -529,15 +702,7 @@ namespace Serina::Simulation
                     // même graine produisent des génomes fondateurs
                     // réellement identiques, pas seulement des positions
                     // identiques.
-                    auto genome = std::make_unique<Genetics::AdvancedGenome>(generation_, static_cast<uint32_t>(rng_()));
-                    // Sinon presque tous les enfants violent les limites de leur
-                    // groupe (validateMutation) et la lignée ne se reproduit pas.
-                    if (const auto *rules = constraints_.getBiologicalGroupRules(founder.type))
-                        for (const auto &[trait, limits] : rules->traitLimits)
-                            genome->rescaleAllelesToRange(trait, limits.first, limits.second);
-                    const auto dietRange = Habitat::founderDietRange(founder.type);
-                    genome->rescaleAllelesToRange(Genetics::TraitType::DIET, dietRange.first, dietRange.second);
-                    Evolution::Organism organism(std::move(genome), founder.commonName);
+                    Evolution::Organism organism = makeFounder(founder.type, founder.commonName);
                     placeInRegion(organism, gx, gy);
                     organism.setEnergy(100.0);
                     population_.push_back(std::move(organism));
@@ -818,6 +983,8 @@ namespace Serina::Simulation
         std::deque<CorpseSnapshot> corpses_;
         std::map<std::string, LifeTally> tallies_; ///< par espèce, gardé après son extinction
         std::set<uint64_t> burnedThisTick_;        ///< morts par le feu pendant ce tick
+        std::set<uint64_t> struckThisTick_;        ///< tués par une catastrophe pendant ce tick
+        std::vector<Intervention> interventions_;
         /// Énergie que contient un corps par unité de taille.
         static constexpr double BODY_ENERGY_PER_SIZE = 30.0;
         /// À 1 % de décomposition par tick, il ne reste presque rien d'un cadavre après 300 ticks.
@@ -1485,14 +1652,10 @@ namespace Serina::Simulation
             storm.life = 300 + static_cast<int>(unit(rng_) * 500.0);
         }
 
-        /// @brief Orages, humidité, foudre et feu : tout agit sur les vraies plantes.
-        void updateWeather()
+        /// @brief Crée les cases météo et les orages au premier besoin.
+        void updateWeatherState()
         {
-            if (params_.stormCount <= 0)
-                return;
-            const int width = grid_.getWidth();
-            const int height = grid_.getHeight();
-            const size_t cells = static_cast<size_t>(width) * height;
+            const size_t cells = static_cast<size_t>(grid_.getWidth()) * grid_.getHeight();
             if (moisture_.size() != cells)
             {
                 moisture_.assign(cells, 0.5);
@@ -1500,12 +1663,23 @@ namespace Serina::Simulation
                 fire_.assign(cells, 0.0);
                 scorch_.assign(cells, 0.0);
             }
-            if (storms_.size() != static_cast<size_t>(params_.stormCount))
+            const size_t wanted = static_cast<size_t>(std::max(params_.stormCount, 0));
+            if (storms_.size() != wanted)
             {
-                storms_.resize(params_.stormCount);
+                storms_.resize(wanted);
                 for (auto &storm : storms_)
                     spawnStorm(storm);
             }
+        }
+
+        /// @brief Orages, humidité, foudre et feu : tout agit sur les vraies plantes.
+        void updateWeather()
+        {
+            if (params_.stormCount <= 0)
+                return;
+            const int width = grid_.getWidth();
+            const int height = grid_.getHeight();
+            updateWeatherState();
 
             Det::UniformReal unit(0.0, 1.0);
             std::fill(rain_.begin(), rain_.end(), 0.0);
@@ -1653,7 +1827,9 @@ namespace Serina::Simulation
                     tally.eaten++;
                     continue; // déjà mangée
                 }
-                if (burnedThisTick_.count(o.getId()))
+                if (struckThisTick_.count(o.getId()))
+                    tally.disaster++;
+                else if (burnedThisTick_.count(o.getId()))
                     tally.burned++;
                 else if (o.getEnergy() <= 0.0)
                     tally.starved++;
@@ -1673,6 +1849,7 @@ namespace Serina::Simulation
                 population_.end());
             killedThisTick_.clear();
             burnedThisTick_.clear();
+            struckThisTick_.clear();
             while (!corpses_.empty() && generation_ - corpses_.front().age > CORPSE_VISIBLE_TICKS)
                 corpses_.pop_front();
         }

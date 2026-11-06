@@ -26,7 +26,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 5;
+    inline constexpr int PROTOCOL_VERSION = 6;
 
     using json = nlohmann::json;
 
@@ -102,7 +102,8 @@ namespace Serina::Daemon
                        {"starved", l.tally.starved},
                        {"oldAge", l.tally.oldAge},
                        {"eaten", l.tally.eaten},
-                       {"burned", l.tally.burned}}},
+                       {"burned", l.tally.burned},
+                       {"disaster", l.tally.disaster}}},
             {"hasBrain", sim.hasBrain(l.speciesName)},
             {"brainComplexity", sim.getBrainComplexity(l.speciesName)},
             // Moyenne réelle des 12 traits diploïdes sur tous les individus
@@ -468,6 +469,9 @@ namespace Serina::Daemon
                 r["extinctionEvents"] = json::array();
                 for (const auto &e : m.sim->getExtinctionEvents())
                     r["extinctionEvents"].push_back({{"species", e.species}, {"generation", e.generation}, {"lastPopulation", e.lastPopulation}});
+                r["interventions"] = json::array();
+                for (const auto &i : m.sim->getInterventions())
+                    r["interventions"].push_back({{"generation", i.generation}, {"kind", i.kind}, {"gridX", i.gridX}, {"gridY", i.gridY}, {"value", i.value}, {"outcome", i.outcome}});
                 r["convergenceSignals"] = json::array();
                 for (const auto &s : m.sim->getConvergenceSignals())
                     r["convergenceSignals"].push_back(convergenceSignalToJson(s));
@@ -486,6 +490,16 @@ namespace Serina::Daemon
                                             {"energy", h.totalEnergy},
                                             {"diversity", h.meanDiversity},
                                             {"bySpecies", h.bySpecies}});
+                return r; });
+        }
+        else if (command == "intervene")
+        {
+            result = registry.withSimulation(simulationId, [&](ManagedSimulation &m)
+                                              {
+                auto [ok, message] = m.sim->intervene(request.value("kind", std::string()), request.value("gridX", -1),
+                                                      request.value("gridY", -1), request.value("value", 0.0), request.value("group", 0));
+                json r = ok ? successJson() : errorJson(message);
+                r["outcome"] = message;
                 return r; });
         }
         else if (command == "ping")
