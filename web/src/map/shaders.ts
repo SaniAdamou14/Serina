@@ -59,7 +59,9 @@ float fbm(vec2 p) {
 }
 
 int cellLayer(ivec2 cell) {
-  ivec2 clamped = clamp(cell, ivec2(0), ivec2(uGrid) - 1);
+  // L'est rejoint l'ouest : les biomes se fondent aussi d'un bord à l'autre de la carte.
+  int w = int(uGrid.x + 0.5);
+  ivec2 clamped = ivec2(((cell.x % w) + w) % w, clamp(cell.y, 0, int(uGrid.y) - 1));
   return int(texelFetch(uCells, clamped, 0).r * 255.0 + 0.5);
 }
 

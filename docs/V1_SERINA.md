@@ -31,7 +31,7 @@ Toutes ces tâches doivent être faites ; l'ordre suit leurs priorités.
 6. Cerveau et intelligence, après le vol qui en est la contrainte.
 7. Fresques : voir plus bas, à faire avancer en parallèle dès que le moteur retient les causes.
 8. Planète façon RimWorld : un globe 3D de toute la planète, où cliquer sur un point ouvre sa carte 2D.
-   - Première étape : le monde actuel enroulé sur la sphère, l'est rejoignant l'ouest.
+   - Première étape, faite : le monde actuel enroulé sur la sphère, l'est rejoignant l'ouest.
    - Étape suivante : une planète immense. Elle demande un moteur à deux échelles, toute la planète simulée
      en gros et les individus seulement sur la carte ouverte. C'est le même chantier de fond que le temps
      géologique : ils se feront ensemble.
@@ -121,7 +121,10 @@ chiffre comme un fait biologique, seulement comme ce qui s'est passé dans ce mo
 Une case n'est cochée que si le banc l'a montré sur des graines non utilisées pour le réglage.
 
 **Le monde**
-- [ ] Globe 3D de la planète façon RimWorld, et planète immense à deux échelles.
+- [x] Globe 3D de la planète façon RimWorld : tout le monde enroulé sur la sphère, l'est rejoignant l'ouest,
+  avec les vraies données de chaque case, et un double-clic qui descend sur la carte. 60 images/s sur Radeon
+  intégrée.
+- [ ] Planète immense à deux échelles.
 - [x] Saisons opposées entre hémisphères, latitude, pluie, foudre et feu.
 - [x] Adaptation locale à la température à l'intérieur d'une espèce : 0,256 sur 6 graines nouvelles
   (61 à 66, 20 000 ticks), contre 0,007 sans climat.

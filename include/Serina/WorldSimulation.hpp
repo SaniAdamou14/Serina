@@ -1045,11 +1045,14 @@ namespace Serina::Simulation
 
                 double nx = organism.getX() + dx;
                 double ny = organism.getY() + dy;
+                // Est et ouest se rejoignent : la carte fait le tour de la planète.
+                nx = std::fmod(nx, worldWidth());
+                if (nx < 0.0)
+                    nx += worldWidth();
                 if (params_.reflectAtBorders)
                 {
-                    if (nx < 0.0) nx = -nx;
+                    // Seuls les pôles sont des bords.
                     if (ny < 0.0) ny = -ny;
-                    if (nx >= worldWidth()) nx = 2.0 * worldWidth() - nx;
                     if (ny >= worldHeight()) ny = 2.0 * worldHeight() - ny;
                 }
                 nx = std::clamp(nx, 0.0, worldWidth() - 1e-6);
@@ -1100,9 +1103,9 @@ namespace Serina::Simulation
             const std::array<std::pair<int, int>, 4> offsets = {{{0, -1}, {0, 1}, {1, 0}, {-1, 0}}};
             for (size_t i = 0; i < offsets.size(); ++i)
             {
-                int nx = gx + offsets[i].first;
+                int nx = grid_.wrapX(gx + offsets[i].first);
                 int ny = gy + offsets[i].second;
-                if (nx < 0 || nx >= grid_.getWidth() || ny < 0 || ny >= grid_.getHeight())
+                if (ny < 0 || ny >= grid_.getHeight())
                     continue;
                 const auto *neighborEnv = environments_.getEnvironment(grid_.at(nx, ny).environmentType);
                 if (neighborEnv)
@@ -1577,7 +1580,7 @@ namespace Serina::Simulation
                         fire -= 0.05;
                     fire = std::clamp(fire, 0.0, 1.0);
 
-                    const int neighbors[4][2] = {{x - 1, y}, {x + 1, y}, {x, y - 1}, {x, y + 1}};
+                    const int neighbors[4][2] = {{grid_.wrapX(x - 1), y}, {grid_.wrapX(x + 1), y}, {x, y - 1}, {x, y + 1}};
                     for (const auto &n : neighbors)
                     {
                         if (n[0] < 0 || n[1] < 0 || n[0] >= width || n[1] >= height || isWaterCell(n[0], n[1]))

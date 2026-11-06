@@ -44,18 +44,22 @@ namespace Serina::Spatial
         int getWidth() const { return width_; }
         int getHeight() const { return height_; }
 
-        const RegionState &at(int x, int y) const { return cells_[index(clampX(x), clampY(y))]; }
-        RegionState &at(int x, int y) { return cells_[index(clampX(x), clampY(y))]; }
+        const RegionState &at(int x, int y) const { return cells_[index(wrapX(x), clampY(y))]; }
+        RegionState &at(int x, int y) { return cells_[index(wrapX(x), clampY(y))]; }
+
+        /// @brief Longitude ramenée dans la carte : la planète fait le tour, l'est rejoint l'ouest.
+        int wrapX(int x) const { return ((x % width_) + width_) % width_; }
 
         /// @brief Convertit une position continue (monde) en coordonnées de grille.
         std::pair<int, int> positionToGrid(double x, double y, double worldWidth, double worldHeight) const
         {
-            int gx = static_cast<int>((x / worldWidth) * width_);
+            // floor et non une troncature : juste à l'ouest de 0, on est sur la dernière colonne.
+            int gx = static_cast<int>(std::floor((x / worldWidth) * width_));
             int gy = static_cast<int>((y / worldHeight) * height_);
-            return {clampX(gx), clampY(gy)};
+            return {wrapX(gx), clampY(gy)};
         }
 
-        /// @brief Les 4 voisins orthogonaux (bords exclus).
+        /// @brief Les 4 voisins orthogonaux : l'est et l'ouest se rejoignent, pas les pôles.
         std::vector<std::pair<int, int>> neighbors(int x, int y) const
         {
             std::vector<std::pair<int, int>> result;
@@ -63,9 +67,9 @@ namespace Serina::Spatial
             const int dy[] = {0, 0, -1, 1};
             for (int i = 0; i < 4; ++i)
             {
-                int nx = x + dx[i];
+                int nx = wrapX(x + dx[i]);
                 int ny = y + dy[i];
-                if (nx >= 0 && nx < width_ && ny >= 0 && ny < height_)
+                if (ny >= 0 && ny < height_ && (nx != x || ny != y))
                     result.emplace_back(nx, ny);
             }
             return result;
@@ -87,7 +91,6 @@ namespace Serina::Spatial
         std::vector<RegionState> cells_;
 
         size_t index(int x, int y) const { return static_cast<size_t>(y) * width_ + x; }
-        int clampX(int x) const { return std::clamp(x, 0, width_ - 1); }
         int clampY(int y) const { return std::clamp(y, 0, height_ - 1); }
 
         void generateBiomes(uint32_t seed)
@@ -142,7 +145,9 @@ namespace Serina::Spatial
                     Ecosystem::EnvironmentType bestType = Ecosystem::EnvironmentType::GRASSLAND;
                     for (const auto &c : centers)
                     {
-                        int dx = c.x - x;
+                        // Distance en faisant le tour : pas de couture de biomes sur le globe.
+                        int dx = std::abs(c.x - x);
+                        dx = std::min(dx, width_ - dx);
                         int dy = c.y - y;
                         int d2 = dx * dx + dy * dy;
                         if (d2 < bestDist)

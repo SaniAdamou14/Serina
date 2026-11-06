@@ -991,3 +991,15 @@ TEST_CASE("every death of a species is counted once, under one cause", "[worldsi
         CHECK(deaths > 0);
     }
 }
+
+TEST_CASE("the map goes round the planet: east meets west, the poles do not", "[worldsim][region]") {
+    Spatial::RegionGrid grid(12, 9, 1234);
+    CHECK(grid.wrapX(-1) == 11);
+    CHECK(grid.wrapX(12) == 0);
+    const auto west = grid.neighbors(0, 4);
+    CHECK(std::find(west.begin(), west.end(), std::make_pair(11, 4)) != west.end());
+    const auto pole = grid.neighbors(5, 0);
+    for (const auto &[x, y] : pole)
+        CHECK(y >= 0);
+    CHECK(grid.positionToGrid(-0.5, 5.0, 120.0, 90.0).first == 11);
+}
