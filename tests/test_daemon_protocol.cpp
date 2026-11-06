@@ -647,3 +647,15 @@ TEST_CASE("a slow command for one simulation does not block a concurrent command
     client.close();
     serverThread.detach();
 }
+
+TEST_CASE("planet sends every tile and the grid triangles", "[daemon]")
+{
+    Daemon::SimulationRegistry registry;
+    Daemon::handleCommand(registry, makeRequest("create", "sim-p", {{"founderCount", 5}}));
+    auto response = Daemon::handleCommand(registry, makeRequest("planet", "sim-p", {}));
+    REQUIRE(response["status"] == "success");
+    REQUIRE(response["tiles"].size() == 2562);
+    REQUIRE(response["tiles"][0].size() == 7);
+    REQUIRE(response["triangles"].size() > 0);
+    REQUIRE(response["home"].get<int>() >= 0);
+}

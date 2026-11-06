@@ -26,7 +26,7 @@ const DEFAULT_TICKS_PER_SECOND = 4;
 const CONNECT_RETRIES = 20;
 const CONNECT_RETRY_DELAY_MS = 250;
 /** PROTOCOL_VERSION de include/Serina/DaemonProtocol.hpp. */
-const REQUIRED_PROTOCOL = 6;
+const REQUIRED_PROTOCOL = 7;
 
 class SimulationEngine extends EventEmitter {
   constructor() {
@@ -209,6 +209,12 @@ class SimulationEngine extends EventEmitter {
    * qui s'en charge en continu tant qu'elle est en lecture.
    */
   /** Histoire de la partie, gardée par le moteur. */
+  /** La planète entière, régénérée par le moteur depuis la graine du monde. */
+  async getPlanet(simulationId) {
+    if (!this.simulations.has(simulationId)) throw new Error('Simulation not found');
+    return this.client.send('planet', simulationId);
+  }
+
   async getHistory(simulationId) {
     if (!this.simulations.has(simulationId)) throw new Error('Simulation not found');
     return this.client.send('history', simulationId);

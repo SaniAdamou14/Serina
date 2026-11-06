@@ -10,8 +10,6 @@ import { computeLineageHues, creatureColor, hexToRgb } from '../utils/lineageCol
 import { OverlayMode, OVERLAY_LABELS, sequentialColor, ramp } from '../utils/overlayColor';
 import { Minimap } from './Minimap';
 import { GlobeView } from './GlobeView';
-import type { GlobeCell } from '../map/globeRenderer';
-import type { MapWorld } from '../map/mapRenderer';
 
 /** Une métrique réelle par région (RegionInfo) pour chaque overlay -- pas
  * de biome ici, géré séparément (rendu de base toujours visible). */
@@ -69,12 +67,11 @@ const DRAG_THRESHOLD_PX = 4;
  * la carte plutôt que superposée).
  */
 export function WorldMap() {
-  const { simulationData } = useSimulation();
+  const { simulationData, currentSimulationId } = useSimulation();
   const { selectedRegion, selectedIndividual, selectRegion, selectIndividual, showSpeciesDetail, pinnedSpecies, togglePinnedSpecies, setCompareOpen } = useSelection();
   const [overlayMode, setOverlayMode] = useState<OverlayMode>('biome');
   // Comme dans RimWorld : la planète entière, puis la carte d'un endroit.
   const [planetView, setPlanetView] = useState(false);
-  const [overlayRgba, setOverlayRgba] = useState<Uint8Array | null>(null);
   const [legendCollapsed, setLegendCollapsed] = useState(true);
   const [container, setContainer] = useState<HTMLDivElement | null>(null);
   const [aspect, setAspect] = useState(0);
@@ -218,7 +215,6 @@ export function WorldMap() {
     const metric = overlayMode !== 'biome' ? OVERLAY_METRICS[overlayMode] : null;
     if (!metric) {
       renderer.current.setOverlay(null);
-      setOverlayRgba(null);
       return;
     }
     const values = regionCells.map(metric);
@@ -234,34 +230,10 @@ export function WorldMap() {
       rgba[at + 3] = OVERLAY_ALPHA;
     });
     renderer.current.setOverlay(rgba);
-    setOverlayRgba(rgba);
     // Le climat change avec les saisons : on recalcule à chaque saison, pas à chaque tick,
     // car ce calque redessine aussi la minicarte.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [overlayMode, terrainKey, worldWidth, worldHeight, canvas, simulationData?.status.season]);
-
-  const globeWorld = useMemo<MapWorld | null>(() => {
-    if (!regionsData || !regionCells || regionCells.length === 0) return null;
-    const layers = new Uint8Array(regionsData.gridWidth * regionsData.gridHeight);
-    for (const r of regionCells) layers[r.gridY * regionsData.gridWidth + r.gridX] = BIOME_LAYERS[r.environmentName] ?? 0;
-    return { gridWidth: regionsData.gridWidth, gridHeight: regionsData.gridHeight, cellSize: regionsData.cellSize, layers };
-    // regionCells change à chaque tick : terrainKey dit si le terrain a vraiment changé.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [terrainKey, worldWidth, worldHeight]);
-  const globeCells = useMemo<GlobeCell[]>(
-    () =>
-      (regionCells ?? []).map((r) => ({
-        gridX: r.gridX,
-        gridY: r.gridY,
-        layer: BIOME_LAYERS[r.environmentName] ?? 0,
-        plants: r.plants ?? 1,
-        rain: r.rain ?? 0,
-        fire: r.fire ?? 0,
-        scorch: r.scorch ?? 0,
-        temperature: r.temperature
-      })),
-    [regionCells]
-  );
 
   const zoomByFactor = useCallback((factor: number, anchorXFrac = 0.5, anchorYFrac = 0.5) => {
     setViewBox((current) => (current ? zoomCamera(current, factor, anchorXFrac, anchorYFrac, world, aspect) : current));
@@ -466,28 +438,10 @@ export function WorldMap() {
 
       {planetView && (
         <GlobeView
-          world={globeWorld}
-          cells={globeCells}
-          overlay={overlayRgba}
-          selected={selectedRegion ? [selectedRegion.gridX, selectedRegion.gridY] : null}
+          simulationId={currentSimulationId}
           season={simulationData?.status.season}
-          describe={(gx, gy) => {
-            const r = regionCells?.find((c) => c.gridX === gx && c.gridY === gy);
-            return r ? `${r.environmentName}, ${r.temperature.toFixed(0)} °C, ${r.population} individus` : '';
-          }}
-          onSelect={(gx, gy) => {
-            const r = regionCells?.find((c) => c.gridX === gx && c.gridY === gy);
-            if (r) selectRegion(r);
-          }}
-          onOpen={(gx, gy) => {
-            const r = regionCells?.find((c) => c.gridX === gx && c.gridY === gy);
-            if (r) selectRegion(r);
-            if (regionsData && aspect > 0) {
-              // On descend sur la case, à peu près trois cases de large.
-              const fit = fitCamera(world, aspect);
-              const zoomed = zoomCamera(fit, (3 * regionsData.cellSize) / fit.w, 0.5, 0.5, world, aspect);
-              setViewBox(centerCamera(zoomed, (gx + 0.5) * regionsData.cellSize, (gy + 0.5) * regionsData.cellSize, world, aspect));
-            }
+          onOpenHome={() => {
+            resetView();
             setPlanetView(false);
           }}
         />

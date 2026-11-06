@@ -1,247 +1,185 @@
-import type { MapWorld } from './mapRenderer';
-
-/** Couches de sol, dans le même ordre que la carte ; 7 et 8 sont l'eau. */
+/** Couches de sol, dans le même ordre que la carte. */
 const GROUND_TEXTURES = ['grass', 'forest', 'tropical', 'wetland', 'rock', 'sand', 'snow'];
 const TEXTURE_SIZE = 512;
-const MIN_DISTANCE = 1.6;
+const MIN_DISTANCE = 1.35;
 const MAX_DISTANCE = 5.0;
 const MAX_PITCH = 1.35;
+const FOV = 0.62;
 /** Inclinaison de l'axe : le soleil passe au-dessus de cette latitude au cœur de l'été. */
 const AXIAL_TILT = 0.41;
 
-/** Ce que le globe montre d'une case : tout vient du moteur. */
-export interface GlobeCell {
-  gridX: number;
-  gridY: number;
-  layer: number;
-  plants: number;
-  rain: number;
-  fire: number;
-  scorch: number;
-  /** °C */
-  temperature: number;
+/** Biome du moteur (EnvironmentType) vers couche de sol ; -1 pour l'eau. */
+const BIOME_LAYER: Record<number, number> = { 0: 0, 1: 1, 2: -1, 3: -1, 4: 3, 5: 4, 6: 5, 7: 6, 8: 2, 9: 4 };
+export const BIOME_NAMES: Record<number, string> = {
+  0: 'Prairie', 1: 'Forêt', 2: 'Lac', 3: 'Océan', 4: 'Marécage', 5: 'Montagne', 6: 'Désert', 7: 'Arctique', 8: 'Forêt tropicale', 9: 'Ruines'
+};
+
+/** La planète telle que le moteur l'envoie. */
+export interface PlanetData {
+  /** [x, y, z, biome, altitude en km, température en °C, pluie en mm/an] */
+  tiles: number[][];
+  triangles: number[][];
+  /** Tuile où se trouve la carte actuelle */
+  home: number;
 }
 
-const VERTEX = `#version 300 es
+const BACKGROUND_VERTEX = `#version 300 es
 in vec2 aCorner;
-void main() { gl_Position = vec4(aCorner, 0.0, 1.0); }
+void main() { gl_Position = vec4(aCorner, 0.999, 1.0); }
 `;
 
-const FRAGMENT = `#version 300 es
+// Espace et halo de l'atmosphère, derrière la planète.
+const BACKGROUND_FRAGMENT = `#version 300 es
 precision highp float;
-precision highp int;
-precision mediump sampler2DArray;
 out vec4 outColor;
-
 uniform vec2 uResolution;
-uniform mat3 uRotation;   // de la vue vers la planète
-uniform float uDistance;  // distance de la caméra au centre, en rayons
-uniform vec2 uGrid;
-uniform sampler2DArray uColors;
-uniform sampler2D uCells;    // r : couche, g : plantes, b : neige, a : feu
-uniform sampler2D uWeather;  // r : pluie, g : trace d'incendie
-uniform sampler2D uOverlay;
-uniform vec3 uSun;           // direction du soleil, repère de la planète
-uniform vec2 uSelected;      // -1 si aucune
-uniform float uTime;
-
-const float PI = 3.14159265;
-const int WATER_FRESH = 7;
-
+uniform float uDistance;
 float hash3(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
   p *= 17.0;
   return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
 }
-float noise3(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(mix(hash3(i), hash3(i + vec3(1, 0, 0)), f.x), mix(hash3(i + vec3(0, 1, 0)), hash3(i + vec3(1, 1, 0)), f.x), f.y),
-             mix(mix(hash3(i + vec3(0, 0, 1)), hash3(i + vec3(1, 0, 1)), f.x), mix(hash3(i + vec3(0, 1, 1)), hash3(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+void main() {
+  vec2 ndc = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
+  ndc.x *= uResolution.x / uResolution.y;
+  vec3 rd = normalize(vec3(ndc * ${FOV}, -1.0));
+  vec3 ro = vec3(0.0, 0.0, uDistance);
+  float closest = length(ro - rd * dot(ro, rd));
+  float halo = exp(-max(closest - 1.0, 0.0) * 9.0) * step(1.0, closest);
+  vec3 q = rd * 160.0;
+  vec3 cell = floor(q);
+  vec3 star = cell + 0.5 + (vec3(hash3(cell + 1.0), hash3(cell + 2.0), hash3(cell + 4.0)) - 0.5) * 0.6;
+  float stars = step(0.985, hash3(cell)) * smoothstep(0.12, 0.0, length(q - star)) * (0.4 + 0.6 * hash3(cell + 3.0));
+  outColor = vec4(vec3(0.012, 0.014, 0.022) + vec3(0.85, 0.9, 1.0) * stars + vec3(0.25, 0.5, 0.95) * halo * 0.55, 1.0);
 }
-float fbm3(vec3 p) {
-  float s = 0.0, a = 0.5;
-  for (int i = 0; i < 3; i++) { s += a * noise3(p); p = p * 2.03 + 11.0; a *= 0.5; }
-  return s;
-}
+`;
 
-vec4 cellAt(ivec2 c) {
-  int w = int(uGrid.x + 0.5);
-  c.x = ((c.x % w) + w) % w;            // l'est rejoint l'ouest
-  c.y = clamp(c.y, 0, int(uGrid.y) - 1); // pas au-delà des pôles
-  return texelFetch(uCells, c, 0);
+const TILE_VERTEX = `#version 300 es
+in vec3 aPosition;  // repère de la planète, rayon 1
+in vec4 aTile;      // tuile, couche de sol, bord (0 au centre, 1 aux coins), altitude
+uniform mat3 uRotation;   // de la vue vers la planète
+uniform float uDistance;
+uniform float uAspect;
+out vec3 vPlanet;
+out vec4 vTile;
+void main() {
+  vec3 view = transpose(uRotation) * aPosition;
+  float depth = uDistance - view.z;
+  vec2 ndc = view.xy / (depth * ${FOV});
+  ndc.x /= uAspect;
+  gl_Position = vec4(ndc, (depth - 0.2) / 10.0 * 2.0 - 1.0, 1.0);
+  vPlanet = aPosition;
+  vTile = aTile;
 }
+`;
 
-// Textures projetées sur trois plans : pas de couture ni d'étirement aux pôles.
-vec3 ground(int layer, vec3 p, vec3 n) {
-  vec3 w = pow(abs(n), vec3(4.0));
+const TILE_FRAGMENT = `#version 300 es
+precision highp float;
+precision mediump sampler2DArray;
+in vec3 vPlanet;
+in vec4 vTile;
+out vec4 outColor;
+uniform sampler2DArray uColors;
+uniform vec3 uSun;
+uniform float uHover;
+uniform float uSelected;
+uniform float uHome;
+
+vec3 ground(int layer, vec3 p) {
+  vec3 w = pow(abs(p), vec3(4.0));
   w /= (w.x + w.y + w.z);
-  vec3 q = p * 2.6;
+  vec3 q = p * 9.0;
   return texture(uColors, vec3(q.yz, float(layer))).rgb * w.x
        + texture(uColors, vec3(q.xz, float(layer))).rgb * w.y
        + texture(uColors, vec3(q.xy, float(layer))).rgb * w.z;
 }
 
-vec3 stars(vec3 rd) {
-  // Une étoile au plus par cellule, ponctuelle et décalée au hasard dans sa cellule.
-  vec3 q = rd * 160.0;
-  vec3 cell = floor(q);
-  float h = hash3(cell);
-  vec3 star = cell + 0.5 + (vec3(hash3(cell + 1.0), hash3(cell + 2.0), hash3(cell + 4.0)) - 0.5) * 0.6;
-  float d = length(q - star);
-  return vec3(0.85, 0.9, 1.0) * step(0.985, h) * smoothstep(0.12, 0.0, d) * (0.4 + 0.6 * hash3(cell + 3.0));
-}
-
 void main() {
-  vec2 ndc = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
-  ndc.x *= uResolution.x / uResolution.y;
-  vec3 ro = vec3(0.0, 0.0, uDistance);
-  vec3 rd = normalize(vec3(ndc * 0.62, -1.0));
-
-  float b = dot(ro, rd);
-  float c = dot(ro, ro) - 1.0;
-  float disc = b * b - c;
-  vec3 space = vec3(0.012, 0.014, 0.022) + stars(rd);
-  // Halo de l'atmosphère autour du disque.
-  float closest = length(ro - rd * b);
-  float halo = exp(-max(closest - 1.0, 0.0) * 9.0) * step(1.0, closest);
-  if (disc < 0.0) {
-    outColor = vec4(space + vec3(0.25, 0.5, 0.95) * halo * 0.55, 1.0);
-    return;
+  vec3 p = normalize(vPlanet);
+  float tile = vTile.x;
+  // floor et non int() : int(-0.5) vaut 0, et toute l'eau deviendrait de la prairie.
+  int layer = int(floor(vTile.y + 0.5));
+  float edge = vTile.z;
+  float elevation = vTile.w;
+  vec3 color;
+  if (layer < 0) {
+    // Plus c'est profond, plus c'est sombre ; les lacs sont plus clairs.
+    float depth = clamp(-elevation / 4.0, 0.0, 1.0);
+    color = layer == -2 ? vec3(0.12, 0.36, 0.44) : mix(vec3(0.08, 0.32, 0.42), vec3(0.02, 0.09, 0.22), depth);
+  } else {
+    color = ground(layer, p);
+    // Le relief se lit à la teinte : les hauteurs foncent un peu.
+    color *= 1.0 - 0.18 * clamp(elevation / 5.0, 0.0, 1.0);
   }
-
-  float t = -b - sqrt(disc);
-  vec3 n = normalize(ro + rd * t);
-  vec3 p = uRotation * n;               // point de la planète
-  float lat = asin(clamp(p.y, -1.0, 1.0));
-  float lon = atan(p.x, p.z);
-  vec2 uv = vec2(lon / (2.0 * PI) + 0.5, 0.5 - lat / PI);
-
-  // Frontières de biomes qui ondulent, comme sur la carte.
-  vec3 warpP = p * 3.0;
-  vec2 warp = (vec2(fbm3(warpP), fbm3(warpP + 17.0)) - 0.47) * 0.9;
-  vec2 g = uv * uGrid + warp - 0.5;
-  ivec2 base = ivec2(floor(g));
-  vec2 f = smoothstep(0.0, 1.0, fract(g));
-  vec4 c00 = cellAt(base), c10 = cellAt(base + ivec2(1, 0)), c01 = cellAt(base + ivec2(0, 1)), c11 = cellAt(base + ivec2(1, 1));
-  vec4 cells[4] = vec4[4](c00, c10, c01, c11);
-  float weights[4] = float[4]((1.0 - f.x) * (1.0 - f.y), f.x * (1.0 - f.y), (1.0 - f.x) * f.y, f.x * f.y);
-
-  float water = 0.0;
-  vec3 land = vec3(0.0);
-  float landW = 0.0;
-  vec4 mixed = vec4(0.0);
-  for (int i = 0; i < 4; i++) {
-    int layer = int(cells[i].r * 255.0 + 0.5);
-    mixed += cells[i] * weights[i];
-    if (layer >= WATER_FRESH) { water += weights[i]; continue; }
-    float w = pow(weights[i], 3.0);
-    land += ground(layer, p, p) * w;
-    landW += w;
-  }
-  vec3 color = landW > 0.0 ? land / landW : vec3(0.3, 0.3, 0.25);
-  float plants = mixed.g, snow = mixed.b, fire = mixed.a;
-  vec4 weather = texture(uWeather, uv);
-
-  // Plus de plantes, plus vert ; une case broutée jaunit.
-  color *= mix(vec3(1.08, 0.98, 0.78), vec3(0.86, 1.02, 0.82), plants);
-  color = mix(color, vec3(0.07, 0.065, 0.06), weather.g * 0.8 * smoothstep(0.3, 0.6, noise3(p * 9.0)));
-  float snowMask = smoothstep(0.55 - snow * 0.55, 0.75 - snow * 0.55, fbm3(p * 6.0)) * step(0.02, snow);
-  color = mix(color, vec3(0.88, 0.9, 0.94), snowMask);
-
-  float shore = smoothstep(0.42, 0.58, water + (noise3(p * 12.0) - 0.5) * 0.12);
-  vec3 sea = mix(vec3(0.05, 0.26, 0.36), vec3(0.03, 0.12, 0.27), smoothstep(0.6, 1.0, water));
-  sea = mix(sea, vec3(0.8, 0.86, 0.92), snowMask * 0.85); // eau gelée
-  color = mix(color, sea, shore);
-
-  vec4 overlay = texture(uOverlay, uv);
-  color = mix(color, overlay.rgb, overlay.a);
-
-  // Soleil : jour, nuit, et reflet sur l'eau.
   float sunlight = dot(p, uSun);
-  // La nuit reste lisible : RimWorld non plus ne plonge pas la planète dans le noir.
   float day = smoothstep(-0.35, 0.3, sunlight);
-  vec3 viewP = uRotation * (-rd);
-  vec3 halfV = normalize(uSun + viewP);
-  float spec = pow(max(dot(p, halfV), 0.0), 60.0) * shore * 0.5;
-  color = color * (0.32 + 0.68 * day * (0.45 + 0.7 * max(sunlight, 0.0))) * mix(vec3(0.7, 0.78, 1.0), vec3(1.0), day) + vec3(spec) * day;
-  // Lueur des feux, visible même de nuit.
-  color += vec3(1.0, 0.42, 0.08) * fire * (0.5 + 0.5 * noise3(p * 40.0 + uTime));
+  color *= (0.32 + 0.68 * day * (0.45 + 0.7 * max(sunlight, 0.0))) * mix(vec3(0.7, 0.78, 1.0), vec3(1.0), day);
 
-  // Nuages : partout un peu, épais là où il pleut vraiment.
-  vec3 cloudP = p * 4.0 + vec3(uTime * 0.02, 0.0, uTime * 0.013);
-  float clouds = smoothstep(0.5, 0.75, fbm3(cloudP) + weather.r * 0.35);
-  color = mix(color, vec3(0.92) * (0.35 + 0.65 * day), clouds * 0.75);
-
-  // Case sélectionnée : son contour exact.
-  if (uSelected.x >= 0.0) {
-    vec2 exact = uv * uGrid;
-    int w = int(uGrid.x + 0.5);
-    ivec2 cell = ivec2(floor(exact));
-    cell.x = ((cell.x % w) + w) % w;
-    if (cell == ivec2(uSelected)) {
-      vec2 local = fract(exact);
-      float edge = min(min(local.x, 1.0 - local.x), min(local.y, 1.0 - local.y));
-      if (edge < 0.035) color = vec3(0.9, 0.82, 0.57);
-    }
-  }
-
-  // Bord de l'atmosphère, côté jour.
-  float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
-  color += vec3(0.3, 0.55, 1.0) * rim * (0.15 + 0.6 * day);
+  // Contour des tuiles, discret ; plus marqué pour la tuile survolée, choisie, ou celle de la carte.
+  float border = smoothstep(0.86, 0.97, edge);
+  color = mix(color, color * 0.55, border * 0.6);
+  if (abs(tile - uHover) < 0.5) color = mix(color, vec3(1.0), 0.18 + 0.5 * border);
+  if (abs(tile - uSelected) < 0.5) color = mix(color, vec3(0.9, 0.82, 0.57), 0.15 + 0.85 * border);
+  if (abs(tile - uHome) < 0.5) color = mix(color, vec3(1.0, 0.75, 0.25), 0.25 + 0.75 * border);
   outColor = vec4(color, 1.0);
 }
 `;
 
-function compile(gl: WebGL2RenderingContext): WebGLProgram {
+function compile(gl: WebGL2RenderingContext, vertex: string, fragment: string, attributes: string[]): WebGLProgram {
   const shader = (type: number, source: string) => {
     const s = gl.createShader(type)!;
     gl.shaderSource(s, source);
     gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`Shader du globe invalide : ${gl.getShaderInfoLog(s)}`);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(`Shader de la planète invalide : ${gl.getShaderInfoLog(s)}`);
     return s;
   };
   const program = gl.createProgram()!;
-  gl.attachShader(program, shader(gl.VERTEX_SHADER, VERTEX));
-  gl.attachShader(program, shader(gl.FRAGMENT_SHADER, FRAGMENT));
-  gl.bindAttribLocation(program, 0, 'aCorner');
+  gl.attachShader(program, shader(gl.VERTEX_SHADER, vertex));
+  gl.attachShader(program, shader(gl.FRAGMENT_SHADER, fragment));
+  attributes.forEach((name, i) => gl.bindAttribLocation(program, i, name));
   gl.linkProgram(program);
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`Programme du globe invalide : ${gl.getProgramInfoLog(program)}`);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(`Programme de la planète invalide : ${gl.getProgramInfoLog(program)}`);
   return program;
 }
 
 /** Rotation de la vue vers la planète : lacet autour de l'axe des pôles, puis tangage. */
 function rotation(yaw: number, pitch: number): number[] {
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  // Ry(yaw) * Rx(pitch), rangée par colonnes pour WebGL.
   return [cy, 0, -sy, sy * sp, cp, cy * sp, sy * cp, -sp, cy * cp];
 }
 
-function apply(m: number[], v: [number, number, number]): [number, number, number] {
+function apply(m: number[], v: number[]): number[] {
   return [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
 }
 
+function applyTransposed(m: number[], v: number[]): number[] {
+  return [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+}
+
+function normalize(v: number[]): number[] {
+  const len = Math.hypot(v[0], v[1], v[2]);
+  return [v[0] / len, v[1] / len, v[2] / len];
+}
+
 /**
- * La planète entière, en 3D, d'après les vraies données du moteur : biomes, plantes, neige,
- * pluie, feux et calques. Le monde du moteur fait le tour de la sphère : chaque colonne de
- * cases est une tranche de longitude, chaque rangée une bande de latitude.
+ * La planète entière, façon RimWorld : chaque tuile du moteur est un hexagone (ou l'un des
+ * douze pentagones), avec son biome, son relief et son climat. Glisser pour tourner,
+ * molette pour zoomer.
  */
 export class GlobeRenderer {
   private gl: WebGL2RenderingContext;
-  private program!: WebGLProgram;
+  private background!: WebGLProgram;
+  private tileProgram!: WebGLProgram;
   private quad!: WebGLVertexArrayObject;
+  private mesh: WebGLVertexArrayObject | null = null;
+  private indexCount = 0;
   private colors!: WebGLTexture;
-  private cellTexture: WebGLTexture | null = null;
-  private weatherTexture: WebGLTexture | null = null;
-  private overlayTexture: WebGLTexture | null = null;
-  private world: MapWorld | null = null;
-  private cells: GlobeCell[] = [];
-  private overlay: Uint8Array | null = null;
-  private selected: [number, number] = [-1, -1];
+  private planet: PlanetData | null = null;
+  private hover = -1;
+  private selected = -1;
   private yaw = 0;
-  private pitch = 0.25;
-  private distance = 3.0;
+  private pitch = 0.3;
+  private distance = 2.6;
   private targetYaw: number | null = null;
   private targetPitch: number | null = null;
   private sunLatitude = 0;
@@ -286,7 +224,8 @@ export class GlobeRenderer {
 
   private async init() {
     const gl = this.gl;
-    this.program = compile(gl);
+    this.background = compile(gl, BACKGROUND_VERTEX, BACKGROUND_FRAGMENT, ['aCorner']);
+    this.tileProgram = compile(gl, TILE_VERTEX, TILE_FRAGMENT, ['aPosition', 'aTile']);
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -295,10 +234,9 @@ export class GlobeRenderer {
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
     gl.bindVertexArray(null);
-    this.cellTexture = this.weatherTexture = this.overlayTexture = null;
+    this.mesh = null;
     this.colors = await this.loadColors();
-    this.upload();
-    this.uploadOverlay();
+    if (this.planet) this.buildMesh(this.planet);
     this.ready = true;
   }
 
@@ -340,37 +278,65 @@ export class GlobeRenderer {
     return texture;
   }
 
-  private texture(width: number, height: number, data: Uint8Array, filter: number, wrapS: number): WebGLTexture {
+  setPlanet(planet: PlanetData) {
+    this.planet = planet;
+    if (this.ready) this.buildMesh(planet);
+  }
+
+  /** Chaque tuile en éventail : son centre, puis ses coins, centres des triangles qui l'entourent. */
+  private buildMesh(planet: PlanetData) {
     const gl = this.gl;
-    const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrapS);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return texture;
+    const around: number[][] = planet.tiles.map(() => []);
+    const corners = planet.triangles.map((t) => {
+      const [a, b, c] = t.map((i) => planet.tiles[i]);
+      return normalize([a[0] + b[0] + c[0], a[1] + b[1] + c[1], a[2] + b[2] + c[2]]);
+    });
+    planet.triangles.forEach((t, k) => t.forEach((i) => around[i].push(k)));
+
+    const vertices: number[] = [];
+    const indices: number[] = [];
+    planet.tiles.forEach((tile, i) => {
+      const center = [tile[0], tile[1], tile[2]];
+      // Repère tangent pour ranger les coins autour du centre.
+      const up = Math.abs(center[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      const u = normalize([up[1] * center[2] - up[2] * center[1], up[2] * center[0] - up[0] * center[2], up[0] * center[1] - up[1] * center[0]]);
+      const v = [center[1] * u[2] - center[2] * u[1], center[2] * u[0] - center[0] * u[2], center[0] * u[1] - center[1] * u[0]];
+      const ring = around[i]
+        .map((k) => corners[k])
+        .sort((p, q) => Math.atan2(p[0] * v[0] + p[1] * v[1] + p[2] * v[2], p[0] * u[0] + p[1] * u[1] + p[2] * u[2]) -
+          Math.atan2(q[0] * v[0] + q[1] * v[1] + q[2] * v[2], q[0] * u[0] + q[1] * u[1] + q[2] * u[2]));
+      const biome = tile[3];
+      const layer = BIOME_LAYER[biome] ?? 0;
+      const shade = biome === 2 ? -2 : layer;
+      const base = vertices.length / 7;
+      vertices.push(center[0], center[1], center[2], i, shade, 0, tile[4]);
+      for (const p of ring) vertices.push(p[0], p[1], p[2], i, shade, 1, tile[4]);
+      for (let r = 0; r < ring.length; r++) indices.push(base, base + 1 + r, base + 1 + ((r + 1) % ring.length));
+    });
+
+    const vao = gl.createVertexArray()!;
+    gl.bindVertexArray(vao);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 4, gl.FLOAT, false, 28, 12);
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(indices), gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+    this.mesh = vao;
+    this.indexCount = indices.length;
   }
 
-  setWorld(world: MapWorld) {
-    this.world = world;
-    this.upload();
-    this.uploadOverlay();
+  setSelection(tile: number | null) {
+    this.selected = tile ?? -1;
   }
 
-  setCells(cells: GlobeCell[]) {
-    this.cells = cells;
-    this.upload();
-  }
-
-  setOverlay(rgba: Uint8Array | null) {
-    this.overlay = rgba;
-    this.uploadOverlay();
-  }
-
-  setSelection(cell: [number, number] | null) {
-    this.selected = cell ?? [-1, -1];
+  setHover(tile: number | null) {
+    this.hover = tile ?? -1;
   }
 
   /** Saison de l'hémisphère nord, 0 printemps à 3 hiver : le soleil monte et descend. */
@@ -378,45 +344,8 @@ export class GlobeRenderer {
     this.targetSunLatitude = [0, AXIAL_TILT, 0, -AXIAL_TILT][((season % 4) + 4) % 4];
   }
 
-  private upload() {
-    const world = this.world;
-    if (!world || !this.program) return;
-    const gl = this.gl;
-    const cells = new Uint8Array(world.gridWidth * world.gridHeight * 4);
-    const weather = new Uint8Array(world.gridWidth * world.gridHeight * 4);
-    world.layers.forEach((layer, i) => {
-      cells[i * 4] = layer;
-      cells[i * 4 + 1] = 255;
-    });
-    for (const c of this.cells) {
-      const at = (c.gridY * world.gridWidth + c.gridX) * 4;
-      cells[at] = c.layer;
-      cells[at + 1] = Math.round(Math.max(0, Math.min(1, c.plants)) * 255);
-      cells[at + 2] = Math.round(Math.max(0, Math.min(1, -c.temperature / 8)) * 255);
-      cells[at + 3] = Math.round(Math.max(0, Math.min(1, c.fire)) * 255);
-      weather[at] = Math.round(Math.max(0, Math.min(1, c.rain)) * 255);
-      weather[at + 1] = Math.round(Math.max(0, Math.min(1, c.scorch)) * 255);
-      weather[at + 3] = 255;
-    }
-    if (this.cellTexture) gl.deleteTexture(this.cellTexture);
-    if (this.weatherTexture) gl.deleteTexture(this.weatherTexture);
-    this.cellTexture = this.texture(world.gridWidth, world.gridHeight, cells, gl.NEAREST, gl.REPEAT);
-    this.weatherTexture = this.texture(world.gridWidth, world.gridHeight, weather, gl.LINEAR, gl.REPEAT);
-  }
-
-  private uploadOverlay() {
-    const world = this.world;
-    if (!world || !this.program) return;
-    const gl = this.gl;
-    if (this.overlayTexture) gl.deleteTexture(this.overlayTexture);
-    this.overlayTexture = this.overlay
-      ? this.texture(world.gridWidth, world.gridHeight, this.overlay, gl.LINEAR, gl.REPEAT)
-      : this.texture(1, 1, new Uint8Array([0, 0, 0, 0]), gl.NEAREST, gl.CLAMP_TO_EDGE);
-  }
-
-  /** Glisser fait tourner la planète ; la latitude reste bornée pour ne pas passer à l'envers. */
   rotateBy(dxPixels: number, dyPixels: number) {
-    const scale = 2.2 / Math.max(this.canvas.clientHeight, 1) * (this.distance - 1);
+    const scale = (2.2 / Math.max(this.canvas.clientHeight, 1)) * (this.distance - 1);
     this.yaw -= dxPixels * scale;
     this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch + dyPixels * scale));
     this.targetYaw = this.targetPitch = null;
@@ -428,44 +357,55 @@ export class GlobeRenderer {
     this.lastInteractionMs = performance.now();
   }
 
-  /** Tourne la planète pour mettre une case face à la caméra. */
-  focusCell(gx: number, gy: number) {
-    const world = this.world;
-    if (!world) return;
-    const u = (gx + 0.5) / world.gridWidth;
-    const v = (gy + 0.5) / world.gridHeight;
-    const lon = (u - 0.5) * 2 * Math.PI;
-    const lat = (0.5 - v) * Math.PI;
-    this.targetYaw = lon;
-    this.targetPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, -lat));
+  /** Tourne la planète pour mettre une tuile face à la caméra. */
+  focusTile(tile: number) {
+    const t = this.planet?.tiles[tile];
+    if (!t) return;
+    this.targetYaw = Math.atan2(t[0], t[2]);
+    this.targetPitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, -Math.asin(Math.max(-1, Math.min(1, t[1])))));
     this.lastInteractionMs = performance.now();
   }
 
-  /** Case sous un point de l'écran, ou null si on vise l'espace. */
-  pickCell(clientX: number, clientY: number): [number, number] | null {
-    const world = this.world;
-    if (!world) return null;
+  /** Tuile sous un point de l'écran, ou null si on vise l'espace. */
+  pickTile(clientX: number, clientY: number): number | null {
+    const planet = this.planet;
+    if (!planet) return null;
     const rect = this.canvas.getBoundingClientRect();
     const aspect = rect.width / Math.max(rect.height, 1);
-    const ndcX = (((clientX - rect.left) / rect.width) * 2 - 1) * aspect;
-    const ndcY = 1 - ((clientY - rect.top) / rect.height) * 2;
-    const len = Math.hypot(ndcX * 0.62, ndcY * 0.62, 1);
-    const rd: [number, number, number] = [(ndcX * 0.62) / len, (ndcY * 0.62) / len, -1 / len];
-    const ro: [number, number, number] = [0, 0, this.distance];
-    const b = ro[2] * rd[2];
-    const c = this.distance * this.distance - 1;
-    const disc = b * b - c;
+    const x = (((clientX - rect.left) / rect.width) * 2 - 1) * aspect * FOV;
+    const y = (1 - ((clientY - rect.top) / rect.height) * 2) * FOV;
+    const rd = normalize([x, y, -1]);
+    const b = this.distance * rd[2];
+    const disc = b * b - (this.distance * this.distance - 1);
     if (disc < 0) return null;
     const t = -b - Math.sqrt(disc);
-    const n: [number, number, number] = [rd[0] * t, rd[1] * t, ro[2] + rd[2] * t];
-    const p = apply(rotation(this.yaw, this.pitch), n);
-    const lat = Math.asin(Math.max(-1, Math.min(1, p[1])));
-    const lon = Math.atan2(p[0], p[2]);
-    const u = lon / (2 * Math.PI) + 0.5;
-    const v = 0.5 - lat / Math.PI;
-    const gx = ((Math.floor(u * world.gridWidth) % world.gridWidth) + world.gridWidth) % world.gridWidth;
-    const gy = Math.max(0, Math.min(world.gridHeight - 1, Math.floor(v * world.gridHeight)));
-    return [gx, gy];
+    const p = apply(rotation(this.yaw, this.pitch), [rd[0] * t, rd[1] * t, this.distance + rd[2] * t]);
+    let best = -1;
+    let bestDot = -2;
+    planet.tiles.forEach((tile, i) => {
+      const d = tile[0] * p[0] + tile[1] * p[1] + tile[2] * p[2];
+      if (d > bestDot) {
+        bestDot = d;
+        best = i;
+      }
+    });
+    return best;
+  }
+
+  /** Position à l'écran du centre d'une tuile, ou null si elle est de l'autre côté. */
+  project(tile: number): { x: number; y: number } | null {
+    const t = this.planet?.tiles[tile];
+    if (!t) return null;
+    const view = applyTransposed(rotation(this.yaw, this.pitch), [t[0], t[1], t[2]]);
+    // Un point de la sphère n'est visible que s'il fait face à la caméra : z > 1 / distance.
+    if (view[2] <= 1 / this.distance) return null;
+    const depth = this.distance - view[2];
+    const rect = this.canvas.getBoundingClientRect();
+    const aspect = rect.width / Math.max(rect.height, 1);
+    return {
+      x: ((view[0] / (depth * FOV) / aspect + 1) / 2) * rect.width,
+      y: ((1 - view[1] / (depth * FOV)) / 2) * rect.height
+    };
   }
 
   private frame = (now: number) => {
@@ -473,9 +413,8 @@ export class GlobeRenderer {
     this.frameHandle = requestAnimationFrame(this.frame);
     const dt = this.lastFrameMs > 0 ? Math.min(0.1, (now - this.lastFrameMs) / 1000) : 0;
     this.lastFrameMs = now;
-    if (!this.ready || !this.world || !this.cellTexture) return;
+    if (!this.ready) return;
 
-    // Vers la case demandée, puis lente rotation quand personne ne touche à rien.
     if (this.targetYaw !== null && this.targetPitch !== null) {
       let delta = this.targetYaw - this.yaw;
       delta = Math.atan2(Math.sin(delta), Math.cos(delta));
@@ -488,39 +427,42 @@ export class GlobeRenderer {
     this.sunLatitude += (this.targetSunLatitude - this.sunLatitude) * Math.min(1, dt * 0.5);
 
     const gl = this.gl;
-    // Un rayon par pixel coûte cher : jamais plus d'un point par pixel d'écran.
-    const dpr = Math.min(window.devicePixelRatio || 1, 1);
-    const width = Math.round(this.canvas.clientWidth * dpr);
-    const height = Math.round(this.canvas.clientHeight * dpr);
+    const width = Math.round(this.canvas.clientWidth);
+    const height = Math.round(this.canvas.clientHeight);
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;
     }
     gl.viewport(0, 0, width, height);
-    const p = this.program;
-    gl.useProgram(p);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(this.background);
     gl.bindVertexArray(this.quad);
+    gl.uniform2f(gl.getUniformLocation(this.background, 'uResolution'), width, height);
+    gl.uniform1f(gl.getUniformLocation(this.background, 'uDistance'), this.distance);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    if (!this.mesh) return;
+    const p = this.tileProgram;
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthFunc(gl.LESS);
+    gl.useProgram(p);
+    gl.bindVertexArray(this.mesh);
     const time = (now - this.startMs) / 1000;
-    // Le soleil fait le tour de la planète : jour et nuit défilent lentement.
     const sunLon = time * 0.05;
-    const sun = [Math.cos(this.sunLatitude) * Math.sin(sunLon), Math.sin(this.sunLatitude), Math.cos(this.sunLatitude) * Math.cos(sunLon)];
-    gl.uniform2f(gl.getUniformLocation(p, 'uResolution'), width, height);
     gl.uniformMatrix3fv(gl.getUniformLocation(p, 'uRotation'), false, rotation(this.yaw, this.pitch));
     gl.uniform1f(gl.getUniformLocation(p, 'uDistance'), this.distance);
-    gl.uniform2f(gl.getUniformLocation(p, 'uGrid'), this.world.gridWidth, this.world.gridHeight);
-    gl.uniform3f(gl.getUniformLocation(p, 'uSun'), sun[0], sun[1], sun[2]);
-    gl.uniform2f(gl.getUniformLocation(p, 'uSelected'), this.selected[0], this.selected[1]);
-    gl.uniform1f(gl.getUniformLocation(p, 'uTime'), time);
-    const bind = (unit: number, target: number, texture: WebGLTexture, name: string) => {
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(target, texture);
-      gl.uniform1i(gl.getUniformLocation(p, name), unit);
-    };
-    bind(0, gl.TEXTURE_2D_ARRAY, this.colors, 'uColors');
-    bind(1, gl.TEXTURE_2D, this.cellTexture, 'uCells');
-    bind(2, gl.TEXTURE_2D, this.weatherTexture!, 'uWeather');
-    bind(3, gl.TEXTURE_2D, this.overlayTexture!, 'uOverlay');
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.uniform1f(gl.getUniformLocation(p, 'uAspect'), width / Math.max(height, 1));
+    gl.uniform3f(gl.getUniformLocation(p, 'uSun'), Math.cos(this.sunLatitude) * Math.sin(sunLon), Math.sin(this.sunLatitude), Math.cos(this.sunLatitude) * Math.cos(sunLon));
+    gl.uniform1f(gl.getUniformLocation(p, 'uHover'), this.hover);
+    gl.uniform1f(gl.getUniformLocation(p, 'uSelected'), this.selected);
+    gl.uniform1f(gl.getUniformLocation(p, 'uHome'), this.planet?.home ?? -1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, this.colors);
+    gl.uniform1i(gl.getUniformLocation(p, 'uColors'), 0);
+    gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_INT, 0);
     gl.bindVertexArray(null);
   };
 }

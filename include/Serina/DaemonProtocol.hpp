@@ -10,6 +10,7 @@
 
 #include "NetSocket.hpp"
 #include "WorldSimulation.hpp"
+#include "Planet.hpp"
 #include "SimulationSerialization.hpp"
 #include <nlohmann/json.hpp>
 
@@ -26,7 +27,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 6;
+    inline constexpr int PROTOCOL_VERSION = 7;
 
     using json = nlohmann::json;
 
@@ -500,6 +501,40 @@ namespace Serina::Daemon
                                                       request.value("gridY", -1), request.value("value", 0.0), request.value("group", 0));
                 json r = ok ? successJson() : errorJson(message);
                 r["outcome"] = message;
+                return r; });
+        }
+        else if (command == "planet")
+        {
+            result = registry.withSimulation(simulationId, [&](ManagedSimulation &m)
+                                              {
+                // La planète se régénère depuis la graine du monde : rien à sauvegarder.
+                Planet::Planet planet(m.sim->getSeed());
+                json r = successJson();
+                json tiles = json::array();
+                int home = -1;
+                double homeLatitude = 2.0;
+                for (size_t i = 0; i < planet.tiles().size(); ++i)
+                {
+                    const auto &t = planet.tiles()[i];
+                    tiles.push_back({t.center[0], t.center[1], t.center[2], static_cast<int>(t.biome), t.elevationKm, t.temperature, t.rainfall});
+                    // La carte actuelle se trouve sur une terre proche de l'équateur, une prairie de préférence.
+                    // Une planète peut n'avoir aucune prairie : toute terre sert alors de repli.
+                    if (!t.water)
+                    {
+                        const double score = std::abs(t.center[1]) + (t.biome == Ecosystem::EnvironmentType::GRASSLAND ? 0.0 : 0.5);
+                        if (score < homeLatitude)
+                        {
+                            homeLatitude = score;
+                            home = static_cast<int>(i);
+                        }
+                    }
+                }
+                json triangles = json::array();
+                for (const auto &tri : planet.triangles())
+                    triangles.push_back({tri[0], tri[1], tri[2]});
+                r["tiles"] = tiles;
+                r["triangles"] = triangles;
+                r["home"] = home;
                 return r; });
         }
         else if (command == "ping")
