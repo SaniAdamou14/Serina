@@ -17,6 +17,11 @@ starting point and the plan.
 
 All captured from the running game, with real engine data.
 
+![The whole planet as a globe, with real cell data, clouds where it rains and the atmosphere](docs/images/planet.jpg)
+
+*The planet, as in RimWorld: the simulated world wraps around the sphere, east meeting west. Press P,
+drag to turn it, and double-click a cell to go down to its map.*
+
 ![A world seen from above: biomes, plants, creatures and a fire started by lightning](docs/images/map.jpg)
 
 *The whole map. Each creature is a real individual, and plants follow each cell's real level.*
