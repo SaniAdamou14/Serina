@@ -47,6 +47,17 @@ namespace Serina::Simulation
     /// (espèce vivante), calculé à partir des individus qui la composent,
     /// pas d'agrégat maintenu séparément qui pourrait diverger de la
     /// réalité de la population.
+    /// @brief Naissances et morts d'une espèce depuis son apparition, par cause. C'est ce qui
+    /// permet de dire de quoi une espèce meurt, sans l'inventer.
+    struct LifeTally
+    {
+        uint64_t births = 0;
+        uint64_t starved = 0;   ///< énergie épuisée
+        uint64_t oldAge = 0;    ///< fin de sa durée de vie
+        uint64_t eaten = 0;     ///< tuée par un prédateur
+        uint64_t burned = 0;    ///< morte dans un feu
+    };
+
     struct LineageSnapshot
     {
         std::string speciesName;
@@ -62,6 +73,7 @@ namespace Serina::Simulation
         /// pour une fiche d'espèce qui montre ce qu'elle est vraiment,
         /// pas seulement les quelques traits utilisés pour le rendu visuel.
         Genetics::AdvancedTraitValues averageTraits;
+        LifeTally tally;
     };
 
     /// @brief Compteurs cumulatifs d'événements de vie réels depuis le début
@@ -397,6 +409,9 @@ namespace Serina::Simulation
         double climateEpochAmplitude = 8.0;
         /// Ticks entre deux changements de grande période.
         uint32_t climateEpochTicks = 30000;
+        /// Petits supplémentaires par portée pour un taux de reproduction de 1 ; 0 : un seul petit.
+        /// L'énergie de départ se partage entre eux : beaucoup de petits fragiles, ou peu de solides.
+        double litterScale = 3.0;
         /// Nombre d'orages qui traversent le monde en même temps ; 0 : ni pluie ni foudre.
         int stormCount = 3;
         /// Rayon d'un orage, en cases.
@@ -617,6 +632,13 @@ namespace Serina::Simulation
         /// @brief Nombre de cases mises à feu par la foudre depuis le début du monde.
         uint64_t getIgnitionCount() const { return ignitions_; }
 
+        /// @brief Naissances et morts par cause d'une espèce, même éteinte.
+        LifeTally getLifeTally(const std::string &species) const
+        {
+            auto it = tallies_.find(species);
+            return it != tallies_.end() ? it->second : LifeTally{};
+        }
+
         /// @brief Morts encore visibles, du plus ancien au plus récent.
         std::vector<CorpseSnapshot> getCorpseSnapshots() const
         {
@@ -718,7 +740,7 @@ namespace Serina::Simulation
                 snap.species = organism.getSpecies();
                 snap.x = organism.getX();
                 snap.y = organism.getY();
-                snap.energy = organism.getEnergy();
+                snap.energy = std::max(0.0, organism.getEnergy());
                 snap.age = organism.getAge();
 
                 auto typeIt = biologicalTypeOf_.find(organism.getSpecies());
@@ -794,6 +816,8 @@ namespace Serina::Simulation
         /// Morts récents pour l'affichage ; age y garde le tick de la mort. Hors sauvegarde
         /// et sans effet sur la simulation : ils repartent de zéro au rechargement.
         std::deque<CorpseSnapshot> corpses_;
+        std::map<std::string, LifeTally> tallies_; ///< par espèce, gardé après son extinction
+        std::set<uint64_t> burnedThisTick_;        ///< morts par le feu pendant ce tick
         /// Énergie que contient un corps par unité de taille.
         static constexpr double BODY_ENERGY_PER_SIZE = 30.0;
         /// À 1 % de décomposition par tick, il ne reste presque rien d'un cadavre après 300 ticks.
@@ -1586,6 +1610,9 @@ namespace Serina::Simulation
                 auto group = biologicalTypeOf_.find(organism.getSpecies());
                 const bool flies = group != biologicalTypeOf_.end() && group->second == Taxonomy::BiologicalType::BIRD;
                 organism.setEnergy(organism.getEnergy() - params_.fireDamage * fire * (flies ? 0.3 : 1.0));
+                // Le feu a pris la dernière énergie : c'est lui qui le tue, pas la faim.
+                if (organism.getEnergy() <= 0.0)
+                    burnedThisTick_.insert(organism.getId());
             }
         }
 
@@ -1617,8 +1644,18 @@ namespace Serina::Simulation
                 if (o.isAlive())
                     continue;
                 recordCorpse(o, killedThisTick_.count(o.getId()) > 0);
+                LifeTally &tally = tallies_[o.getSpecies()];
                 if (killedThisTick_.count(o.getId()))
+                {
+                    tally.eaten++;
                     continue; // déjà mangée
+                }
+                if (burnedThisTick_.count(o.getId()))
+                    tally.burned++;
+                else if (o.getEnergy() <= 0.0)
+                    tally.starved++;
+                else
+                    tally.oldAge++;
                 auto [cellX, cellY] = regionOf(o);
                 carrion_[static_cast<size_t>(cellY) * grid_.getWidth() + cellX] +=
                     BODY_ENERGY_PER_SIZE * o.getGenome().getTrait(Genetics::TraitType::SIZE) + o.getEnergy() * 0.5;
@@ -1632,6 +1669,7 @@ namespace Serina::Simulation
                                 [](const Evolution::Organism &o) { return !o.isAlive(); }),
                 population_.end());
             killedThisTick_.clear();
+            burnedThisTick_.clear();
             while (!corpses_.empty() && generation_ - corpses_.front().age > CORPSE_VISIBLE_TICKS)
                 corpses_.pop_front();
         }
@@ -1692,18 +1730,36 @@ namespace Serina::Simulation
                         if (std::abs(parent1.getGenome().getTrait(Genetics::TraitType::DIET) - parent2.getGenome().getTrait(Genetics::TraitType::DIET)) > params_.assortativeMatingGap)
                             continue;
 
-                        auto child = tryReproduce(parent1, parent2, species);
-                        if (child)
+                        // Taille de la portée tirée du taux de reproduction moyen des parents : son
+                        // espérance vaut 1 + taux × litterScale.
+                        const double rate = 0.5 * (parent1.getGenome().getTrait(Genetics::TraitType::REPRODUCTION_RATE) +
+                                                   parent2.getGenome().getTrait(Genetics::TraitType::REPRODUCTION_RATE));
+                        const int litter = 1 + static_cast<int>(rate * params_.litterScale + crossoverChance(rng_));
+                        // Un seul petit part avec 40 d'énergie ; une portée partage un peu plus.
+                        const double childEnergy = 40.0 * 1.5 / (litter + 0.5);
+                        int born = 0;
+                        for (int k = 0; k < litter; ++k)
                         {
-                            parent1.setEnergy(parent1.getEnergy() - 30.0);
-                            parent2.setEnergy(parent2.getEnergy() - 30.0);
+                            auto child = tryReproduce(parent1, parent2, species);
+                            if (!child)
+                                continue;
+                            child->setEnergy(childEnergy);
                             offspring.push_back(std::move(*child));
+                            born++;
+                        }
+                        if (born > 0)
+                        {
+                            const double cost = 30.0 + 6.0 * (born - 1);
+                            parent1.setEnergy(parent1.getEnergy() - cost);
+                            parent2.setEnergy(parent2.getEnergy() - cost);
                         }
                     }
                 }
             }
 
             lifeEvents_.births += offspring.size();
+            for (const auto &child : offspring)
+                tallies_[child.getSpecies()].births++;
             for (auto &child : offspring)
                 population_.push_back(std::move(child));
         }
@@ -2258,6 +2314,7 @@ namespace Serina::Simulation
                 auto typeIt = biologicalTypeOf_.find(species);
                 snap.biologicalType = (typeIt != biologicalTypeOf_.end()) ? typeIt->second : Taxonomy::BiologicalType::BIRD;
                 snap.population = static_cast<uint32_t>(indices.size());
+                snap.tally = getLifeTally(species);
 
                 double fitnessSum = 0.0;
                 for (size_t idx : indices)

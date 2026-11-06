@@ -56,6 +56,8 @@ async function main() {
     `  dans chaque espèce : résistance/climat ${med('resistanceWithin')} | isolation/température ${med('insulationWithin')}\n` +
       `  espèces d'oiseaux ${med('birdSpecies')} (max ${Math.max(...rows.map((r) => r.birdSpecies))}) | niches des oiseaux ${med('birdGuilds')}/3 (max ${Math.max(...rows.map((r) => r.birdGuilds))}) | toutes espèces ${med('allGuilds')}/3 | écart de régime des oiseaux ${med('birdDietSpread')} | régime moyen ${med('meanDiet')} | plantes ${med('plantLevel')} | ticks joués ${med('ranTicks')} | incendies ${med('ignitions')}\n` +
       `  voisinage entre espèces ${med('sympatry')} | étendue du régime des oiseaux (p10-p90) ${med('birdDietRange')}\n` +
+      `  morts des poissons : faim ${med('fishStarved')} | vieillesse ${med('fishOld')} | prédation ${med('fishEaten')} ; des oiseaux : faim ${med('birdStarved')} | vieillesse ${med('birdOld')} | prédation ${med('birdEaten')}\n` +
+      `  taux de reproduction moyen : poissons ${med('fishRate')} | oiseaux ${med('birdRate')}\n` +
       `  taille moyenne ${med('meanSize')} | proies tuées ${med('kills')}\n` +
       `  isolation : écart à l'idéal ${med('insulationGap')} | avantage local ${med('localAdvantage')} | étendue climatique ${med('climateSpread')}`
   );

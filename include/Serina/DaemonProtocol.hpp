@@ -26,7 +26,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 4;
+    inline constexpr int PROTOCOL_VERSION = 5;
 
     using json = nlohmann::json;
 
@@ -98,6 +98,11 @@ namespace Serina::Daemon
             {"regionsOccupied", l.regionsOccupied},
             {"adaptations", l.adaptations},
             {"innovations", l.innovations},
+            {"tally", {{"births", l.tally.births},
+                       {"starved", l.tally.starved},
+                       {"oldAge", l.tally.oldAge},
+                       {"eaten", l.tally.eaten},
+                       {"burned", l.tally.burned}}},
             {"hasBrain", sim.hasBrain(l.speciesName)},
             {"brainComplexity", sim.getBrainComplexity(l.speciesName)},
             // Moyenne réelle des 12 traits diploïdes sur tous les individus

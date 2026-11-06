@@ -20,7 +20,9 @@ nécessaires pour elle : le monde est une lune inventée, pas la Terre.
 
 ## Ordre de travail
 
-1. Validation du climat, puis correction des poissons.
+Toutes ces tâches doivent être faites ; l'ordre suit leurs priorités.
+
+1. Validation du climat, puis correction des poissons (en cours : voir les limites connues).
 2. Agir sur le monde : orage, feu, météorite, changement de climat, ajout d'espèces, consignés dans la
    chronique. Sert aussi d'outil de test.
 3. Habitat héritable : gènes de vol et de vie aquatique.
@@ -28,6 +30,11 @@ nécessaires pour elle : le monde est une lune inventée, pas la Terre.
 5. Monde qui change : introduction par étapes, extinctions de masse, biomes qui bougent.
 6. Cerveau et intelligence, après le vol qui en est la contrainte.
 7. Fresques : voir plus bas, à faire avancer en parallèle dès que le moteur retient les causes.
+8. Planète façon RimWorld : un globe 3D de toute la planète, où cliquer sur un point ouvre sa carte 2D.
+   - Première étape : le monde actuel enroulé sur la sphère, l'est rejoignant l'ouest.
+   - Étape suivante : une planète immense. Elle demande un moteur à deux échelles, toute la planète simulée
+     en gros et les individus seulement sur la carte ouverte. C'est le même chantier de fond que le temps
+     géologique : ils se feront ensemble.
 
 ## Les mécanismes à simuler
 
@@ -57,7 +64,25 @@ que d'autres ne résolvent pas, et rien de plus.
 Idée du propriétaire : quand un moment marquant survient, une fresque en pixel art s'affiche avec une image
 et un texte, pour l'effet dramatique, et reste consignée dans un registre. Exemples : le dernier individu d'une
 espèce, une extinction, un événement à l'échelle du monde, ou l'apparition d'une nouvelle créature avec son
-image et ses caractéristiques. Référence de style citée : « 1 sur 8 millions », à préciser.
+image et ses caractéristiques. Référence citée : [« 1 sur 8 milliards »](https://1in8billion.app/fr/), un jeu
+qui fait vivre une vie humaine année après année à partir de vraies probabilités.
+
+**Ce qu'on reprend de « 1 sur 8 milliards », transposé à des espèces**
+
+| Chez eux | Chez nous |
+|---|---|
+| Acte de naissance et acte de décès | Acte de naissance d'une espèce (ancêtre, lieu, date, ce qui a changé) et acte d'extinction (dernier lieu, cause mesurée, durée de la lignée) |
+| Carte de vie, une case par année | Carte de vie d'une espèce : une frise où chaque case montre l'effectif et l'événement de la période |
+| Courbe de survie | Courbe de population d'une lignée, jusqu'à son dernier individu |
+| Mémorial | Mémorial des espèces disparues, dans le registre des légendes |
+| Carte à partager | Export d'une fresque |
+| Pauses de réflexion à certains âges | Pause aux grands jalons du monde, avec ce qui a changé depuis |
+| Probabilités, pas destin | Notre règle : les mécanismes sont fixés, le résultat reste libre |
+
+Le ton aussi : les événements graves y sont brefs et sans détails. Une date, un lieu, un effectif qui tombe à 1
+porteront plus qu'un texte dramatique, et restent fidèles à la règle de ne rien inventer. Une différence à garder :
+ce jeu s'appuie sur des données humaines réelles, nous sur une simulation. Nos actes ne présentent donc jamais un
+chiffre comme un fait biologique, seulement comme ce qui s'est passé dans ce monde-là.
 
 **Ce qui les rend fidèles au projet**
 
@@ -96,7 +121,10 @@ image et ses caractéristiques. Référence de style citée : « 1 sur 8 million
 Une case n'est cochée que si le banc l'a montré sur des graines non utilisées pour le réglage.
 
 **Le monde**
+- [ ] Globe 3D de la planète façon RimWorld, et planète immense à deux échelles.
 - [x] Saisons opposées entre hémisphères, latitude, pluie, foudre et feu.
+- [x] Adaptation locale à la température à l'intérieur d'une espèce : 0,256 sur 6 graines nouvelles
+  (61 à 66, 20 000 ticks), contre 0,007 sans climat.
 - [x] Plantes qui poussent selon la température et la pluie (modèle de Miami, Lieth 1975).
 - [ ] Lune paramétrable : taille, gravité, inclinaison, longueur de l'année.
 - [ ] Grandes périodes froides et chaudes qui changent vraiment les biomes.
@@ -151,8 +179,12 @@ parfois sur les limites exactes.
 
 Elles viennent des mesures et ne doivent pas disparaître sans nouvelle mesure.
 
-- Sur 6 graines à 20 000 ticks, qui ont servi au réglage : 2 espèces d'oiseaux en médiane, 4 au mieux, 2 niches
-  de régime sur 3, 3 au mieux, et les poissons vivants dans seulement 3 mondes sur 6.
+- Sur 6 graines nouvelles (61 à 66) à 20 000 ticks, avec le climat : 2 espèces d'oiseaux en médiane, 5 au mieux,
+  2 niches de régime sur 3, 3 au mieux. Oiseaux vivants dans 4 mondes sur 6, poissons 3, arthropodes et
+  mollusques 6. Population médiane de 1842, 11 incendies par monde.
+- Les poissons meurent surtout de vieillesse, faute de naissances : sur les graines 61 à 66 à 8000 ticks, ils
+  survivent dans 4 mondes sur 6. Ni des portées plus grandes ni une vraie famine n'ont réglé ce point, la cause
+  reste à trouver.
 - Le moteur compte environ 2,7 Ko par individu et 5 µs par individu et par tick. Le passage au temps géologique
   ne se fera pas en ajoutant des individus : c'est le chantier le plus lourd de cette V1.
 - La carte fait 12 cases sur 9, ce qui limite l'isolement et donc la diversité.
