@@ -32,6 +32,7 @@ Toutes ces tâches doivent être faites ; l'ordre suit leurs priorités.
 7. Fresques : voir plus bas, à faire avancer en parallèle dès que le moteur retient les causes.
 8. Planète façon RimWorld : un globe 3D de toute la planète, où cliquer sur un point ouvre sa carte 2D.
    - Première étape, faite : le monde actuel enroulé sur la sphère, l'est rejoignant l'ouest.
+   - Conception : voir [PLANET_DESIGN.md](PLANET_DESIGN.md), métapopulation par tuile et carte locale individuelle.
    - Étape suivante : une planète immense. Elle demande un moteur à deux échelles, toute la planète simulée
      en gros et les individus seulement sur la carte ouverte. C'est le même chantier de fond que le temps
      géologique : ils se feront ensemble.
