@@ -327,6 +327,7 @@ namespace Serina::Simulation
             {"plantHalfSaturation", params_.plantHalfSaturation},
             {"carrionHalfSaturation", params_.carrionHalfSaturation},
             {"dietSpecialization", params_.dietSpecialization},
+            {"litterScale", params_.litterScale},
             {"yearTicks", params_.yearTicks},
             {"latitudeRange", params_.latitudeRange},
             {"seasonAmplitude", params_.seasonAmplitude},
@@ -413,6 +414,10 @@ namespace Serina::Simulation
         for (const auto &[name, streak] : nicheStreak_)
             nicheStreak[name] = streak;
         j["nicheStreak"] = nicheStreak;
+        json tallies = json::object();
+        for (const auto &[name, t] : tallies_)
+            tallies[name] = {t.births, t.starved, t.oldAge, t.eaten, t.burned};
+        j["tallies"] = tallies;
 
         // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
         // génération avant la sauvegarde -- lue par buildBrainInputs() au
@@ -517,6 +522,7 @@ namespace Serina::Simulation
             params.plantHalfSaturation = pj.value("plantHalfSaturation", params.plantHalfSaturation);
             params.carrionHalfSaturation = pj.value("carrionHalfSaturation", params.carrionHalfSaturation);
             params.dietSpecialization = pj.value("dietSpecialization", params.dietSpecialization);
+            params.litterScale = pj.value("litterScale", params.litterScale);
             params.yearTicks = pj.value("yearTicks", params.yearTicks);
             params.latitudeRange = pj.value("latitudeRange", params.latitudeRange);
             params.seasonAmplitude = pj.value("seasonAmplitude", params.seasonAmplitude);
@@ -616,6 +622,13 @@ namespace Serina::Simulation
         const json savedNicheStreak = j.value("nicheStreak", json::object());
         for (const auto &[name, streak] : savedNicheStreak.items())
             sim->nicheStreak_[name] = streak.get<uint32_t>();
+        const json savedTallies = j.value("tallies", json::object());
+        for (const auto &[name, t] : savedTallies.items())
+        {
+            if (!t.is_array() || t.size() != 5)
+                continue;
+            sim->tallies_[name] = {t[0].get<uint64_t>(), t[1].get<uint64_t>(), t[2].get<uint64_t>(), t[3].get<uint64_t>(), t[4].get<uint64_t>()};
+        }
 
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))

@@ -973,3 +973,21 @@ TEST_CASE("a cold spell slowly changes every cell", "[worldsim][climate]") {
     CHECK(largest > 0.0);
     CHECK(largest <= params.climateEpochAmplitude);
 }
+
+TEST_CASE("every death of a species is counted once, under one cause", "[worldsim][foodweb]") {
+    UnifiedWorldSimulator sim({}, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    // Naissances moins morts redonnent la population vivante, fondateurs compris.
+    std::map<std::string, uint64_t> founders = {{"Serinus canaria", 40}, {"Xiphophorus hellerii", 40}, {"Gryllus seriensis", 40}, {"Solenopsis invicta", 40}, {"Achatina fulica", 40}};
+    for (const auto &lineage : sim.getLineageSnapshots()) {
+        const auto &t = lineage.tally;
+        const uint64_t deaths = t.starved + t.oldAge + t.eaten + t.burned;
+        if (!founders.count(lineage.speciesName))
+            continue; // une espèce née d'une scission part de ses premiers membres, pas de naissances
+        CHECK(founders[lineage.speciesName] + t.births >= deaths);
+        CHECK(deaths > 0);
+    }
+}

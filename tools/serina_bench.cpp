@@ -4,6 +4,7 @@
 //   serina_bench <graine> <ticks> [cle=valeur ...]
 #include "Serina/WorldSimulation.hpp"
 
+#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -61,6 +62,8 @@ namespace
             p.plantHalfSaturation = value;
         else if (key == "huntSatiety")
             p.huntSatiety = value;
+        else if (key == "litterScale")
+            p.litterScale = value;
         else if (key == "seasonAmplitude")
             p.seasonAmplitude = value;
         else if (key == "latitudeRange")
@@ -248,6 +251,40 @@ int main(int argc, char **argv)
                 sympatric += count;
     std::sort(birdDiets.begin(), birdDiets.end());
     const double birdDietRange = birdDiets.size() >= 10 ? birdDiets[birdDiets.size() * 9 / 10] - birdDiets[birdDiets.size() / 10] : 0.0;
+    // Causes de mort de chaque groupe, toutes espèces confondues, y compris les éteintes.
+    double fishDeaths[4] = {0, 0, 0, 0};
+    double birdDeaths[4] = {0, 0, 0, 0};
+    for (const auto &lineage : lineages)
+    {
+        double *row = lineage.biologicalType == Taxonomy::BiologicalType::FISH ? fishDeaths : lineage.biologicalType == Taxonomy::BiologicalType::BIRD ? birdDeaths : nullptr;
+        if (!row)
+            continue;
+        row[0] += lineage.tally.starved;
+        row[1] += lineage.tally.oldAge;
+        row[2] += lineage.tally.eaten;
+        row[3] += lineage.tally.burned;
+    }
+    const auto shares = [](const double *row) {
+        const double total = row[0] + row[1] + row[2] + row[3];
+        return std::array<double, 4>{total > 0 ? row[0] / total : 0, total > 0 ? row[1] / total : 0, total > 0 ? row[2] / total : 0, total > 0 ? row[3] / total : 0};
+    };
+    const auto fishShare = shares(fishDeaths);
+    const auto birdShare = shares(birdDeaths);
+    double fishRate = 0.0, birdRate = 0.0;
+    double fishN = 0.0, birdN = 0.0;
+    for (const auto &lineage : lineages)
+    {
+        if (lineage.biologicalType == Taxonomy::BiologicalType::FISH)
+        {
+            fishRate += lineage.averageTraits.reproductionRate * lineage.population;
+            fishN += lineage.population;
+        }
+        else if (lineage.biologicalType == Taxonomy::BiologicalType::BIRD)
+        {
+            birdRate += lineage.averageTraits.reproductionRate * lineage.population;
+            birdN += lineage.population;
+        }
+    }
     double dietSum = 0.0, plantSum = 0.0;
     for (const auto &ind : inds)
         dietSum += ind.diet;
@@ -273,7 +310,7 @@ int main(int argc, char **argv)
     std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
-                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ignitions\":%llu,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
+                "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ignitions\":%llu,\"fishRate\":%.3f,\"birdRate\":%.3f,\"fishStarved\":%.3f,\"fishOld\":%.3f,\"fishEaten\":%.3f,\"birdStarved\":%.3f,\"birdOld\":%.3f,\"birdEaten\":%.3f,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
                 seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
@@ -281,7 +318,7 @@ int main(int argc, char **argv)
                 100.0 * forbidden / n, climateCorrelation, insulationVsClimate.value(),
                 withinSpecies(insulationBySpecies), withinSpecies(resistanceBySpecies), meanInsulationGap / n, meanSize / n, static_cast<unsigned long long>(life.predationKills),
                 int(birdGuild[0]) + int(birdGuild[1]) + int(birdGuild[2]), int(anyGuild[0]) + int(anyGuild[1]) + int(anyGuild[2]),
-                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, static_cast<unsigned long long>(sim.getIgnitionCount()), ranTicks, birdSpecies, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
+                birdMaxDiet > birdMinDiet ? birdMaxDiet - birdMinDiet : 0.0, dietSum / n, static_cast<unsigned long long>(sim.getIgnitionCount()), fishN > 0 ? fishRate / fishN : 0.0, birdN > 0 ? birdRate / birdN : 0.0, fishShare[0], fishShare[1], fishShare[2], birdShare[0], birdShare[1], birdShare[2], ranTicks, birdSpecies, inhabited > 0 ? plantSum / inhabited : 0.0, sympatric / n, birdDietRange, (gapToSpeciesMean - meanInsulationGap) / n, spreadOfIdeal / n,
                 static_cast<unsigned long long>(life.births), static_cast<unsigned long long>(life.starvationDeaths),
                 static_cast<unsigned long long>(life.oldAgeDeaths), static_cast<unsigned long long>(life.predationTransfers));
     return 0;

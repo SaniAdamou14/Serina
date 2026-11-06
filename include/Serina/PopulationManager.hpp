@@ -79,7 +79,9 @@ namespace Serina::Evolution
         double getVY() const { return vy_; }
 
         // Setters
-        void setEnergy(double energy) { energy_ = std::max(0.0, energy); }
+        // Peut devenir négative : une dette d'énergie non remboursée tue au tick suivant (voir update).
+        // Bloquée à zéro, elle effaçait la dette à chaque tick et plus rien ne mourait de faim.
+        void setEnergy(double energy) { energy_ = energy; }
         void setPosition(double x, double y)
         {
             x_ = x;
