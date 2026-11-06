@@ -135,6 +135,11 @@ class ApiService {
     return request<ApiResponse<EvolutionHistoryEntry[]>>(`/api/simulations/${simulationId}/history?limit=${limit}`)
   }
 
+  /** Tuiles : [x, y, z, biome, altitude en km, température en °C, pluie en mm/an]. */
+  getPlanet(simulationId: SimulationId) {
+    return request<{ status: string; tiles: number[][]; triangles: number[][]; home: number }>(`/api/serina/planet/${simulationId}`)
+  }
+
   getGameHistory(simulationId: SimulationId) {
     return request<HistoryResult>(`/api/serina/history/${simulationId}`)
   }

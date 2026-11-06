@@ -292,6 +292,17 @@ router.get('/status/:simulationId', async (req, res) => {
  *     summary: Histoire de la partie (points pour les graphiques), gardée par le moteur
  *     tags: [Serina]
  */
+router.get('/planet/:simulationId', async (req, res) => {
+  if (!simulationEngine) {
+    return res.status(500).json({ error: 'Simulation engine not initialized' });
+  }
+  try {
+    res.json(await simulationEngine.getPlanet(req.params.simulationId));
+  } catch (error) {
+    res.status(error.message.includes('not found') ? 404 : 500).json({ error: error.message });
+  }
+});
+
 router.get('/history/:simulationId', async (req, res) => {
   if (!simulationEngine) {
     return res.status(500).json({ error: 'Simulation engine not initialized' });

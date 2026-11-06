@@ -93,3 +93,10 @@ target_link_libraries(test_determinism PRIVATE Catch2::Catch2WithMain nlohmann_j
 target_include_directories(test_determinism PRIVATE ${CMAKE_SOURCE_DIR}/include)
 target_compile_features(test_determinism PRIVATE cxx_std_20)
 catch_discover_tests(test_determinism)
+
+# La planète découpée en tuiles (docs/PLANET_DESIGN.md, étape 1).
+add_executable(test_planet test_planet.cpp)
+target_link_libraries(test_planet PRIVATE Catch2::Catch2WithMain)
+target_include_directories(test_planet PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_features(test_planet PRIVATE cxx_std_20)
+catch_discover_tests(test_planet)

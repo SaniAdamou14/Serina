@@ -112,7 +112,8 @@ Recommandation de départ : 2562 tuiles et une seule carte locale ouverte à la 
 
 Chacune a son critère mesuré et sa PR.
 
-1. **Grille géodésique et génération de la planète** : continents, isthmes, océans, îles, relief, pluie, climat par
+1. **Grille géodésique et génération de la planète** (faite : 2562 tuiles dont 12 pentagones, continent en arc,
+   climat et biomes, globe hexagonal à 60 images/s ; la carte actuelle est posée sur une tuile marquée) : continents, isthmes, océans, îles, relief, pluie, climat par
    latitude et altitude, globe hexagonal cliquable. Critère : 60 images/s, biomes cohérents avec le climat.
 2. **Métapopulation seule** : la planète évolue sans carte ouverte. Critère : les groupes fondateurs survivent, la
    migration remplit les continents, l'isolement par l'océan crée des espèces, sur des graines nouvelles.
