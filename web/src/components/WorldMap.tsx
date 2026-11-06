@@ -539,13 +539,7 @@ export function WorldMap() {
             Indiv.
           </button>
         </div>
-        <button
-          className={`game-button text-xs py-1 ${planetView ? 'game-button-active' : ''}`}
-          onClick={() => setPlanetView((v) => !v)}
-          title="Voir toute la planète, ou revenir à la carte (P)"
-        >
-          {planetView ? 'Revenir à la carte' : 'Planète'}
-        </button>
+
       </div>
 
       <div
@@ -622,14 +616,24 @@ export function WorldMap() {
         </div>
       )}
 
-      <div className="absolute top-2 right-2 pointer-events-none z-10">
-        <Minimap
-          image={worldImage}
-          worldWidth={worldWidth}
-          worldHeight={worldHeight}
-          viewBox={viewBox}
-          onNavigate={navigateFromMinimap}
-        />
+      <div className="absolute top-2 right-2 pointer-events-none z-10 flex flex-col items-stretch gap-1">
+        {!planetView && (
+          <Minimap
+            image={worldImage}
+            worldWidth={worldWidth}
+            worldHeight={worldHeight}
+            viewBox={viewBox}
+            onNavigate={navigateFromMinimap}
+          />
+        )}
+        {/* Sous la minicarte, toujours visible : le panneau du temps ne peut pas le recouvrir. */}
+        <button
+          className={`game-button pointer-events-auto text-xs py-1 ${planetView ? 'game-button-active' : ''}`}
+          onClick={() => setPlanetView((v) => !v)}
+          title="Voir toute la planète, ou revenir à la carte (P)"
+        >
+          {planetView ? 'Revenir à la carte (P)' : 'Planète (P)'}
+        </button>
       </div>
 
     </div>
