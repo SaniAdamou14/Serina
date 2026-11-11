@@ -186,6 +186,7 @@ export class MapRenderer {
   private lost = false;
   private frameTimes: number[] = [];
   private resourcesReady = false;
+  private paused = false;
   private worldImageDirty = false;
   private lastFrameMs = 0;
 
@@ -220,6 +221,14 @@ export class MapRenderer {
   async start() {
     await this.initResources();
     this.frameHandle = requestAnimationFrame(this.frame);
+  }
+
+  /** Arrête de dessiner tant que la carte est masquée (par exemple sous le globe). */
+  setPaused(paused: boolean) {
+    if (paused === this.paused) return;
+    this.paused = paused;
+    cancelAnimationFrame(this.frameHandle);
+    if (!paused && !this.lost && this.resourcesReady) this.frameHandle = requestAnimationFrame(this.frame);
   }
 
   destroy() {
@@ -642,7 +651,7 @@ export class MapRenderer {
   }
 
   private frame = (now: number) => {
-    if (this.lost) return;
+    if (this.lost || this.paused) return;
     this.frameHandle = requestAnimationFrame(this.frame);
     if (this.lastFrameMs > 0) {
       this.frameTimes.push(now - this.lastFrameMs);

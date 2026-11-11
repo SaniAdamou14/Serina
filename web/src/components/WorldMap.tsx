@@ -148,6 +148,11 @@ export function WorldMap() {
     if (viewBox) renderer.current?.setCamera(viewBox);
   }, [viewBox, canvas]);
 
+  // Sous le globe, la carte est cachée : inutile de la redessiner à chaque image.
+  useEffect(() => {
+    renderer.current?.setPaused(planetView);
+  }, [planetView, canvas]);
+
   useEffect(() => {
     renderer.current?.setSelection(selectedRegion ? [selectedRegion.gridX, selectedRegion.gridY] : null, selectedIndividual?.id ?? null);
   }, [selectedRegion, selectedIndividual, canvas]);
