@@ -1,5 +1,5 @@
-import { RefreshCw, Rocket, Skull, WifiOff, X, Hand } from 'lucide-react'
-import { EVENT_LABELS } from '../hooks/useEcologicalEvents'
+import { RefreshCw, Rocket, Skull, WifiOff, X, Hand, TrendingDown } from 'lucide-react'
+import { EcoEvent, EVENT_LABELS, MAJOR_IMPORTANCE } from '../hooks/useEcologicalEvents'
 import { useSimulation } from '@services/SimulationContext'
 import { useGameLog } from '@services/GameLogContext'
 
@@ -7,6 +7,21 @@ import { useGameLog } from '@services/GameLogContext'
  * Bord droit de l'écran, façon RimWorld : les alertes durables (perte de connexion,
  * extinction totale) puis les lettres d'événements réellement détectés.
  */
+const EVENT_TINTS: Record<EcoEvent['type'], string> = {
+  extinction: 'text-red-200',
+  decline: 'text-orange-200',
+  intervention: 'text-amber-200',
+  speciation: 'text-primary-300'
+}
+
+/** L'icône d'un type d'événement, partagée avec les Chroniques. */
+export function EventIcon({ type, className }: { type: EcoEvent['type']; className: string }) {
+  if (type === 'extinction') return <Skull className={className} />
+  if (type === 'decline') return <TrendingDown className={className} />
+  if (type === 'intervention') return <Hand className={className} />
+  return <Rocket className={className} />
+}
+
 export function AlertStack() {
   const { simulationData, currentSimulationId, isConnected, connect } = useSimulation()
   const { letters: events, dismissLetter: dismiss } = useGameLog()
@@ -32,9 +47,9 @@ export function AlertStack() {
       {events.map((event) => (
         <div
           key={event.id}
-          className={`game-panel pointer-events-auto w-full px-2 py-1.5 text-xs flex items-start gap-2 ${event.type === 'extinction' ? 'text-red-200' : event.type === 'intervention' ? 'text-amber-200' : 'text-primary-300'}`}
+          className={`game-panel pointer-events-auto w-full px-2 py-1.5 text-xs flex items-start gap-2 ${EVENT_TINTS[event.type]} ${event.importance >= MAJOR_IMPORTANCE ? 'border-l-2 border-l-red-400' : ''}`}
         >
-          {event.type === 'extinction' ? <Skull className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : event.type === 'intervention' ? <Hand className="w-3.5 h-3.5 shrink-0 mt-0.5" /> : <Rocket className="w-3.5 h-3.5 shrink-0 mt-0.5" />}
+          <EventIcon type={event.type} className="w-3.5 h-3.5 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="font-semibold">{EVENT_LABELS[event.type]}, tick {event.generation}</div>
             <div className="text-slate-300 break-words">{event.message}</div>

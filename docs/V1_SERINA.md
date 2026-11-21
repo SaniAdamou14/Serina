@@ -113,6 +113,14 @@ chiffre comme un fait biologique, seulement comme ce qui s'est passé dans ce mo
 **Étapes**
 
 1. Le moteur retient les causes de mort et détecte les moments marquants, avec un score d'importance.
+   Fait : dernier survivant (avec son identifiant, pour le suivre plus tard), extinction avec la cause de ses
+   derniers morts et leur case, disparition d'un groupe entier, extinction de masse, nouvelle espèce et son lieu
+   de naissance, effondrement (la moitié d'un sommet perdue en moins d'un an, une seule fois par déclin). Le
+   score est un rang de présentation, pas une mesure : à partir de 0,5 une lettre, à partir de 0,8 un moment
+   majeur. Mesuré sur 6 graines nouvelles (101 à 106, 8000 ticks), en médiane par monde : 9 moments, dont 5
+   lettres et aucun moment majeur ; 3 effondrements, 5 au plus. Une première version comptait un effondrement
+   à chaque division par deux d'un même déclin : 17 moments par monde, tous des lettres (graines 1 à 6).
+   Reste : le premier occupant d'une niche, le plus grand animal jamais vu, le premier oiseau qui ne vole plus.
 2. Registre et fresques en version simple : texte réel et créature en pixel art depuis les sprites actuels.
 3. Scènes générées : biome, saison, météo et silhouette tirée du génome, ce qui dépend des silhouettes d'I6.
 4. Galerie, frise, export d'image, et un son à l'ouverture.
@@ -161,7 +169,8 @@ Une case n'est cochée que si le banc l'a montré sur des graines non utilisées
 **L'interface**
 - [x] Carte vivante : plantes, morts, feu, pluie, éclairs, neige et saisons.
 - [ ] Silhouettes tirées du génome de chaque lignée, à la place des gabarits.
-- [ ] Fresques et registre des légendes.
+- [ ] Fresques et registre des légendes. Les moments marquants sont détectés et racontés dans les Chroniques
+  et les lettres ; restent les fresques elles-mêmes et le registre.
 - [ ] Alertes et lettres, calques complets.
 - [ ] Sauvegarde automatique, limite des parties oubliées, tests navigateur en CI.
 

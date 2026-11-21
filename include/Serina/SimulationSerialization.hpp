@@ -422,6 +422,25 @@ namespace Serina::Simulation
         for (const auto &i : interventions_)
             interventions.push_back({{"generation", i.generation}, {"kind", i.kind}, {"gridX", i.gridX}, {"gridY", i.gridY}, {"value", i.value}, {"outcome", i.outcome}});
         j["interventions"] = interventions;
+        json moments = json::array();
+        for (const auto &m : moments_)
+            moments.push_back({{"generation", m.generation},
+                               {"kind", m.kind},
+                               {"species", m.species},
+                               {"relatedSpecies", m.relatedSpecies},
+                               {"biologicalType", m.biologicalType},
+                               {"gridX", m.gridX},
+                               {"gridY", m.gridY},
+                               {"individualId", m.individualId},
+                               {"before", m.before},
+                               {"after", m.after},
+                               {"cause", m.cause},
+                               {"importance", m.importance}});
+        j["moments"] = moments;
+        json peaks = json::object();
+        for (const auto &[name, p] : peaks_)
+            peaks[name] = {p.count, p.generation, p.tally.births, p.tally.starved, p.tally.oldAge, p.tally.eaten, p.tally.burned, p.tally.disaster, p.collapsedFrom};
+        j["peaks"] = peaks;
 
         // Chantier F/G1 : pression écologique réelle mesurée à la DERNIÈRE
         // génération avant la sauvegarde -- lue par buildBrainInputs() au
@@ -636,6 +655,34 @@ namespace Serina::Simulation
         }
         for (const auto &i : j.value("interventions", json::array()))
             sim->interventions_.push_back({i.value("generation", 0u), i.value("kind", std::string()), i.value("gridX", -1), i.value("gridY", -1), i.value("value", 0.0), i.value("outcome", std::string())});
+        // Absents des sauvegardes d'avant les moments : le registre repart de la reprise.
+        const json savedMoments = j.value("moments", json::array());
+        for (const auto &m : savedMoments)
+        {
+            Moment moment;
+            moment.generation = m.value("generation", 0u);
+            moment.kind = m.value("kind", std::string());
+            moment.species = m.value("species", std::string());
+            moment.relatedSpecies = m.value("relatedSpecies", std::string());
+            moment.biologicalType = m.value("biologicalType", -1);
+            moment.gridX = m.value("gridX", -1);
+            moment.gridY = m.value("gridY", -1);
+            moment.individualId = m.value("individualId", uint64_t{0});
+            moment.before = m.value("before", 0u);
+            moment.after = m.value("after", 0u);
+            moment.cause = m.value("cause", std::string());
+            moment.importance = m.value("importance", 0.0);
+            sim->moments_.push_back(std::move(moment));
+        }
+        const json savedPeaks = j.value("peaks", json::object());
+        for (const auto &[name, p] : savedPeaks.items())
+        {
+            if (!p.is_array() || p.size() < 9)
+                continue;
+            sim->peaks_[name] = {p[0].get<uint32_t>(), p[1].get<uint32_t>(),
+                                 {p[2].get<uint64_t>(), p[3].get<uint64_t>(), p[4].get<uint64_t>(), p[5].get<uint64_t>(), p[6].get<uint64_t>(), p[7].get<uint64_t>()},
+                                 p[8].get<uint32_t>()};
+        }
 
         sim->speciationEvents_.clear();
         for (const auto &ej : j.at("speciationEvents"))

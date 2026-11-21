@@ -27,7 +27,7 @@ namespace Serina::Daemon
 {
     /// À augmenter quand une réponse change de forme, avec REQUIRED_PROTOCOL dans
     /// api/services/simulationEngine.js : un ancien moteur est refusé, pas affiché à moitié.
-    inline constexpr int PROTOCOL_VERSION = 7;
+    inline constexpr int PROTOCOL_VERSION = 8;
 
     using json = nlohmann::json;
 
@@ -150,6 +150,24 @@ namespace Serina::Daemon
             {"geneticDistance", s.geneticDistance},
             {"traitDistanceDelta", s.traitDistanceDelta},
             {"geneticDistanceDelta", s.geneticDistanceDelta}};
+    }
+
+    /// @brief Un moment marquant, tel que le moteur l'a vu (voir Simulation::Moment).
+    inline json momentToJson(const Simulation::Moment &m)
+    {
+        return {
+            {"generation", m.generation},
+            {"kind", m.kind},
+            {"species", m.species},
+            {"relatedSpecies", m.relatedSpecies},
+            {"biologicalType", m.biologicalType},
+            {"gridX", m.gridX},
+            {"gridY", m.gridY},
+            {"individualId", m.individualId},
+            {"before", m.before},
+            {"after", m.after},
+            {"cause", m.cause},
+            {"importance", m.importance}};
     }
 
     /// @brief Une simulation vivante gérée par le daemon : son état réel,
@@ -473,6 +491,9 @@ namespace Serina::Daemon
                 r["interventions"] = json::array();
                 for (const auto &i : m.sim->getInterventions())
                     r["interventions"].push_back({{"generation", i.generation}, {"kind", i.kind}, {"gridX", i.gridX}, {"gridY", i.gridY}, {"value", i.value}, {"outcome", i.outcome}});
+                r["moments"] = json::array();
+                for (const auto &moment : m.sim->getMoments())
+                    r["moments"].push_back(momentToJson(moment));
                 r["convergenceSignals"] = json::array();
                 for (const auto &s : m.sim->getConvergenceSignals())
                     r["convergenceSignals"].push_back(convergenceSignalToJson(s));
