@@ -70,6 +70,28 @@ namespace Serina::Simulation
         std::string outcome; ///< ce qui s'est vraiment passé
     };
 
+    /// @brief Un moment marquant de l'histoire du monde, détecté par le moteur à partir de ce
+    /// qui s'est vraiment passé. Sert aux fresques, aux lettres et au registre des légendes
+    /// (docs/V1_SERINA.md). Rien n'y est inventé : une cause vide veut dire qu'elle n'est pas connue.
+    struct Moment
+    {
+        uint32_t generation = 0;
+        /// last_survivor, extinction, group_extinct, mass_extinction, new_species, collapse
+        std::string kind;
+        std::string species;        ///< espèce concernée ; vide pour une extinction de masse
+        std::string relatedSpecies; ///< espèce mère d'une nouvelle espèce
+        int biologicalType = -1;    ///< groupe de l'espèce, -1 pour le monde entier
+        int gridX = -1;             ///< case du moment, -1 si elle n'a pas de sens
+        int gridY = -1;
+        uint64_t individualId = 0;  ///< le dernier survivant, 0 sinon
+        uint32_t before = 0;        ///< effectif avant : dernier connu, sommet récent, espèces vivantes
+        uint32_t after = 0;         ///< effectif après, ou nombre d'espèces éteintes
+        std::string cause;          ///< starved, oldAge, eaten, burned, disaster ; vide si inconnue
+        /// Rang du moment entre 0 et 1 : un choix de présentation, pas une mesure. Le plus haut
+        /// prend l'écran, le milieu devient une lettre, le reste une ligne du registre.
+        double importance = 0.0;
+    };
+
     struct LineageSnapshot
     {
         std::string speciesName;
@@ -765,6 +787,8 @@ namespace Serina::Simulation
         double getCellSize() const { return params_.cellSize; }
         const std::vector<SpeciationEvent> &getSpeciationEvents() const { return speciationEvents_; }
         const std::vector<ExtinctionEvent> &getExtinctionEvents() const { return extinctionEvents_; }
+        /// @brief Moments marquants, dans l'ordre où ils sont arrivés.
+        const std::vector<Moment> &getMoments() const { return moments_; }
         const std::vector<HistorySample> &getHistory() const { return history_; }
         /// @brief Historique des signaux de convergence évolutive candidats
         /// détectés jusqu'ici (Chantier G2) -- voir ConvergenceSignal pour
@@ -991,6 +1015,37 @@ namespace Serina::Simulation
         static constexpr uint32_t CORPSE_VISIBLE_TICKS = 300;
         static constexpr size_t MAX_VISIBLE_CORPSES = 1500;
         std::map<std::string, uint32_t> lastCounts_; ///< effectifs du tick précédent
+        std::vector<Moment> moments_;
+        /// Plus haut effectif récent d'une espèce, et ses morts à cet instant : de quoi voir un
+        /// effondrement et dire de quoi elle est morte depuis.
+        struct PopulationPeak
+        {
+            uint32_t count = 0;
+            uint32_t generation = 0;
+            LifeTally tally;
+            /// Sommet d'où l'espèce s'est effondrée, 0 sinon : un déclin ne compte qu'une fois,
+            /// jusqu'à ce qu'elle remonte.
+            uint32_t collapsedFrom = 0;
+        };
+        std::map<std::string, PopulationPeak> peaks_;
+        /// Morts du tick en cours par espèce, et la case de la dernière. Refait à chaque tick,
+        /// donc hors sauvegarde.
+        struct TickDeaths
+        {
+            LifeTally causes;
+            int gridX = -1;
+            int gridY = -1;
+        };
+        std::map<std::string, TickDeaths> deathsThisTick_;
+        /// Un effondrement, c'est perdre au moins la moitié de son sommet en moins d'un an.
+        static constexpr double COLLAPSE_SHARE = 0.5;
+        /// Une espèce effondrée s'est remise quand elle retrouve cette part de son sommet.
+        static constexpr double RECOVERY_SHARE = 0.75;
+        /// En dessous, une chute n'a rien de marquant.
+        static constexpr uint32_t COLLAPSE_MIN_PEAK = 20;
+        /// Une extinction de masse : au moins 3 espèces et 30 % des espèces en moins d'un an.
+        static constexpr uint32_t MASS_EXTINCTION_MIN_SPECIES = 3;
+        static constexpr double MASS_EXTINCTION_SHARE = 0.3;
         std::vector<HistorySample> history_;
         uint32_t historyInterval_ = 20; ///< ticks entre deux points, double quand l'historique est plein
 
@@ -1816,26 +1871,43 @@ namespace Serina::Simulation
         void removeDead()
         {
             ensureFood();
+            deathsThisTick_.clear();
             for (const auto &o : population_)
             {
                 if (o.isAlive())
                     continue;
                 recordCorpse(o, killedThisTick_.count(o.getId()) > 0);
                 LifeTally &tally = tallies_[o.getSpecies()];
+                TickDeaths &deaths = deathsThisTick_[o.getSpecies()];
+                auto [cellX, cellY] = regionOf(o);
+                deaths.gridX = cellX;
+                deaths.gridY = cellY;
                 if (killedThisTick_.count(o.getId()))
                 {
                     tally.eaten++;
+                    deaths.causes.eaten++;
                     continue; // déjà mangée
                 }
                 if (struckThisTick_.count(o.getId()))
+                {
                     tally.disaster++;
+                    deaths.causes.disaster++;
+                }
                 else if (burnedThisTick_.count(o.getId()))
+                {
                     tally.burned++;
+                    deaths.causes.burned++;
+                }
                 else if (o.getEnergy() <= 0.0)
+                {
                     tally.starved++;
+                    deaths.causes.starved++;
+                }
                 else
+                {
                     tally.oldAge++;
-                auto [cellX, cellY] = regionOf(o);
+                    deaths.causes.oldAge++;
+                }
                 carrion_[static_cast<size_t>(cellY) * grid_.getWidth() + cellX] +=
                     BODY_ENERGY_PER_SIZE * o.getGenome().getTrait(Genetics::TraitType::SIZE) + o.getEnergy() * 0.5;
                 if (o.getEnergy() <= 0.0)
@@ -2180,17 +2252,47 @@ namespace Serina::Simulation
             }
 
             speciationEvents_.push_back({parentSpecies, newName, generation_, distance});
+
+            // Le lieu de naissance : la case où vit la plus grande part du groupe qui se sépare.
+            std::map<std::pair<int, int>, uint32_t> cells;
+            for (size_t idx : splittingGroup)
+                cells[regionOf(population_[idx])]++;
+            uint32_t most = 0;
+
+            Moment moment;
+            moment.generation = generation_;
+            moment.kind = "new_species";
+            moment.species = newName;
+            moment.relatedSpecies = parentSpecies;
+            moment.biologicalType = static_cast<int>(biologicalType);
+            for (const auto &[cell, count] : cells)
+            {
+                if (count > most)
+                {
+                    most = count;
+                    moment.gridX = cell.first;
+                    moment.gridY = cell.second;
+                }
+            }
+            moment.after = static_cast<uint32_t>(splittingGroup.size());
+            // La première espèce nouvelle du monde compte plus que les suivantes.
+            moment.importance = speciationEvents_.size() == 1 ? 0.65 : 0.5;
+            moments_.push_back(std::move(moment));
+            // Le parent perd d'un coup le groupe qui part : ce n'est pas un effondrement.
+            peaks_.erase(parentSpecies);
         }
 
         void checkExtinction()
         {
             auto counts = populationCountsBySpecies();
+            std::vector<std::string> extinct;
             for (auto it = brains_.begin(); it != brains_.end();)
             {
                 if (counts.find(it->first) == counts.end())
                 {
                     auto last = lastCounts_.find(it->first);
                     extinctionEvents_.push_back({it->first, generation_, last != lastCounts_.end() ? last->second : 0u});
+                    extinct.push_back(it->first);
                     divergentStreak_.erase(it->first);
                     nicheStreak_.erase(it->first);
                     it = brains_.erase(it);
@@ -2200,7 +2302,180 @@ namespace Serina::Simulation
                     ++it;
                 }
             }
+            detectMoments(counts, extinct);
             lastCounts_ = std::move(counts);
+        }
+
+        /// @brief La cause qui a tué le plus, dans un ordre fixe en cas d'égalité ; vide sans mort.
+        static std::string dominantCause(const LifeTally &t)
+        {
+            const std::pair<uint64_t, const char *> causes[] = {
+                {t.starved, "starved"}, {t.oldAge, "oldAge"}, {t.eaten, "eaten"}, {t.burned, "burned"}, {t.disaster, "disaster"}};
+            std::string best;
+            uint64_t most = 0;
+            for (const auto &[count, name] : causes)
+            {
+                if (count > most)
+                {
+                    most = count;
+                    best = name;
+                }
+            }
+            return best;
+        }
+
+        /// @brief Les morts survenues entre deux relevés d'une même espèce.
+        static LifeTally deathsBetween(const LifeTally &now, const LifeTally &then)
+        {
+            LifeTally d;
+            d.starved = now.starved - then.starved;
+            d.oldAge = now.oldAge - then.oldAge;
+            d.eaten = now.eaten - then.eaten;
+            d.burned = now.burned - then.burned;
+            d.disaster = now.disaster - then.disaster;
+            return d;
+        }
+
+        LifeTally tallyOf(const std::string &species) const
+        {
+            auto it = tallies_.find(species);
+            return it != tallies_.end() ? it->second : LifeTally{};
+        }
+
+        int biologicalTypeIndex(const std::string &species) const
+        {
+            auto it = biologicalTypeOf_.find(species);
+            return it != biologicalTypeOf_.end() ? static_cast<int>(it->second) : -1;
+        }
+
+        /// @brief Détecte les moments marquants du tick, une fois les effectifs connus. Ne tire
+        /// aucun nombre au hasard et ne change rien au monde : il ne fait que regarder.
+        void detectMoments(const std::map<std::string, uint32_t> &counts, const std::vector<std::string> &extinct)
+        {
+            const uint32_t window = std::max<uint32_t>(params_.yearTicks, 1);
+
+            for (const auto &[species, count] : counts)
+            {
+                auto previous = lastCounts_.find(species);
+                if (count != 1 || previous == lastCounts_.end() || previous->second <= 1)
+                    continue;
+                Moment moment;
+                moment.generation = generation_;
+                moment.kind = "last_survivor";
+                moment.species = species;
+                moment.biologicalType = biologicalTypeIndex(species);
+                moment.before = previous->second;
+                moment.after = 1;
+                for (const auto &organism : population_)
+                {
+                    if (organism.isAlive() && organism.getSpecies() == species)
+                    {
+                        moment.individualId = organism.getId();
+                        std::tie(moment.gridX, moment.gridY) = regionOf(organism);
+                        break;
+                    }
+                }
+                // Ce qui l'a laissé seul : les morts depuis le sommet récent de l'espèce.
+                auto peak = peaks_.find(species);
+                const LifeTally since = peak != peaks_.end() ? deathsBetween(tallyOf(species), peak->second.tally) : LifeTally{};
+                moment.cause = dominantCause(since);
+                if (moment.cause.empty() && deathsThisTick_.count(species))
+                    moment.cause = dominantCause(deathsThisTick_.at(species).causes);
+                moment.importance = 0.75;
+                moments_.push_back(std::move(moment));
+            }
+
+            std::set<int> groupsLost;
+            for (const auto &species : extinct)
+            {
+                peaks_.erase(species);
+                // Une espèce qui n'a jamais vécu dans ce monde (aucune case pour elle) ne s'éteint pas.
+                auto previous = lastCounts_.find(species);
+                if (previous == lastCounts_.end() || previous->second == 0)
+                    continue;
+                Moment moment;
+                moment.generation = generation_;
+                moment.kind = "extinction";
+                moment.species = species;
+                moment.biologicalType = biologicalTypeIndex(species);
+                moment.before = previous->second;
+                auto deaths = deathsThisTick_.find(species);
+                if (deaths != deathsThisTick_.end())
+                {
+                    moment.cause = dominantCause(deaths->second.causes);
+                    moment.gridX = deaths->second.gridX;
+                    moment.gridY = deaths->second.gridY;
+                }
+                // Une lignée d'origine (fondatrice ou introduite) pèse plus qu'une branche récente.
+                const bool original = std::none_of(speciationEvents_.begin(), speciationEvents_.end(),
+                                                   [&](const SpeciationEvent &e) { return e.newSpecies == species; });
+                moment.importance = original ? 0.8 : 0.7;
+
+                const int type = moment.biologicalType;
+                const bool groupAlive = std::any_of(counts.begin(), counts.end(), [&](const auto &entry) { return biologicalTypeIndex(entry.first) == type; });
+                Moment groupMoment = moment;
+                moments_.push_back(std::move(moment));
+                if (type >= 0 && !groupAlive && groupsLost.insert(type).second)
+                {
+                    groupMoment.kind = "group_extinct";
+                    groupMoment.importance = 1.0;
+                    moments_.push_back(std::move(groupMoment));
+                }
+            }
+
+            if (!extinct.empty())
+            {
+                const uint32_t recent = static_cast<uint32_t>(std::count_if(moments_.begin(), moments_.end(),
+                                                                            [&](const Moment &m) { return m.kind == "extinction" && generation_ - m.generation < window; }));
+                const uint32_t before = static_cast<uint32_t>(counts.size()) + recent;
+                const bool reported = std::any_of(moments_.begin(), moments_.end(), [&](const Moment &m) { return m.kind == "mass_extinction" && generation_ - m.generation < window; });
+                if (!reported && recent >= MASS_EXTINCTION_MIN_SPECIES && recent >= MASS_EXTINCTION_SHARE * before)
+                {
+                    Moment moment;
+                    moment.generation = generation_;
+                    moment.kind = "mass_extinction";
+                    moment.before = before;
+                    moment.after = recent;
+                    moment.importance = 0.9;
+                    moments_.push_back(std::move(moment));
+                }
+            }
+
+            for (const auto &[species, count] : counts)
+            {
+                auto it = peaks_.find(species);
+                if (it != peaks_.end() && it->second.collapsedFrom > 0)
+                {
+                    // Le même déclin ne se raconte pas deux fois : la suite, c'est le dernier
+                    // survivant ou l'extinction, à moins qu'elle ne remonte.
+                    if (count < it->second.collapsedFrom * RECOVERY_SHARE)
+                        continue;
+                    peaks_[species] = {count, generation_, tallyOf(species), 0};
+                    continue;
+                }
+                if (it == peaks_.end() || count >= it->second.count || generation_ - it->second.generation > window)
+                {
+                    peaks_[species] = {count, generation_, tallyOf(species), 0};
+                    continue;
+                }
+                const PopulationPeak &peak = it->second;
+                // Un seul survivant est déjà un moment à part entière.
+                if (count <= 1 || peak.count < COLLAPSE_MIN_PEAK || count > peak.count * (1.0 - COLLAPSE_SHARE))
+                    continue;
+                Moment moment;
+                moment.generation = generation_;
+                moment.kind = "collapse";
+                moment.species = species;
+                moment.biologicalType = biologicalTypeIndex(species);
+                moment.before = peak.count;
+                moment.after = count;
+                moment.cause = dominantCause(deathsBetween(tallyOf(species), peak.tally));
+                // De 0,25 pour la moitié perdue à 0,75 pour presque tout : une lettre à partir des trois quarts.
+                moment.importance = (1.0 - static_cast<double>(count) / peak.count) - 0.25;
+                const uint32_t from = peak.count;
+                moments_.push_back(std::move(moment));
+                peaks_[species] = {count, generation_, tallyOf(species), from};
+            }
         }
 
         /// @brief Ajoute un point à l'histoire de la partie. Quand elle est pleine, un point

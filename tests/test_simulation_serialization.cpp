@@ -191,3 +191,42 @@ TEST_CASE("a saved game keeps its history and its extinctions", "[serialization]
     CHECK(restored->getHistory().back().generation == sim.getHistory().back().generation);
     CHECK(restored->getHistory().back().bySpecies == sim.getHistory().back().bySpecies);
 }
+
+TEST_CASE("the moments of a game survive a save, and the game keeps noticing the same ones", "[serialization][moments]")
+{
+    // Les sommets récents font partie de l'état : sans eux, un effondrement après la reprise
+    // serait vu autrement que dans une partie jamais interrompue.
+    UnifiedWorldSimulator original(Simulation::WorldSimulationParameters{}, /*seed=*/99);
+    original.seedFounderSpecies(2);
+    for (int i = 0; i < 400; ++i)
+        original.step();
+    auto restored = UnifiedWorldSimulator::fromJson(original.toJson());
+    REQUIRE(restored->getMoments().size() == original.getMoments().size());
+
+    UnifiedWorldSimulator reference(Simulation::WorldSimulationParameters{}, /*seed=*/99);
+    reference.seedFounderSpecies(2);
+    for (int i = 0; i < 800; ++i)
+        reference.step();
+    for (int i = 0; i < 400; ++i)
+        restored->step();
+
+    const auto &a = restored->getMoments();
+    const auto &b = reference.getMoments();
+    REQUIRE(!b.empty());
+    REQUIRE(a.size() == b.size());
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        INFO("moment #" << i << " " << b[i].kind << " " << b[i].species);
+        CHECK(a[i].generation == b[i].generation);
+        CHECK(a[i].kind == b[i].kind);
+        CHECK(a[i].species == b[i].species);
+        CHECK(a[i].relatedSpecies == b[i].relatedSpecies);
+        CHECK(a[i].biologicalType == b[i].biologicalType);
+        CHECK(a[i].gridX == b[i].gridX);
+        CHECK(a[i].gridY == b[i].gridY);
+        CHECK(a[i].before == b[i].before);
+        CHECK(a[i].after == b[i].after);
+        CHECK(a[i].cause == b[i].cause);
+        CHECK(a[i].importance == b[i].importance);
+    }
+}

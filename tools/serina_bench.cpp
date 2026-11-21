@@ -307,11 +307,25 @@ int main(int argc, char **argv)
             inBorderCells += r.population;
     }
 
-    std::printf("{\"seed\":%u,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
+    // Moments marquants : combien de chaque sorte, et combien prendraient l'écran ou une lettre.
+    std::map<std::string, int> momentKinds;
+    int fresques = 0, letters = 0;
+    for (const auto &m : sim.getMoments())
+    {
+        momentKinds[m.kind]++;
+        if (m.importance >= 0.8)
+            fresques++;
+        else if (m.importance >= 0.5)
+            letters++;
+    }
+
+    std::printf("{\"seed\":%u,\"moments\":%zu,\"momentFresques\":%d,\"momentLetters\":%d,\"lastSurvivors\":%d,\"extinctions\":%d,\"groupsLost\":%d,\"massExtinctions\":%d,\"newSpecies\":%d,\"collapses\":%d,\"pop\":%zu,\"lineages\":%zu,\"speciations\":%zu,\"occupied\":%d,"
                 "\"wallPct\":%.1f,\"borderPct\":%.1f,\"meanAge\":%.0f,"
                 "\"bird\":%zu,\"fish\":%zu,\"arthropod\":%zu,\"mollusc\":%zu,\"fishDryPct\":%.1f,"
                 "\"forbiddenPct\":%.2f,\"climateCorrelation\":%.3f,\"insulationCorrelation\":%.3f,\"insulationWithin\":%.3f,\"resistanceWithin\":%.3f,\"insulationGap\":%.3f,\"meanSize\":%.3f,\"kills\":%llu,\"birdGuilds\":%d,\"allGuilds\":%d,\"birdDietSpread\":%.3f,\"meanDiet\":%.3f,\"ignitions\":%llu,\"fishRate\":%.3f,\"birdRate\":%.3f,\"fishStarved\":%.3f,\"fishOld\":%.3f,\"fishEaten\":%.3f,\"birdStarved\":%.3f,\"birdOld\":%.3f,\"birdEaten\":%.3f,\"ranTicks\":%d,\"birdSpecies\":%d,\"plantLevel\":%.3f,\"sympatry\":%.3f,\"birdDietRange\":%.3f,\"localAdvantage\":%.3f,\"climateSpread\":%.3f,\"births\":%llu,\"starved\":%llu,\"oldAge\":%llu,\"predation\":%llu}\n",
-                seed, inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
+                seed, sim.getMoments().size(), fresques, letters, momentKinds["last_survivor"], momentKinds["extinction"], momentKinds["group_extinct"],
+                momentKinds["mass_extinction"], momentKinds["new_species"], momentKinds["collapse"],
+                inds.size(), lineages.size(), sim.getSpeciationEvents().size(), occupied,
                 100.0 * wall / n, 100.0 * inBorderCells / n, meanAge / n,
                 byGroup[Taxonomy::BiologicalType::BIRD], fish, byGroup[Taxonomy::BiologicalType::ARTHROPOD],
                 byGroup[Taxonomy::BiologicalType::MOLLUSC], fish ? 100.0 * fishDry / fish : 0.0,

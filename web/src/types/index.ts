@@ -217,6 +217,24 @@ export interface InterventionInfo {
   outcome: string
 }
 
+/** Un moment marquant détecté par le moteur (voir docs/SERINA_DAEMON_PROTOCOL.md). */
+export interface MomentInfo {
+  generation: number
+  kind: 'last_survivor' | 'extinction' | 'group_extinct' | 'mass_extinction' | 'new_species' | 'collapse'
+  species: string
+  relatedSpecies: string
+  biologicalType: number
+  gridX: number
+  gridY: number
+  individualId: number
+  before: number
+  after: number
+  /** starved, oldAge, eaten, burned, disaster, ou vide si rien ne l'a mesurée. */
+  cause: string
+  /** Rang de présentation entre 0 et 1, pas une mesure. */
+  importance: number
+}
+
 export interface ExtinctionEventInfo {
   species: string
   generation: number
@@ -268,6 +286,8 @@ export interface LineagesResult {
   extinctionEvents: ExtinctionEventInfo[]
   /** Absent d'un moteur plus ancien. */
   interventions?: InterventionInfo[]
+  /** Absent d'un moteur d'avant le protocole 8. */
+  moments?: MomentInfo[]
   convergenceSignals: ConvergenceSignalInfo[]
   error?: string
 }

@@ -169,6 +169,24 @@ TEST_CASE("lineages includes the real speciation event history shape", "[daemon]
     // Chantier G2 : jamais absent, meme quand aucun signal candidat n'a
     // encore ete detecte (tableau vide, pas un champ manquant).
     REQUIRE(response["convergenceSignals"].is_array());
+    REQUIRE(response["moments"].is_array());
+}
+
+TEST_CASE("lineages carries the moments the engine noticed, field by field", "[daemon][moments]")
+{
+    Daemon::SimulationRegistry registry;
+    Daemon::handleCommand(registry, makeRequest("create", "sim-m", {{"founderCount", 2}, {"seed", 99}}));
+    Daemon::handleCommand(registry, makeRequest("step", "sim-m", {{"count", 1500}}));
+
+    auto response = Daemon::handleCommand(registry, makeRequest("lineages", "sim-m"));
+    REQUIRE(response["status"] == "success");
+    REQUIRE(!response["moments"].empty());
+    for (const auto &m : response["moments"])
+    {
+        for (const char *field : {"generation", "kind", "species", "relatedSpecies", "biologicalType", "gridX", "gridY",
+                                  "individualId", "before", "after", "cause", "importance"})
+            CHECK(m.contains(field));
+    }
 }
 
 TEST_CASE("ping reports the protocol version the API checks", "[daemon]")

@@ -50,7 +50,7 @@ explaining why) plus the echoed `id`.
 | `status` | - | `generation`, `population`, `running`, `speciesCount`, `lineages` (see below), `speciationEventCount` (a count, see `lineages` for the full history). |
 | `regions` | - | `gridWidth`, `gridHeight`, `regions`: one entry per cell (`gridX`, `gridY`, `environmentType`, `environmentName`, `temperature`, `primaryProducers`, `predationPressure`, `competitionIntensity`, `climaticStress`, `population`, the real count of living organisms in that cell right now). |
 | `individuals` | - | `individuals`: one real entry per living organism (`id`, `species`, `x`, `y`, `energy`, `age`), no genome internals, just enough to place and inspect it. |
-| `lineages` | - | `lineages` (see below) plus `speciationEvents`: the **full array** of real speciation events (`parentSpecies`, `newSpecies`, `generation`, `geneticDistanceAtSplit`). |
+| `lineages` | - | `lineages` (see below) plus `speciationEvents`: the **full array** of real speciation events (`parentSpecies`, `newSpecies`, `generation`, `geneticDistanceAtSplit`), `extinctionEvents`, `interventions`, `convergenceSignals`, and `moments` (since protocol 8, see below). |
 | `ping` | - | Liveness check; always succeeds if the daemon is up. Returns `protocolVersion`, which the API checks before starting a game. |
 
 A lineage entry (used by both `status` and `lineages`):
@@ -75,6 +75,39 @@ A lineage entry (used by both `status` and `lineages`):
 `docs/UNIFIED_ENGINE_DESIGN.md`. `brainComplexity` is that lineage's NEAT
 brain's node + connection count (Phase 8); it changes over generations only
 when the (1+1) evolution strategy actually accepts a structural mutation.
+
+A moment entry (`lineages.moments`), a notable moment the engine detected, in the order it happened:
+
+```json
+{
+  "generation": 4120,
+  "kind": "extinction",
+  "species": "Xiphophorus hellerii",
+  "relatedSpecies": "",
+  "biologicalType": 1,
+  "gridX": 3,
+  "gridY": 5,
+  "individualId": 0,
+  "before": 2,
+  "after": 0,
+  "cause": "oldAge",
+  "importance": 0.8
+}
+```
+
+| `kind` | Detected when | `before` / `after` | `cause` |
+|---|---|---|---|
+| `last_survivor` | a species falls to one individual (`individualId`, its cell) | previous count / 1 | main cause of death since the recent peak |
+| `extinction` | a species has no individual left (cell of its last death) | last count / 0 | main cause of the last deaths |
+| `group_extinct` | the last species of a biological group dies out | as `extinction` | as `extinction` |
+| `mass_extinction` | at least 3 species and 30 % of species die out within a year | species alive a year ago / species lost | empty |
+| `new_species` | a speciation (`relatedSpecies` is the parent, cell where most of the new group lives) | 0 / size of the new group | empty |
+| `collapse` | a species loses at least half of its peak of the last year, from at least 20; once per decline, until it is back to three quarters of that peak | peak / count now | main cause of death since the peak |
+
+`cause` is one of `starved`, `oldAge`, `eaten`, `burned`, `disaster`, or empty when nothing measured it.
+`importance` is a presentation rank in [0, 1], not a measurement: `group_extinct` 1, `mass_extinction` 0.9,
+extinction of an original lineage 0.8 (0.7 for a branch), `last_survivor` 0.75, first `new_species` 0.65
+(0.5 after), `collapse` the share lost minus 0.25 (a letter from three quarters lost).
 
 ## Persistence
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <set>
 #include <unordered_map>
 
 using namespace Serina::Simulation;
@@ -1047,4 +1048,133 @@ TEST_CASE("the player acts on the world, and every action is recorded as it real
     CHECK(log.front().kind == "meteor");
     for (const auto &entry : log)
         CHECK(!entry.outcome.empty());
+}
+
+TEST_CASE("the engine notices the moments that matter, and says only what it measured", "[worldsim][moments]") {
+    // Deux fondateurs par espèce : quand l'un meurt, l'autre reste seul.
+    UnifiedWorldSimulator sim({}, 99);
+    sim.seedFounderSpecies(2);
+    for (int i = 0; i < 1500; ++i)
+        sim.step();
+
+    const auto &moments = sim.getMoments();
+    const std::set<std::string> causes = {"", "starved", "oldAge", "eaten", "burned", "disaster"};
+    uint32_t previous = 0;
+    for (const auto &m : moments) {
+        CHECK(m.generation >= previous);
+        previous = m.generation;
+        CHECK(m.importance >= 0.0);
+        CHECK(m.importance <= 1.0);
+        CHECK(causes.count(m.cause) == 1);
+        if (m.gridX >= 0) {
+            CHECK(m.gridX < sim.getGrid().getWidth());
+            CHECK(m.gridY >= 0);
+            CHECK(m.gridY < sim.getGrid().getHeight());
+        }
+    }
+
+    auto find = [&](const std::string &kind, const std::string &species) {
+        return std::find_if(moments.begin(), moments.end(), [&](const Moment &m) { return m.kind == kind && m.species == species; });
+    };
+
+    // Chaque espèce qui a vécu puis disparu a son moment : la cause de ses derniers morts et leur case.
+    int extinctions = 0;
+    for (const auto &e : sim.getExtinctionEvents()) {
+        if (e.lastPopulation == 0)
+            continue; // jamais posée sur cette carte
+        const auto it = find("extinction", e.species);
+        REQUIRE(it != moments.end());
+        CHECK(it->generation == e.generation);
+        CHECK(it->before == e.lastPopulation);
+        CHECK(it->after == 0);
+        CHECK(!it->cause.empty());
+        CHECK(it->gridX >= 0);
+        extinctions++;
+    }
+    CHECK(extinctions > 0);
+
+    for (const auto &e : sim.getSpeciationEvents()) {
+        const auto it = find("new_species", e.newSpecies);
+        REQUIRE(it != moments.end());
+        CHECK(it->relatedSpecies == e.parentSpecies);
+        CHECK(it->generation == e.generation);
+    }
+
+    // Un dernier survivant est un vrai individu, seul de son espèce, avant qu'elle ne s'éteigne.
+    int survivors = 0;
+    for (const auto &m : moments) {
+        if (m.kind != "last_survivor")
+            continue;
+        survivors++;
+        CHECK(m.individualId != 0);
+        CHECK(m.after == 1);
+        CHECK(m.before > 1);
+        const auto end = find("extinction", m.species);
+        if (end != moments.end())
+            CHECK(end->generation >= m.generation);
+    }
+    CHECK(survivors > 0);
+
+    // Un groupe perdu n'a plus aucune espèce vivante, sans introduction pour le faire revenir.
+    const auto lineages = sim.getLineageSnapshots();
+    for (const auto &m : moments) {
+        if (m.kind != "group_extinct")
+            continue;
+        CHECK(m.importance == 1.0);
+        for (const auto &lineage : lineages)
+            CHECK(static_cast<int>(lineage.biologicalType) != m.biologicalType);
+    }
+}
+
+TEST_CASE("a catastrophe that halves a species is a collapse, and its cause is the catastrophe", "[worldsim][moments]") {
+    UnifiedWorldSimulator sim({}, 7);
+    sim.seedFounderSpecies(40);
+    for (int i = 0; i < 50; ++i)
+        sim.step();
+
+    // La case la plus peuplée d'une espèce, frappée trois fois au plus fort.
+    std::map<std::pair<std::string, std::pair<int, int>>, int> crowd;
+    const double width = sim.getGrid().getWidth() * sim.getCellSize();
+    const double height = sim.getGrid().getHeight() * sim.getCellSize();
+    for (const auto &ind : sim.getIndividualSnapshots())
+        crowd[{ind.species, sim.getGrid().positionToGrid(ind.x, ind.y, width, height)}]++;
+    const auto target = std::max_element(crowd.begin(), crowd.end(), [](const auto &a, const auto &b) { return a.second < b.second; })->first;
+    const std::string species = target.first;
+
+    auto countOf = [&]() {
+        int n = 0;
+        for (const auto &ind : sim.getIndividualSnapshots())
+            n += ind.species == species;
+        return n;
+    };
+    const int before = countOf();
+    const size_t momentsBefore = sim.getMoments().size();
+    for (int i = 0; i < 3; ++i)
+        REQUIRE(sim.intervene("meteor", target.second.first, target.second.second, 4.0).first);
+    sim.step();
+    const int after = countOf();
+    REQUIRE(before >= 20);
+    REQUIRE(after * 2 <= before);
+
+    // Selon ce qui reste : un effondrement, un dernier survivant ou une extinction, toujours par la catastrophe.
+    bool told = false;
+    for (size_t i = momentsBefore; i < sim.getMoments().size(); ++i) {
+        const auto &m = sim.getMoments()[i];
+        if (m.species != species || (m.kind != "collapse" && m.kind != "last_survivor" && m.kind != "extinction"))
+            continue;
+        told = true;
+        CHECK(m.cause == "disaster");
+        CHECK(m.before >= static_cast<uint32_t>(before));
+        CHECK(m.after == static_cast<uint32_t>(after));
+    }
+    CHECK(told);
+
+    // Frappée encore pendant qu'elle est au plus bas : le même déclin ne se raconte pas deux fois.
+    const size_t momentsAfter = sim.getMoments().size();
+    if (after >= 2) {
+        REQUIRE(sim.intervene("meteor", target.second.first, target.second.second, 4.0).first);
+        sim.step();
+        for (size_t i = momentsAfter; i < sim.getMoments().size(); ++i)
+            CHECK_FALSE((sim.getMoments()[i].kind == "collapse" && sim.getMoments()[i].species == species));
+    }
 }

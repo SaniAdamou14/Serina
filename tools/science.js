@@ -62,6 +62,11 @@ async function main() {
       `  isolation : écart à l'idéal ${med('insulationGap')} | avantage local ${med('localAdvantage')} | étendue climatique ${med('climateSpread')}`
   );
   console.log(
+    `  moments ${med('moments')} (fresques ${med('momentFresques')}, lettres ${med('momentLetters')}) | derniers survivants ${med('lastSurvivors')} | ` +
+      `extinctions ${med('extinctions')} | groupes perdus ${med('groupsLost')} | extinctions de masse ${med('massExtinctions')} | ` +
+      `nouvelles espèces ${med('newSpecies')} | effondrements ${med('collapses')} (max ${Math.max(...rows.map((r) => r.collapses))})`
+  );
+  console.log(
     `  groupes vivants /${n} : oiseaux ${alive('bird')}, poissons ${alive('fish')}, ` +
       `arthropodes ${alive('arthropod')}, mollusques ${alive('mollusc')}`
   );
